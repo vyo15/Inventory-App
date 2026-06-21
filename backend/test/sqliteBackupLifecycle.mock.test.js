@@ -128,6 +128,7 @@ test("storage class hanya daily, monthly, dan manual", () => {
   assert.equal(backupModule.getBackupStorageClass("monthly"), "monthly");
   assert.equal(backupModule.getBackupStorageClass("manual"), "manual");
   assert.equal(backupModule.getBackupStorageClass("pre-restore"), "manual");
+  assert.equal(backupModule.getBackupStorageClass("pre-repair"), "manual");
   assert.equal(backupModule.getBackupStorageClass("manual-import"), "manual");
 });
 

@@ -9,7 +9,8 @@
     "lint": "node ./node_modules/eslint/bin/eslint.js .",
     "preview": "node ./node_modules/vite/bin/vite.js preview",
     "test": "vitest run --pool=vmThreads --no-file-parallelism --maxWorkers=1",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage --pool=vmThreads --no-file-parallelism --maxWorkers=1"
   },
   "dependencies": {
     "antd": "^5.27.4",
@@ -28,6 +29,7 @@
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
     "@vitejs/plugin-react": "^5.0.0",
+    "@vitest/coverage-v8": "^4.1.9",
     "eslint": "^9.33.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
@@ -39,5 +41,8 @@
   "overrides": {
     "@babel/core": "7.29.7",
     "js-yaml": "4.2.0"
+  },
+  "engines": {
+    "node": ">=22.12.0 <23"
   }
 }

@@ -12,7 +12,10 @@ IMS Bunga Flanel adalah aplikasi inventory dan operasional UMKM yang berjalan se
 
 ## Menjalankan project
 
+Runtime resmi memakai **Node.js 22.12 sampai sebelum 23**. Versi rekomendasi project berada di `.nvmrc` dan `.node-version` (`22.16.0`).
+
 ```powershell
+npm run check:runtime
 npm run install:all
 npm run dev
 ```
@@ -31,9 +34,11 @@ npm run test:scripts
 npm --prefix backend run check
 npm --prefix backend test
 npm --prefix frontend test
+npm --prefix frontend run test:coverage
 npm --prefix frontend run lint
 npm --prefix frontend run build
 npm run check:bundle
+npm run sbom
 npm run verify:source
 ```
 
@@ -64,4 +69,4 @@ Dokumentasi teknis dan business rule berada di folder [`docs/`](docs/). Bila dok
 
 ## Lisensi
 
-Lisensi project belum ditetapkan. Jangan mengasumsikan project ini berlisensi open-source sebelum owner menetapkan file `LICENSE` secara eksplisit.
+Lisensi project belum ditetapkan. Jangan mengasumsikan project ini berlisensi open-source sebelum owner menetapkan file `LICENSE` secara eksplisit. Inventaris dependency dan ketentuan pihak ketiga dijelaskan di [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md); CycloneDX SBOM dapat dibuat dengan `npm run sbom`.

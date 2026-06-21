@@ -243,7 +243,7 @@ backend start / hourly lifecycle check
 → audit log setiap promosi/cleanup
 ```
 
-Folder aktif hanya `daily`, `monthly`, dan `manual`. Backup manual, import, serta pre-restore masuk storage class `manual`; jenis aslinya tetap dicatat di manifest.
+Folder aktif hanya `daily`, `monthly`, dan `manual`. Backup manual, import, pre-repair, serta pre-restore masuk storage class `manual`; jenis aslinya tetap dicatat di manifest.
 
 Restore wajib:
 

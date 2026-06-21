@@ -61,12 +61,13 @@ Menu `Maintenance & Backup` adalah pusat perawatan data lokal. Urutan pakainya:
 
 1. Buka `Ringkasan` untuk melihat status aman/tidak.
 2. Gunakan `Backup & Restore` untuk backup resmi dan restore guarded.
-3. Tab `Audit Data` dan `Repair Aman` otomatis saat ini ditandai belum tersedia sampai backend SQLite menyediakan implementasi nyata.
-4. Gunakan checklist manual dan export master untuk review; jangan menganggap stub/no-op sebagai hasil audit.
-5. Gunakan `Data Tools` untuk export master dan checklist data pokok.
-6. Gunakan `Checklist` sebelum update, restore, atau maintenance besar.
-7. Buka `Riwayat` untuk melihat backup/restore resmi.
-8. `Reset Testing` hanya catatan arsip nonaktif pada mode database lokal; pemulihan data utama harus lewat Backup & Restore.
+3. Tab `Audit Data` menyediakan audit read-only untuk integrity database, invariant stok, data turunan stok, registry backup, dan pasangan kas-ledger.
+4. Tab `Repair Aman` hanya mengaktifkan rebuild/cleanup data turunan stok. Sistem membuat backup `pre-repair`; cleanup orphan membutuhkan keyword `BERSIHKAN DATA STOK`.
+5. Repair stok utama, transaksi, finance, production, payroll, dan HPP otomatis tetap tidak tersedia. Gunakan checklist manual dan review audit untuk area tersebut.
+6. Gunakan `Data Tools` untuk export master dan checklist data pokok.
+7. Gunakan `Checklist` sebelum update, restore, atau maintenance besar.
+8. Buka `Riwayat` untuk melihat backup/restore resmi.
+9. `Reset Testing` hanya catatan arsip nonaktif pada mode database lokal; pemulihan data utama harus lewat Backup & Restore.
 
 ## Backup otomatis dan retensi
 
@@ -79,7 +80,7 @@ Aturan:
 3. Pada awal bulan berikutnya, sistem mengambil daily verified terakhir bulan sebelumnya berdasarkan kalender lokal komputer utama, lalu membuat satu backup `monthly` di `backups/sqlite/monthly/`. Sumber daily disalin, diverifikasi, lalu dipromosikan; bukan dipindahkan sebelum validasi.
 4. Monthly dipertahankan maksimal 12 bulan.
 5. Backup manual tetap bisa dibuat kapan saja dan tidak dihapus otomatis.
-6. Sistem otomatis membuat backup `pre-restore` sebelum restore berjalan; file ini disimpan di folder `manual/` dengan jenis `pre-restore` tetap tercatat pada manifest.
+6. Sistem otomatis membuat backup `pre-restore` sebelum restore dan `pre-repair` sebelum repair data turunan stok; file disimpan di folder `manual/` dengan jenis tetap tercatat pada manifest.
 7. Import backup dari flashdisk juga disimpan pada folder `manual/`.
 8. Setelah restore selesai, backup `pre-restore` otomatis didaftarkan ulang agar tetap muncul di daftar backup untuk rollback jika restore ternyata salah. Backup sumber restore juga dipastikan tetap tercatat agar riwayat restore mudah dilacak.
 9. Backup harus berstatus `verified` sebelum dianggap aman.
@@ -386,3 +387,13 @@ Yang tidak ikut GitHub:
 - `node_modules`, `dist`, cache build.
 
 Untuk pindah data transaksi ke PC baru, gunakan Backup & Restore resmi dari file `.imsbackup`, bukan GitHub.
+
+### Membaca status queue dan log
+
+Status Maintenance menampilkan antrean database aktif, jumlah request menunggu, operasi lambat, dan error terakhir. Jika queue menunggu lama:
+
+1. Jangan menutup paksa aplikasi ketika backup/restore/repair sedang aktif.
+2. Tunggu operasi selesai dan cek file log JSONL di folder `logs/`.
+3. Log dirotasi berdasarkan ukuran dan dibersihkan sesuai retention; log tidak menyimpan body request atau password.
+   Folder `logs/` adalah runtime-only dan tidak ikut clean source ZIP/Git archive.
+4. Jika queue tidak bergerak, hentikan transaksi baru, buat salinan backup terbaru bila memungkinkan, lalu restart backend secara terkontrol.

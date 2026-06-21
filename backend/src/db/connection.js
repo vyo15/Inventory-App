@@ -4,16 +4,50 @@ const { AsyncLocalStorage } = require("node:async_hooks");
 const sqlite3 = require("sqlite3");
 const { open } = require("sqlite");
 const env = require("../config/env");
+const logger = require("../utils/logger");
 
 let rawDbPromise = null;
+let databaseGeneration = 0;
 let dbQueueTail = Promise.resolve();
+let operationSequence = 0;
 const dbAccessContext = new AsyncLocalStorage();
+const queueMetrics = {
+  queued: 0,
+  active: null,
+  totalCompleted: 0,
+  totalFailed: 0,
+  maxQueueDepth: 0,
+  slowWaitCount: 0,
+  slowOperationCount: 0,
+  lastSlowWait: null,
+  lastSlowOperation: null,
+  lastError: null,
+};
 
 const ensureDirectory = (filePath) => {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
 };
 
 const getDbPath = () => env.dbPath;
+const getDatabaseGeneration = () => databaseGeneration;
+
+const getDbQueueStatus = () => ({
+  queued: queueMetrics.queued,
+  active: queueMetrics.active ? { ...queueMetrics.active } : null,
+  totalCompleted: queueMetrics.totalCompleted,
+  totalFailed: queueMetrics.totalFailed,
+  maxQueueDepth: queueMetrics.maxQueueDepth,
+  slowWaitCount: queueMetrics.slowWaitCount,
+  slowOperationCount: queueMetrics.slowOperationCount,
+  lastSlowWait: queueMetrics.lastSlowWait ? { ...queueMetrics.lastSlowWait } : null,
+  lastSlowOperation: queueMetrics.lastSlowOperation ? { ...queueMetrics.lastSlowOperation } : null,
+  lastError: queueMetrics.lastError ? { ...queueMetrics.lastError } : null,
+  thresholds: {
+    slowWaitMs: env.dbQueueSlowWaitMs,
+    slowOperationMs: env.dbQueueSlowOperationMs,
+  },
+  databaseGeneration,
+});
 
 const openRawDb = async () => {
   ensureDirectory(env.dbPath);
@@ -24,6 +58,7 @@ const openRawDb = async () => {
   await db.exec("PRAGMA journal_mode = WAL;");
   await db.exec("PRAGMA foreign_keys = ON;");
   await db.exec("PRAGMA busy_timeout = 5000;");
+  databaseGeneration += 1;
   return db;
 };
 
@@ -37,27 +72,74 @@ const getRawDb = () => {
   return rawDbPromise;
 };
 
-const enqueueDbAccess = (callback) => {
+const enqueueDbAccess = (callback, { label = "database_operation" } = {}) => {
   const activeContext = dbAccessContext.getStore();
   if (activeContext?.exclusive === true && activeContext?.released !== true) {
     return callback(activeContext);
   }
 
+  operationSequence += 1;
+  const operationId = operationSequence;
+  const queuedAt = Date.now();
+  queueMetrics.queued += 1;
+  queueMetrics.maxQueueDepth = Math.max(queueMetrics.maxQueueDepth, queueMetrics.queued);
+
   const execute = () => {
+    queueMetrics.queued = Math.max(0, queueMetrics.queued - 1);
+    const startedAt = Date.now();
+    const waitMs = startedAt - queuedAt;
+    const active = {
+      id: operationId,
+      label,
+      queuedAt: new Date(queuedAt).toISOString(),
+      startedAt: new Date(startedAt).toISOString(),
+      waitMs,
+    };
+    queueMetrics.active = active;
+
+    if (waitMs >= env.dbQueueSlowWaitMs) {
+      queueMetrics.slowWaitCount += 1;
+      queueMetrics.lastSlowWait = { ...active };
+      logger.warn("sqlite_queue_slow_wait", active);
+    }
+
     const context = {
       exclusive: true,
       released: false,
       transactionActive: false,
       rawDb: null,
+      operationId,
+      operationLabel: label,
     };
+
     return dbAccessContext.run(context, async () => {
       try {
-        return await callback(context);
+        const result = await callback(context);
+        queueMetrics.totalCompleted += 1;
+        return result;
+      } catch (error) {
+        queueMetrics.totalFailed += 1;
+        queueMetrics.lastError = {
+          id: operationId,
+          label,
+          at: new Date().toISOString(),
+          message: error?.message || String(error),
+          code: error?.code || error?.errorCode || null,
+        };
+        throw error;
       } finally {
+        const durationMs = Date.now() - startedAt;
+        if (durationMs >= env.dbQueueSlowOperationMs) {
+          queueMetrics.slowOperationCount += 1;
+          queueMetrics.lastSlowOperation = { ...active, durationMs };
+          logger.warn("sqlite_queue_slow_operation", { ...active, durationMs });
+        }
         context.released = true;
+        if (queueMetrics.active?.id === operationId) queueMetrics.active = null;
       }
     });
   };
+
   const result = dbQueueTail.then(execute, execute);
   dbQueueTail = result.then(() => undefined, () => undefined);
   return result;
@@ -67,7 +149,7 @@ const callSerializedDbMethod = (methodName, args) => enqueueDbAccess(async (cont
   const rawDb = context.rawDb || await getRawDb();
   context.rawDb = rawDb;
   return rawDb[methodName](...args);
-});
+}, { label: `db.${methodName}` });
 
 const dbFacade = new Proxy({}, {
   get(_target, property) {
@@ -91,13 +173,15 @@ async function getDb() {
   return dbFacade;
 }
 
-const runSerializedDbOperation = async (callback) => enqueueDbAccess(async (context) => {
-  const rawDb = context.rawDb || await getRawDb();
-  context.rawDb = rawDb;
-  return callback(dbFacade);
-});
+const runSerializedDbOperation = async (callback, { label = "database_exclusive_operation" } = {}) => (
+  enqueueDbAccess(async (context) => {
+    const rawDb = context.rawDb || await getRawDb();
+    context.rawDb = rawDb;
+    return callback(dbFacade);
+  }, { label })
+);
 
-const runInTransaction = async (callback, { mode = "IMMEDIATE" } = {}) => {
+const runInTransaction = async (callback, { mode = "IMMEDIATE", label = "database_transaction" } = {}) => {
   const activeContext = dbAccessContext.getStore();
   if (activeContext?.transactionActive === true) {
     return callback(dbFacade);
@@ -124,7 +208,7 @@ const runInTransaction = async (callback, { mode = "IMMEDIATE" } = {}) => {
     } finally {
       context.transactionActive = false;
     }
-  });
+  }, { label });
 };
 
 async function closeDb() {
@@ -141,13 +225,15 @@ async function closeDb() {
     await rawDb.close();
     rawDbPromise = null;
     context.rawDb = null;
-  });
+  }, { label: "database_close" });
 }
 
 module.exports = {
   closeDb,
   getDb,
+  getDatabaseGeneration,
   getDbPath,
+  getDbQueueStatus,
   runInTransaction,
   runSerializedDbOperation,
 };

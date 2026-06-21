@@ -35,6 +35,13 @@ function main() {
   console.log("\n[git:check] Jalankan automated test backend dan frontend...");
   run("npm", ["test"]);
 
+  if (runFull) {
+    console.log("\n[git:check] Cek coverage flow kritis frontend...");
+    run("npm", ["--prefix", "frontend", "run", "test:coverage"]);
+    console.log("\n[git:check] Buat CycloneDX SBOM evidence...");
+    run("npm", ["run", "sbom"]);
+  }
+
   console.log("\n[git:check] OK. Source siap dicek/push.");
 }
 

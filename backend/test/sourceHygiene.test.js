@@ -35,7 +35,7 @@ test("source engineering minimum tersedia dan dead compatibility files tidak kem
   });
 });
 
-test("source readiness menolak runtime database dan backup yang ter-track", () => {
+test("source readiness menolak runtime database, backup, dan log yang ter-track", () => {
   const trackedFiles = [
     "data/.gitkeep",
     "backups/.gitkeep",
@@ -44,6 +44,7 @@ test("source readiness menolak runtime database dan backup yang ter-track", () =
     "data\\ims.sqlite-wal",
     "backups/sqlite/daily/IMS-BF-BACKUP.imsbackup",
     "backups\\sqlite\\daily\\IMS-BF-BACKUP.imsbackup.manifest.json",
+    "logs/ims-backend.log",
     "frontend/src/main.jsx",
   ];
 
@@ -52,6 +53,7 @@ test("source readiness menolak runtime database dan backup yang ter-track", () =
     "data\\ims.sqlite-wal",
     "backups/sqlite/daily/IMS-BF-BACKUP.imsbackup",
     "backups\\sqlite\\daily\\IMS-BF-BACKUP.imsbackup.manifest.json",
+    "logs/ims-backend.log",
   ]);
 });
 
@@ -67,11 +69,12 @@ test("backend test runner memakai discovery otomatis dan lockfile registry publi
   assert.doesNotMatch(frontendLock, /node_modules\/@ant-design\/charts/);
 });
 
-test("git archive mengecualikan seluruh folder data dan backups", () => {
+test("git archive mengecualikan seluruh folder runtime data, backups, dan logs", () => {
   const attributes = readRootFile(".gitattributes");
 
   assert.match(attributes, /^\/data export-ignore$/m);
   assert.match(attributes, /^\/backups export-ignore$/m);
+  assert.match(attributes, /^\/logs export-ignore$/m);
 });
 
 test("JavaScript source memakai kebijakan LF yang konsisten", () => {
@@ -92,8 +95,9 @@ test("JavaScript source memakai kebijakan LF yang konsisten", () => {
     "dist",
     "build",
     "coverage",
+    ".artifacts",
   ]);
-  const ignoredRootDirectories = new Set(["data", "backups"]);
+  const ignoredRootDirectories = new Set(["data", "backups", "logs"]);
   const supportedExtensions = new Set([".js", ".jsx", ".cjs", ".mjs"]);
   const pendingDirectories = [ROOT_DIR];
   const invalidFiles = [];
@@ -155,14 +159,18 @@ test("source ZIP verifier menolak runtime, generated output, dan path backslash"
     "Inventory-App/backups/sqlite/daily/IMS.imsbackup",
     "Inventory-App/data/ims.sqlite-wal",
     "Inventory-App/frontend/dist/index.js",
+    "Inventory-App/.artifacts/sbom/backend-sbom.cdx.json",
+    "Inventory-App/logs/ims-backend.log",
     "Inventory-App\\backend\\package.json",
   ]);
 
   assert.deepEqual(unsafeEntries, [
+    ".artifacts/sbom/backend-sbom.cdx.json",
     "Inventory-App/backend/package.json",
     "backups/sqlite/daily/IMS.imsbackup",
     "data/ims.sqlite-wal",
     "frontend/dist/index.js",
+    "logs/ims-backend.log",
   ]);
 });
 
@@ -237,13 +245,14 @@ const listTarEntries = (archiveBuffer) => {
   return entries;
 };
 
-test("git archive aktual tidak membawa data dan backup runtime", () => {
+test("git archive aktual tidak membawa data, backup, dan log runtime", () => {
   const tempRepo = fs.mkdtempSync(path.join(os.tmpdir(), "ims-source-hygiene-"));
 
   try {
     fs.mkdirSync(path.join(tempRepo, "data"), { recursive: true });
     fs.mkdirSync(path.join(tempRepo, "backups", "sqlite", "daily"), { recursive: true });
     fs.mkdirSync(path.join(tempRepo, "frontend", "src"), { recursive: true });
+    fs.mkdirSync(path.join(tempRepo, "logs"), { recursive: true });
 
     fs.copyFileSync(path.join(ROOT_DIR, ".gitattributes"), path.join(tempRepo, ".gitattributes"));
     fs.writeFileSync(path.join(tempRepo, "data", ".gitkeep"), "");
@@ -254,6 +263,7 @@ test("git archive aktual tidak membawa data dan backup runtime", () => {
       "runtime-backup",
     );
     fs.writeFileSync(path.join(tempRepo, "frontend", "src", "main.jsx"), "export default true;\n");
+    fs.writeFileSync(path.join(tempRepo, "logs", "ims-backend.log"), "runtime-log\n");
 
     const runGit = (args, options = {}) => execFileSync("git", args, {
       cwd: tempRepo,
@@ -273,6 +283,7 @@ test("git archive aktual tidak membawa data dan backup runtime", () => {
     assert.equal(entries.includes("frontend/src/main.jsx"), true);
     assert.equal(entries.some((entry) => entry === "data" || entry.startsWith("data/")), false);
     assert.equal(entries.some((entry) => entry === "backups" || entry.startsWith("backups/")), false);
+    assert.equal(entries.some((entry) => entry === "logs" || entry.startsWith("logs/")), false);
 
     fs.writeFileSync(path.join(tempRepo, "package.json"), "{}\n");
     fs.mkdirSync(path.join(tempRepo, "backend"), { recursive: true });

@@ -125,33 +125,40 @@ test("login route aktual menyimpan session di cookie HttpOnly tanpa mengirim tok
   assert.equal(mePayload.data.user.username, "admin");
 });
 
-test("Bearer session lama dimigrasikan menjadi cookie oleh endpoint me", async () => {
+test("Bearer session lama hanya dimigrasikan saat compatibility diaktifkan eksplisit", async () => {
   await bootstrapAdministrator();
+  const env = require("../src/config/env");
+  const previousFlag = env.authAllowLegacyBearer;
   const legacySession = await authService.login({
     username: "admin",
     password: ADMIN_PASSWORD,
   });
 
-  const meResponse = await request("/api/auth/me", {
-    headers: {
-      Authorization: `Bearer ${legacySession.token}`,
-      cookie: "ims_session=stale-cookie",
-      "user-agent": "IMS-Legacy-Test",
-    },
-  });
-  const cookie = meResponse.headers.get("set-cookie") || "";
+  env.authAllowLegacyBearer = true;
+  try {
+    const meResponse = await request("/api/auth/me", {
+      headers: {
+        Authorization: `Bearer ${legacySession.token}`,
+        cookie: "ims_session=stale-cookie",
+        "user-agent": "IMS-Legacy-Test",
+      },
+    });
+    const cookie = meResponse.headers.get("set-cookie") || "";
 
-  assert.equal(meResponse.status, 200);
-  assert.match(cookie, /^ims_session=/);
-  assert.match(cookie, /HttpOnly/i);
+    assert.equal(meResponse.status, 200);
+    assert.match(cookie, /^ims_session=/);
+    assert.match(cookie, /HttpOnly/i);
 
-  const secondMeResponse = await request("/api/auth/me", {
-    headers: {
-      Authorization: `Bearer ${legacySession.token}`,
-      "user-agent": "IMS-Legacy-Test-Repeat",
-    },
-  });
-  assert.equal(secondMeResponse.status, 200);
+    const secondMeResponse = await request("/api/auth/me", {
+      headers: {
+        Authorization: `Bearer ${legacySession.token}`,
+        "user-agent": "IMS-Legacy-Test-Repeat",
+      },
+    });
+    assert.equal(secondMeResponse.status, 200);
+  } finally {
+    env.authAllowLegacyBearer = previousFlag;
+  }
 
   const db = await testDatabase.getDb();
   const migrationAudits = await db.all(

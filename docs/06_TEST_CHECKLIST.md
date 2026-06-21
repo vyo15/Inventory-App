@@ -58,6 +58,8 @@ Coverage aktif saat ini:
 - Finance ledger: cash-in, invalid cash-out rollback, serta soft-delete cash-out dan ledger pasangannya.
 - Return guard: `relatedSaleId` wajib dan qty retur kumulatif tidak boleh melebihi sisa qty sales.
 - SQLite concurrency: dua transaction paralel diproses FIFO, read menunggu commit, rollback tidak meracuni queue, dan context selesai tidak melewati serialisasi.
+- Maintenance data tools: audit read-only, stock read model rebuild, orphan cleanup keyword, pre-repair backup, transaction, dan audit log.
+- Platform hardening: security headers, structured logger rotation, OpenAPI contract, Node runtime guard, common-password rejection, dan finance manual duplicate guard.
 - Business code counter: dua preview yang sama tetap menghasilkan code/ID unik saat create final, baseline historis dihormati, serta Purchase/Cash In tanpa kode memakai sequence tanggal yang aman.
 - Auth concurrency: dua perubahan admin paralel tetap menyisakan satu administrator aktif.
 - Password policy: maksimum 128 karakter aktif pada backend dan frontend shared policy.
@@ -67,6 +69,13 @@ Test memakai database SQLite temporary di folder sistem dan tidak menunjuk ke da
 ## 1A.1 Concurrent write dan runtime counter
 
 - [ ] `backend/test/dbConnectionQueue.mock.test.js` lulus tanpa native SQLite: FIFO transaction, blocked read, dan queue recovery.
+- [ ] Queue status menampilkan depth/active/slow/error tanpa payload bisnis; slow callback tidak menghentikan queue berikutnya.
+- [ ] `backend/test/maintenanceDataTools.test.js` lulus: audit read-only, rebuild projection dengan pre-repair backup, keyword cleanup orphan, dan master stock tidak berubah.
+- [ ] Import backup dengan audit failure me-rollback `backup_logs` dan menghapus file import.
+- [ ] Cash manual duplicate ditolak, sedangkan posting system source tetap idempotent.
+- [ ] Soft-delete kas tidak menonaktifkan ledger lain yang kebetulan memakai `source_id` sama tetapi `source_type` berbeda.
+- [ ] Security headers dan OpenAPI administrator-only lulus automated test.
+- [ ] Structured logger menghasilkan JSONL, size rotation, dan retention tanpa membuat request gagal saat file write bermasalah.
 - [ ] `backend/test/sqliteConcurrentWrites.test.js` lulus pada PC project dengan native `sqlite3` terpasang.
 - [ ] Dua Cash In paralel tanpa kode menghasilkan dua `CSH-IN-DDMMYYYY-xxx` unik dan dua ledger.
 - [ ] Dua Purchase paralel tanpa kode menghasilkan dua `PUR-DDMMYYYY-xxx`, stok bertambah tepat, expense/ledger tidak duplikat.
@@ -246,7 +255,7 @@ Test memakai database SQLite temporary di folder sistem dan tidak menunjuk ke da
 - [ ] Loading state jelas.
 - [ ] Error state tidak white screen.
 - [ ] Technical ID tidak tampil di UI utama, drawer, tooltip, report, atau export.
-- [ ] ZIP hasil `npm run clean:zip:ps` lulus `npm run verify:zip -- ../Inventory-App-clean.zip` dan tidak membawa `data/`, `backups/`, database, backup, `node_modules`, `dist`, atau path backslash.
+- [ ] ZIP hasil `npm run clean:zip:ps` lulus `npm run verify:zip -- ../<nama-source-clean>.zip` dan tidak membawa `data/`, `backups/`, database, backup, `node_modules`, `dist`, atau path backslash.
 
 
 ## 12A. Cross-device responsive QA
@@ -278,14 +287,19 @@ Referensi detail: `docs/21_RESPONSIVE_UI_UX_STANDARD.md`.
 - [ ] Docs guarded area tetap melindungi stock, sales, purchases, returns, finance, production, payroll, HPP, auth, backup/restore, reset, route/menu, role guard, dan audit log.
 - [ ] Jika source berubah, docs terkait ikut diperbarui dalam patch yang sama.
 - [ ] GitHub Actions menjalankan source hygiene, backend check/test, frontend test/lint/build, dan bundle budget pada push/PR.
-- [ ] `npm test` lulus sebelum merge; coverage yang belum otomatis tetap diuji manual.
+- [ ] `npm run check:runtime` lulus pada Node `>=22.12.0 <23`; `.nvmrc`, `.node-version`, package engines, dan CI selaras.
+- [ ] Frontend build tidak menampilkan circular manual-chunk warning dan `npm run check:bundle` melaporkan chunk terbesar di bawah budget.
+- [ ] Frontend Audit Data hanya menampilkan subset read-only nyata; Repair Aman hanya menampilkan projection stok yang didukung backend.
+- [ ] `npm test` dan `npm --prefix frontend run test:coverage` lulus sebelum merge.
+- [ ] CI mengunggah `frontend/coverage/coverage-summary.json` dan CycloneDX SBOM backend/frontend sebagai evidence.
+- [ ] Setelah koneksi database ditutup/dibuka kembali atau restore, baseline business-code counter diverifikasi ulang sebelum kode berikutnya dialokasikan.
 
 ## 14. P8A–P12 regression
 
-- [ ] Login dari session Bearer lama melalui `/api/auth/me` membuat cookie HttpOnly dan audit `legacy_bearer_migrated`.
+- [ ] Default backend menolak Bearer legacy; saat compatibility diaktifkan eksplisit, `/api/auth/me` membuat cookie HttpOnly dan audit `legacy_bearer_migrated`.
 - [ ] Request Bearer berulang dari session yang sama tidak membuat audit migrasi duplikat.
 - [ ] Maintenance status menampilkan total, tujuh hari terakhir, dan timestamp migrasi Bearer tanpa otomatis menyatakan semua perangkat siap.
-- [ ] Setelah semua laptop/HP login ulang dan dikonfirmasi, `IMS_AUTH_ALLOW_LEGACY_BEARER=false` menolak Bearer tetapi tetap menerima cookie.
+- [ ] `IMS_AUTH_ALLOW_LEGACY_BEARER=false` tetap menerima cookie dan menolak Bearer; `true` hanya dipakai sementara untuk migrasi.
 - [ ] `backend/package.json` memakai `node scripts/run-tests.cjs`, bukan daftar file test manual.
 - [ ] Backend dependency audit lockfile tidak memiliki vulnerability aktif.
 - [ ] Frontend lockfile tidak memuat registry internal dan tidak lagi membawa `@ant-design/charts`.

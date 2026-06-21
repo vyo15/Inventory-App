@@ -1,3 +1,5 @@
+process.env.IMS_AUTH_ALLOW_LEGACY_BEARER = "true";
+
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const { once } = require("node:events");

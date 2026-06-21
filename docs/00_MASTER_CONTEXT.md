@@ -1,9 +1,9 @@
 # MASTER CONTEXT — IMS Bunga Flanel
 
-Dokumen ini dibuat berdasarkan audit langsung terhadap source code aplikasi. Update terbaru 2026-06-07 memakai ZIP `Inventory-App-clean.zip` sebagai sumber kebenaran utama, bukan template umum atau docs lama.
+Dokumen ini dibuat berdasarkan audit langsung terhadap source code aplikasi. Update terbaru 2026-06-21 memakai ZIP `Inventory-App-20260621-223301409-main-9e6581f4-dirty.zip` sebagai sumber kebenaran utama, bukan template umum atau docs lama.
 
-Update verifikasi source aktual — 2026-06-07:
-- source yang divalidasi: ZIP `Inventory-App-clean.zip` dengan root project `Inventory-App-test`;
+Update verifikasi source aktual — 2026-06-21:
+- source yang divalidasi: ZIP `Inventory-App-20260621-223301409-main-9e6581f4-dirty.zip` dengan root project source pada arsip;
 - runtime utama source aktual adalah React/Vite frontend + Node.js Express backend + SQLite file lokal/LAN;
 - `backend/src/server.js` mendaftarkan endpoint `/api/**` untuk Auth, master data, stock, transaksi, finance, production, reports, maintenance, dan audit log;
 - `frontend/src/context/AuthContext.jsx` memakai `localAuthService` dan `authMode: "sqlite"`; nama state auth lama yang masih tersisa hanya compatibility internal untuk actor label lama, bukan runtime auth lama;
@@ -261,6 +261,8 @@ Status cleanup bertahap yang dikunci di docs:
 - **Aktif/P1:** backup lifecycle dan restore file swap berjalan eksklusif terhadap request database operasional. Restore tetap mempertahankan preview, confirm keyword, pre-restore backup, candidate validation, rollback file, dan audit yang sudah ada.
 - **Aktif/P1:** automated regression mencakup transaction paralel, read menunggu commit, queue setelah rollback, counter code paralel, baseline data historis, finance/ledger, purchase/stock, dan last-admin guard.
 - **Compatibility:** satu koneksi SQLite, WAL, `busy_timeout=5000`, schema, route, role guard, dan format data historis tetap dipertahankan. Serialization application-level ditambahkan di atas locking SQLite; bukan pengganti transaction database.
+- **Observability aktif:** coordinator mempublikasikan queue depth, active operation, slow wait/operation, failure terakhir, dan database generation melalui status maintenance. Slow wait/operation dicatat ke structured JSON logger tanpa payload bisnis.
+- **Runtime guard aktif:** Node.js didukung pada `>=22.12.0 <23`; versi rekomendasi `22.16.0` dikunci melalui `.nvmrc`, `.node-version`, package `engines`, CI, dan `npm run check:runtime`.
 
 ## Maintenance & Backup Center — 2026-06-07
 - **Aktif:** Reset & Maintenance Data menjadi Maintenance & Backup Center, bukan daftar tombol reset teknis.
@@ -268,10 +270,21 @@ Status cleanup bertahap yang dikunci di docs:
 - **Reset testing lama:** route/tab hanya menampilkan status nonaktif. Handler reset testing lama tidak tersedia di UI operasional.
 - **Auto detect:** audit data historis/stok/log/produksi/payroll/variant transaksi bersifat read-only terhadap data bisnis dan hanya boleh membuat maintenance log metadata.
 - **Export data pokok:** tersedia sebagai export master SQLite read-only/checklist manual, bukan restore otomatis dan bukan merge transaksi.
-- Backup resmi SQLite memakai satu file `.imsbackup` self-contained berisi database, manifest, checksum, dan README internal; file `.manifest.json` terpisah tidak dibuat lagi. Snapshot, lifecycle daily/monthly/retention, dan restore file swap memegang database coordinator eksklusif agar tidak berjalan bersamaan dengan request operasional. Struktur folder aktif hanya `daily/`, `monthly/`, dan `manual/`. Daily dibuat otomatis maksimal satu per hari dan disimpan 60 hari. Monthly dibuat otomatis dari daily verified terakhir setiap bulan dan disimpan maksimal 12 bulan. Backup manual, import, pre-update, pre-reset, dan pre-restore disimpan pada folder `manual/` serta tidak dihapus otomatis. Restore tetap full replace guarded, bukan merge; backup legacy `.imsbak.zip` dan sidecar manifest lama tetap dibaca sebagai kompatibilitas. Backup `pre-restore` dan backup sumber restore dipastikan tercatat ulang setelah restore agar rollback dan traceability tetap terlihat di daftar backup.
+- Backup resmi SQLite memakai satu file `.imsbackup` self-contained berisi database, manifest, checksum, dan README internal; file `.manifest.json` terpisah tidak dibuat lagi. Snapshot, lifecycle daily/monthly/retention, dan restore file swap memegang database coordinator eksklusif agar tidak berjalan bersamaan dengan request operasional. Struktur folder aktif hanya `daily/`, `monthly/`, dan `manual/`. Daily dibuat otomatis maksimal satu per hari dan disimpan 60 hari. Monthly dibuat otomatis dari daily verified terakhir setiap bulan dan disimpan maksimal 12 bulan. Backup manual, import, pre-update, pre-reset, pre-repair, dan pre-restore disimpan pada folder `manual/` serta tidak dihapus otomatis. Restore tetap full replace guarded, bukan merge; backup legacy `.imsbak.zip` dan sidecar manifest lama tetap dibaca sebagai kompatibilitas. Backup `pre-restore` dan backup sumber restore dipastikan tercatat ulang setelah restore agar rollback dan traceability tetap terlihat di daftar backup.
 - **Guarded:** log/transaksi lama tidak direkomendasikan dibawa ulang sebagai default jika logic berubah; transaksi baru sebaiknya dibuat ulang lewat flow terbaru agar log baru mengikuti logic terbaru.
 - **Opening stock:** setelah restore/reset manual di luar aplikasi, stok awal sebaiknya dibuat ulang lewat purchase/opening adjustment resmi, bukan menempel stok mentah tanpa audit.
+- **Audit Data aktif terbatas:** backend menyediakan audit read-only untuk integrity SQLite, invariant stok master, stock read model, registry backup, dan pasangan kas-ledger. Audit tidak menulis data bisnis.
+- **Repair Aman aktif terbatas:** hanya missing/stale `stock_read_models` yang boleh direbuild dari master dan orphan projection yang boleh dibersihkan dengan keyword. Kedua aksi membuat backup `pre-repair`, memakai transaction, dan membuat audit log. Repair stok utama, transaksi, finance, production, payroll, serta HPP tetap dinonaktifkan.
+- **Import backup atomic:** file, `backup_logs`, dan audit import diproses dalam exclusive coordinator; kegagalan audit me-rollback row dan membersihkan file import agar tidak ada registry yatim.
 
+
+
+## Hardening Platform Aman — 2026-06-21
+- API mengirim security headers tanpa dependency baru: `nosniff`, frame deny, referrer policy, permissions policy, COOP/CORP, dan CSP ketat untuk response API.
+- Structured JSON logger aktif untuk request/error/queue/server lifecycle, dengan rotation ukuran dan retention harian. Bootstrap secret tetap hanya dicetak ke terminal dan tidak ditulis ke log file.
+- OpenAPI 3.1 ringkas tersedia administrator-only di `GET /api/openapi.json`; dokumentasi tidak membuka endpoint publik baru.
+- Password tetap minimal 8 karakter, wajib huruf+angka, maksimum 128 karakter, dan menolak daftar password umum lokal. Screening breach online tidak dipakai agar runtime tetap offline.
+- Vendor split hanya memisahkan React Router/React dan Day.js; business chunks tetap mengikuti route lazy. Tidak ada circular manual-chunk warning.
 
 ---
 

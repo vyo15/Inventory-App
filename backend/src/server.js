@@ -5,9 +5,11 @@ const { runMigrations } = require("./db/migrate");
 const { getDbPath } = require("./db/connection");
 const { ensureDailyBackupForToday } = require("./utils/sqliteBackup");
 const requestLogger = require("./middlewares/requestLogger");
+const securityHeaders = require("./middlewares/securityHeaders");
 const { createCorsOptionsDelegate, enforceTrustedOrigin } = require("./middlewares/corsOptions");
 const { errorHandler, notFoundHandler } = require("./middlewares/errorHandler");
 const { success } = require("./utils/response");
+const logger = require("./utils/logger");
 const healthRoutes = require("./modules/health/health.routes");
 const settingsRoutes = require("./modules/settings/settings.routes");
 const authRoutes = require("./modules/auth/auth.routes");
@@ -28,12 +30,14 @@ const transactionsRoutes = require("./modules/transactions/transactions.routes")
 const financeRoutes = require("./modules/finance/finance.routes");
 const productionRoutes = require("./modules/production/production.routes");
 const reportsRoutes = require("./modules/reports/reports.routes");
+const openApiRoutes = require("./modules/openApi/openApi.routes");
 const authService = require("./modules/auth/auth.service");
 const { getBootstrapCodeForConsole } = require("./modules/auth/authBootstrapGuard");
 
 const app = express();
 app.disable("x-powered-by");
 
+app.use(securityHeaders);
 app.use(enforceTrustedOrigin);
 app.use(cors(createCorsOptionsDelegate));
 app.use(express.json({ limit: "1mb" }));
@@ -69,6 +73,7 @@ app.use("/api/transactions", transactionsRoutes);
 app.use("/api/finance", financeRoutes);
 app.use("/api/production", productionRoutes);
 app.use("/api/reports", reportsRoutes);
+app.use("/api/openapi.json", openApiRoutes);
 app.use("/api/maintenance", maintenanceRoutes);
 app.use("/api/audit-logs", auditLogsRoutes);
 app.use("/api/module-runtime-status", migrationStatusRoutes);
@@ -93,20 +98,22 @@ async function startServer() {
   try {
     const dailyBackup = await ensureDailyBackupForToday();
     if (dailyBackup.created) {
-      console.log(`Auto backup harian dibuat: ${dailyBackup.backup.filename}`);
+      logger.info("daily_backup_created", { filename: dailyBackup.backup.filename });
     }
   } catch (error) {
-    console.warn("Auto backup harian gagal dibuat. Jalankan backup manual dari UI.", error.message);
+    logger.warn("daily_backup_failed", { error });
   }
 
   app.listen(env.port, env.host, () => {
-    console.log(`IMS layanan lokal jalan di http://localhost:${env.port}`);
-    console.log(`Lokasi database lokal: ${getDbPath()}`);
-    console.log("Mode: database lokal primary. Modul guarded wajib lewat endpoint layanan resmi.");
+    logger.info("ims_local_server_started", {
+      address: `http://localhost:${env.port}`,
+      databasePath: getDbPath(),
+      mode: "sqlite_primary_guarded",
+    });
   });
 }
 
 startServer().catch((error) => {
-  console.error("Gagal menjalankan IMS layanan lokal:", error);
+  logger.error("ims_local_server_start_failed", { error });
   process.exit(1);
 });

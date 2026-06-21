@@ -18,6 +18,11 @@ export const validatePasswordStrength = (password = "") => {
     return PASSWORD_POLICY.messages.maxLength;
   }
 
+  const normalizedValue = value.trim().toLowerCase();
+  if (PASSWORD_POLICY.commonPasswords.includes(normalizedValue)) {
+    return PASSWORD_POLICY.messages.commonPassword;
+  }
+
   const letterInvalid = PASSWORD_POLICY.requireLetter && !hasLetter(value);
   const numberInvalid = PASSWORD_POLICY.requireNumber && !hasNumber(value);
 

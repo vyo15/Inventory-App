@@ -49,12 +49,53 @@ export default defineConfig(({ mode }) => {
       restoreMocks: true,
       clearMocks: true,
       css: true,
+      coverage: {
+        provider: "v8",
+        reporter: ["text", "json-summary", "html"],
+        reportsDirectory: "coverage",
+        include: [
+          "src/components/Auth/ProtectedRoute.jsx",
+          "src/config/**/*.js",
+          "src/data/adapters/sqlite/sqliteProductionAdapter.js",
+          "src/pages/Auth/Login.jsx",
+          "src/pages/Finance/helpers/financePeriodHelpers.js",
+          "src/services/Maintenance/maintenanceLogService.js",
+          "src/services/Pricing/pricingService.js",
+          "src/services/Produksi/productionWorkLogsService.js",
+          "src/services/System/*.js",
+          "src/services/Transaksi/*.js",
+          "src/utils/auth/roleAccess.js",
+          "src/utils/export/sheetJsWriteAdapter.js",
+          "src/utils/navigation/sidebarNavigation.js",
+          "src/utils/variants/variantStockNormalizer.js",
+        ],
+        exclude: ["**/*.test.{js,jsx}"],
+        thresholds: {
+          statements: 55,
+          branches: 38,
+          functions: 35,
+          lines: 60,
+        },
+      },
     },
 
     build: {
       // AKTIF + GUARDED:
-      // Batas warning saja, bukan business rule. Nilai ini dipertahankan agar build
-      // tidak gagal hanya karena bundle vendor lebih besar setelah manualChunks dihapus.
+      // Vendor split dibatasi ke library stabil. Business/page modules tetap mengikuti
+      // dynamic import route agar tidak membuat coupling manual antarmodul IMS.
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            const normalizedId = String(id || "").replaceAll("\\", "/");
+            if (!normalizedId.includes("/node_modules/")) return undefined;
+            if (/\/node_modules\/(react|react-dom|react-router|react-router-dom)\//.test(normalizedId)) {
+              return "vendor-react";
+            }
+            if (normalizedId.includes("/node_modules/dayjs/")) return "vendor-date";
+            return undefined;
+          },
+        },
+      },
       chunkSizeWarningLimit: 900,
     },
   };

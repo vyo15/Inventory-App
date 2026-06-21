@@ -65,9 +65,11 @@ Kebijakan retensi:
 
 - `daily`: maksimal satu verified per hari, simpan 60 hari.
 - `monthly`: satu snapshot per bulan dari daily verified terakhir, simpan maksimal 12 bulan. Batas hari/bulan mengikuti kalender lokal komputer backend agar konsisten dengan waktu operasional IMS.
-- `manual`: tidak dihapus otomatis; import, pre-update, pre-reset, dan pre-restore memakai storage class manual.
+- `manual`: tidak dihapus otomatis; import, pre-update, pre-reset, pre-repair, dan pre-restore memakai storage class manual.
 - Cleanup daily hanya boleh dilakukan jika monthly verified untuk bulan terkait sudah tersedia.
 - Setiap promosi monthly dan penghapusan retention wajib memiliki audit log.
+- Backup `pre-repair` wajib dibuat sebelum rebuild/cleanup data turunan stok dan disimpan pada storage class `manual`.
+- Import backup wajib exclusive dan atomic antara file package, `backup_logs`, serta audit log. Jika DB/audit gagal, registry di-rollback dan file import dibersihkan.
 
 Backup legacy `.imsbak.zip`, folder lama, dan sidecar manifest lama tetap boleh dibaca untuk restore agar file lama tidak terputus kompatibilitasnya, tetapi source baru tidak membuat struktur lama lagi.
 
@@ -123,9 +125,20 @@ Restore resmi harus:
 - `npm run check`, `git check`, dan pre-push wajib menjalankan automated test backend + frontend; test yang gagal harus menghentikan quality gate.
 - Perubahan auth, stock engine, purchase, sales, return, atau finance wajib mempertahankan regression test terkait.
 - Automated coverage backend aktif melindungi auth route aktual, cookie `HttpOnly`, migrasi/disable Bearer legacy, bootstrap code guard, CORS same-host, rate limiting login, stock/transaction/finance/return, production/payroll/HPP, backup/restore guarded, dan source ZIP hygiene.
+- Automated backend juga melindungi database queue diagnostics, atomic backup import, manual finance duplicate guard, maintenance data audit/rebuild/cleanup, security headers, structured logger, OpenAPI, dan password umum.
+- Runtime resmi adalah Node `>=22.12.0 <23`; quality gate wajib menjalankan `npm run check:runtime`.
 - Automated coverage frontend aktif melindungi auth service, Login error state/bootstrap, ProtectedRoute, role access matrix, dan Dashboard role-aware.
 - Report, seluruh variasi UI transaksi/produksi, serta interaksi maintenance kompleks tetap memerlukan checklist manual sampai coverage khusus ditambahkan.
 - Test tidak boleh mengubah schema, route, role guard, atau business rule hanya agar assertion lulus. Jika test menemukan bug, perbaikan business logic harus menjadi patch terpisah dan direview.
+
+## Maintenance data integrity contract
+
+- `GET /api/maintenance/data-audit` bersifat administrator-only dan read-only. Audit boleh membaca integrity SQLite, foreign key, invariant stok, stock read model, backup registry, dan pasangan kas-ledger.
+- `GET /api/maintenance/stock-read-model-audit` wajib membedakan `missing`, `stale`, dan `orphan`.
+- Rebuild hanya boleh menulis `stock_read_models` dari master Product/Raw Material/Semi Finished, setelah backup `pre-repair`, di dalam transaction, dan dengan audit log.
+- Cleanup orphan wajib keyword `BERSIHKAN DATA STOK`, backup `pre-repair`, transaction, dan audit log.
+- Tool ini dilarang mengubah stock master, inventory log, transaksi, finance, production, payroll, atau HPP.
+- Endpoint OpenAPI ringkas tersedia administrator-only di `GET /api/openapi.json`; kontrak dokumentasi bukan pengganti backend role guard.
 
 ## Auth session dan bootstrap contract
 
@@ -133,7 +146,7 @@ Restore resmi harus:
 - Cookie `Secure` hanya diaktifkan untuk deployment HTTPS melalui `IMS_AUTH_COOKIE_SECURE=true`; runtime HTTP LAN harus tetap `false` agar login berfungsi.
 - Frontend wajib memakai `credentials: "include"` pada seluruh request backend, termasuk download/import backup.
 - Response login tidak boleh mengembalikan raw token ke JavaScript; seluruh endpoint auth wajib memakai `Cache-Control: no-store` dan server tidak mengekspos header `X-Powered-By`.
-- Bearer token lama boleh diterima sementara untuk compatibility dan dimigrasikan oleh `/api/auth/me`; flow baru dilarang menulis token ke `localStorage`. Compatibility dikontrol oleh `IMS_AUTH_ALLOW_LEGACY_BEARER` dan baru boleh diset `false` setelah seluruh perangkat login ulang serta cookie session terverifikasi.
+- Bearer token lama ditolak secara default. Compatibility dapat diaktifkan sementara dengan `IMS_AUTH_ALLOW_LEGACY_BEARER=true` agar `/api/auth/me` memigrasikan perangkat lama ke cookie; setelah migrasi, flag wajib dikembalikan ke `false`. Flow baru dilarang menulis token ke `localStorage`.
 - CORS credentialed hanya mengizinkan hostname yang sama/loopback atau origin tambahan eksplisit dari `IMS_SQLITE_CORS_ORIGIN`; wildcard `*` tidak berlaku.
 - Bootstrap administrator pertama wajib kode setup terminal minimal 8 karakter. Endpoint public tidak boleh mengirim kode setup.
 - Setelah administrator aktif tersedia, endpoint bootstrap tetap terkunci oleh business guard backend.
@@ -155,7 +168,7 @@ Restore resmi harus:
 - [ ] Restore preview sukses.
 - [ ] Restore execute butuh keyword confirm.
 - [ ] Dashboard/report tidak white screen.
-- [ ] Setelah migrasi seluruh perangkat terkonfirmasi, `IMS_AUTH_ALLOW_LEGACY_BEARER=false` menolak Bearer lama tanpa memutus cookie session.
+- [ ] Default `IMS_AUTH_ALLOW_LEGACY_BEARER=false` menolak Bearer lama tanpa memutus cookie session; mode `true` hanya diuji sebagai jalur migrasi sementara.
 
 ## Source/archive hygiene
 

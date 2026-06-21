@@ -15,7 +15,7 @@ export default defineConfig([
   // - AKTIF sebagai baseline cleanup batch UI consistency.
   // - GUARDED: daftar ignore ini untuk output generated/build, bukan untuk source app.
   // =========================
-  globalIgnores(["dist", "build", "assets"]),
+  globalIgnores(["dist", "build", "coverage", "assets"]),
   {
     files: ["src/**/*.{js,jsx}"],
     extends: [

@@ -20,11 +20,14 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: |
             backend/package-lock.json
             frontend/package-lock.json
+
+      - name: Verify Node.js runtime
+        run: npm run check:runtime
 
       - name: Install backend dependencies
         run: npm ci --prefix backend
@@ -47,6 +50,9 @@ jobs:
       - name: Test frontend
         run: npm --prefix frontend test
 
+      - name: Check frontend critical-flow coverage
+        run: npm --prefix frontend run test:coverage
+
       - name: Lint frontend
         run: npm --prefix frontend run lint
 
@@ -55,3 +61,15 @@ jobs:
 
       - name: Check frontend bundle budget
         run: npm run check:bundle
+
+      - name: Generate CycloneDX SBOM
+        run: npm run sbom
+
+      - name: Upload coverage and SBOM evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ims-quality-evidence
+          path: |
+            frontend/coverage/coverage-summary.json
+            .artifacts/sbom/*.json
+          if-no-files-found: error

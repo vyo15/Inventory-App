@@ -1,3 +1,4 @@
+import { createClientId } from "../../utils/ids/createClientId";
 const STORAGE_KEY = "ims.maintenance.session-log.v1";
 const EVIDENCE_SCOPE = "client_session_only";
 const memoryFallbackLogs = [];
@@ -47,7 +48,7 @@ export const createMaintenanceLog = async ({
   executedBy = "client-ui",
 } = {}) => {
   const now = new Date().toISOString();
-  const id = `maintenance_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const id = createClientId("maintenance");
   const logs = readLogs();
 
   logs.unshift({

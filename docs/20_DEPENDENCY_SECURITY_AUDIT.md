@@ -50,6 +50,15 @@ Migrasi ke distribusi SheetJS resmi yang lebih baru harus menjadi patch dependen
 
 Residual ini berasal dari toolchain Vite major 7 dan bersifat development/build-time. Upgrade paksa melalui override tidak dilakukan karena dapat melanggar dependency range Vite. Upgrade ke Vite major berikutnya harus melalui migration review dan full regression, bukan `audit fix --force`.
 
+
+## Coverage dan SBOM evidence
+
+- Frontend memakai `@vitest/coverage-v8` dengan threshold critical-flow pada `frontend/vite.config.js`.
+- `npm --prefix frontend run test:coverage` menghasilkan text, HTML, dan `coverage-summary.json`.
+- `npm run sbom` menghasilkan CycloneDX backend/frontend dari lockfile ke `.artifacts/sbom/`.
+- CI mengunggah coverage summary dan SBOM sebagai artifact; `.artifacts/` tidak boleh masuk source ZIP.
+- `THIRD_PARTY_NOTICES.md` menjelaskan status dependency pihak ketiga. Lisensi source IMS sendiri tetap menunggu keputusan eksplisit owner.
+
 ## Quality gate setelah perubahan dependency
 
 Wajib dijalankan:
@@ -69,3 +78,10 @@ npm run git:check:full
 - Jangan mengubah major React, Vite, Ant Design, router, atau SheetJS dalam patch cleanup biasa.
 - Jangan menerima package registry internal/non-portable di lockfile.
 - Jangan menandai residual sebagai selesai hanya karena dependency bersifat transitive; tetap dokumentasikan reachability dan mitigasinya.
+
+## Hardening tanpa upgrade dependency — 2026-06-21
+
+- Runtime Node dipatok `>=22.12.0 <23` dengan rekomendasi `22.16.0`; CI membaca `.nvmrc`.
+- Security headers, structured logging/rotation, OpenAPI, common-password denylist, queue telemetry, dan vendor split ditambahkan tanpa dependency runtime baru.
+- Vendor split hanya memisahkan React/React Router dan Day.js untuk menghindari circular chunk Ant Design/rc-component. Chunk terbesar sekitar 706.6 KiB dan tetap di bawah budget 1074.2 KiB.
+- Residual `xlsx` dan `esbuild` tetap ada; hardening di atas tidak boleh diklaim sebagai penghapusan vulnerability dependency tersebut.

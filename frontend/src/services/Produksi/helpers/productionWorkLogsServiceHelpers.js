@@ -1,3 +1,5 @@
+import { createClientId } from "../../../utils/ids/createClientId";
+
 // =====================================================
 // Production Work Logs Service Helpers — GUARDED
 //
@@ -43,7 +45,7 @@ export const PRODUCTION_STEPS_COLLECTION_NAME = "production_steps";
 export const normalizeMaterialUsages = (lines = []) =>
   lines.map((line, index) =>
     calculateMaterialUsageLine({
-      id: line.id || `usage-${Date.now()}-${index}`,
+      id: line.id || createClientId(`usage-${index}`),
       itemType: line.itemType || "raw_material",
       itemId: line.itemId || "",
       itemCode: safeTrim(line.itemCode),
@@ -66,7 +68,7 @@ export const normalizeMaterialUsages = (lines = []) =>
 export const normalizeOutputs = (lines = []) =>
   lines.map((line, index) =>
     calculateOutputLine({
-      id: line.id || `output-${Date.now()}-${index}`,
+      id: line.id || createClientId(`output-${index}`),
       outputType: line.outputType || "semi_finished_material",
       outputIdRef: line.outputIdRef || "",
       outputCode: safeTrim(line.outputCode),
@@ -741,7 +743,7 @@ export const buildWorkLogDraftFromBom = (bom, selectedStepId = "") => {
     scrapQty: 0,
 
     materialUsages: materialLines.map((line, index) => ({
-      id: line.id || `usage-${Date.now()}-${index}`,
+      id: line.id || createClientId(`usage-${index}`),
       itemType: line.itemType,
       itemId: line.itemId,
       itemCode: line.itemCode,
@@ -832,7 +834,7 @@ export const buildWorkLogDraftFromProductionOrderData = (
     scrapQty: 0,
 
     materialUsages: requirementLines.map((line, index) => ({
-      id: line.id || `usage-po-${Date.now()}-${index}`,
+      id: line.id || createClientId(`usage-po-${index}`),
       itemType: line.itemType || "raw_material",
       itemId: line.itemId || "",
       itemCode: line.itemCode || "",
@@ -869,7 +871,7 @@ export const buildWorkLogDraftFromProductionOrderData = (
 
     outputs: [
       {
-        id: `output-po-${Date.now()}`,
+        id: createClientId("output-po"),
         outputType: productionOrder.targetType || "product",
         outputIdRef: productionOrder.targetId || "",
         outputCode: productionOrder.targetCode || "",

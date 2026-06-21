@@ -21,6 +21,7 @@ frontend/dist/
 frontend/dist-ssr/
 build/
 coverage/
+/.artifacts/
 .cache/
 .vite/
 

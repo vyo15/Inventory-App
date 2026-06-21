@@ -1,13 +1,18 @@
 const { failure } = require("../utils/response");
+const logger = require("../utils/logger");
 
 function notFoundHandler(req, res) {
-  void req;
+  logger.warn("http_not_found", { method: req.method, path: req.path });
   return failure(res, "Endpoint tidak ditemukan", "NOT_FOUND", 404);
 }
 
 function errorHandler(error, req, res, next) {
-  void req;
-  console.error("IMS layanan database lokal error:", error);
+  logger.error("http_request_error", {
+    method: req.method,
+    path: req.path,
+    actor: req.localAuth?.user?.username || null,
+    error,
+  });
 
   if (res.headersSent) {
     return next(error);

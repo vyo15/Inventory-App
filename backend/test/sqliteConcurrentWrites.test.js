@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const { after, before, beforeEach, test } = require("node:test");
 const { runInTransaction } = require("../src/db/connection");
+const { formatBusinessDateStamp } = require("../src/utils/businessCodeCounter");
 const { createCustomer, generateCustomerCode } = require("../src/modules/customers/customers.service");
 const { createUser, updateUser } = require("../src/modules/auth/auth.service");
 const { commitCashIn } = require("../src/modules/finance/finance.service");
@@ -311,9 +312,7 @@ test("dua perubahan admin paralel tidak dapat menurunkan administrator aktif ter
 
 test("runtime counter mengambil baseline kode historis tanpa scan sequence di JavaScript", async () => {
   const db = await testDatabase.getDb();
-  const preview = await generateCustomerCode();
-  const [prefix] = preview.match(/^CUS-\d{8}/) || [];
-  assert.ok(prefix);
+  const prefix = `CUS-${formatBusinessDateStamp()}`;
 
   await db.run(
     `INSERT INTO customers (customer_code, name, phone, status)

@@ -262,6 +262,28 @@ const MaintenanceChecklistPanel = () => {
         })(),
     },
     {
+      key: "database-queue",
+      kind: "auto",
+      status: statusData.databaseQueue && Number(statusData.databaseQueue.queued || 0) <= 5 ? "done" : "pending",
+      statusLabel: statusData.databaseQueue && Number(statusData.databaseQueue.queued || 0) <= 5 ? "Sesuai" : "Perlu cek",
+      title: "Antrean database terpantau",
+      description: "Semua read/write SQLite memakai coordinator FIFO; status ini menampilkan antrean dan operasi lambat tanpa membuka payload bisnis.",
+      extra: statusData.databaseQueue
+        ? `Antre ${Number(statusData.databaseQueue.queued || 0)} • maksimum ${Number(statusData.databaseQueue.maxQueueDepth || 0)} • slow wait ${Number(statusData.databaseQueue.slowWaitCount || 0)} • slow operation ${Number(statusData.databaseQueue.slowOperationCount || 0)}`
+        : "Telemetry antrean database belum terbaca.",
+    },
+    {
+      key: "structured-logging",
+      kind: "auto",
+      status: statusData.logging?.structured ? "done" : "pending",
+      statusLabel: statusData.logging?.structured ? "Sesuai" : "Perlu cek",
+      title: "Structured logging dan retention aktif",
+      description: "Request, error, dan operasi database lambat dicatat sebagai JSON tanpa payload transaksi.",
+      extra: statusData.logging?.structured
+        ? `File log ${statusData.logging.fileLoggingEnabled ? "aktif" : "nonaktif"} • retensi ${Number(statusData.logging.retentionDays || 0)} hari`
+        : "Status logger belum terbaca.",
+    },
+    {
       key: "module-runtime-known",
       kind: "auto",
       status: moduleRuntimeKnown && moduleRuntimeNotReady === 0 && moduleRuntimeReady === moduleRuntimeTotal ? "done" : "pending",

@@ -337,7 +337,40 @@ test("import backup menormalkan filename dan hanya menerima package valid", asyn
 });
 
 
-test("status maintenance menampilkan evidence migrasi Bearer tanpa menyimpulkan semua perangkat siap", async () => {
+
+test("import backup rollback log dan menghapus file ketika audit gagal", async () => {
+  await upsertCategory({ code: "CAT-IMPORT-ROLLBACK", name: "Import rollback source" });
+  const backup = await createBackup({ type: "test", actor: "import-rollback-tester" });
+  const packageBuffer = fs.readFileSync(backup.path);
+  const db = await testDatabase.getDb();
+  const beforeCount = await db.get("SELECT COUNT(*) AS count FROM backup_logs");
+  const beforeFiles = new Set(fs.readdirSync(path.join(testDatabase.backupDir, "manual")));
+
+  await db.exec(`
+    CREATE TRIGGER force_backup_import_audit_failure
+    BEFORE INSERT ON audit_logs
+    WHEN NEW.action = 'backup_import'
+    BEGIN
+      SELECT RAISE(ABORT, 'forced backup import audit failure');
+    END;
+  `);
+
+  await assert.rejects(
+    importBackupFile({
+      body: packageBuffer,
+      headers: { "x-ims-backup-filename": encodeURIComponent("rollback-test.imsbackup") },
+      actor: "import-rollback-tester",
+    }),
+    /forced backup import audit failure/,
+  );
+
+  const afterCount = await db.get("SELECT COUNT(*) AS count FROM backup_logs");
+  const afterFiles = fs.readdirSync(path.join(testDatabase.backupDir, "manual"));
+  assert.equal(afterCount.count, beforeCount.count);
+  assert.deepEqual(new Set(afterFiles), beforeFiles);
+});
+
+test("status maintenance menampilkan Bearer legacy nonaktif secara default dan tetap menyimpan evidence", async () => {
   const db = await testDatabase.getDb();
   await db.run(
     `INSERT INTO audit_logs (module, action, entity_type, entity_id, description, actor)
@@ -346,9 +379,9 @@ test("status maintenance menampilkan evidence migrasi Bearer tanpa menyimpulkan 
 
   const status = await getMaintenanceStatus();
 
-  assert.equal(status.authCompatibility.legacyBearerEnabled, true);
-  assert.equal(status.authCompatibility.removalReady, false);
-  assert.equal(status.authCompatibility.manualConfirmationRequired, true);
+  assert.equal(status.authCompatibility.legacyBearerEnabled, false);
+  assert.equal(status.authCompatibility.removalReady, true);
+  assert.equal(status.authCompatibility.manualConfirmationRequired, false);
   assert.equal(status.authCompatibility.migrationEvidence.totalMigrations, 1);
   assert.equal(status.authCompatibility.migrationEvidence.recentMigrations7d, 1);
   assert.ok(status.authCompatibility.migrationEvidence.latestMigrationAt);

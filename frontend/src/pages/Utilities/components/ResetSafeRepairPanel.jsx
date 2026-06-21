@@ -5,7 +5,11 @@ import DataTableView from "../../../components/Layout/Table/DataTableView";
 import ImsNotice from "../../../components/Layout/Feedback/ImsNotice";
 import { formatHppUnitCurrencyId } from "../../../utils/formatters/currencyId";
 import { formatQuantityId } from "../../../utils/formatters/numberId";
-import { MAINTENANCE_DATA_TOOLS_AVAILABLE, MAINTENANCE_DATA_TOOLS_UNAVAILABLE_MESSAGE } from "../../../services/Maintenance/resetMaintenanceDataService";
+import {
+  MAINTENANCE_DATA_TOOLS_AVAILABLE,
+  MAINTENANCE_DATA_TOOLS_MODE,
+  MAINTENANCE_DATA_TOOLS_UNAVAILABLE_MESSAGE,
+} from "../../../services/Maintenance/resetMaintenanceDataService";
 
 const { Text } = Typography;
 
@@ -173,6 +177,107 @@ const ResetSafeRepairPanel = ({
       </Popconfirm>
     );
   };
+
+  if (MAINTENANCE_DATA_TOOLS_MODE === "safe_subset") {
+    const repairCount = Number(stockReadModelSummary.executablePlanCount || 0);
+    const orphanCount = Number(stockReadModelSummary.orphanCount || 0);
+
+    return (
+      <Card title="Repair Data Turunan Stok" size="small" extra={<Tag color="green">Guarded</Tag>}>
+        <Space direction="vertical" size={12} style={{ width: "100%" }}>
+          <ImsNotice
+            variant="guidance"
+            compact
+            title="Hanya projection stok yang dapat diperbaiki otomatis"
+            description="Rebuild membaca Product, Bahan Baku, dan Barang Setengah Jadi lalu menulis stock_read_models. Master stock, inventory log, transaksi, production, payroll, HPP, dan finance tidak diubah. Backup resmi dibuat sebelum repair."
+          />
+          <Row gutter={[8, 8]}>
+            <Col xs={24} md={8}>
+              <Button block icon={<FileSearchOutlined />} loading={loadingStockReadModelAudit} onClick={onLoadStockReadModelAudit}>
+                Audit Data Turunan Stok
+              </Button>
+            </Col>
+            <Col xs={24} md={8}>
+              <Popconfirm
+                title="Rebuild data turunan stok?"
+                description={buildGuardMessage({ auditReady: Boolean(stockReadModelAudit), planCount: repairCount })}
+                okText="Ya, rebuild"
+                cancelText="Batal"
+                disabled={!stockReadModelAudit || repairCount <= 0}
+                onConfirm={onRepairStockReadModelAudit}
+              >
+                <Button block icon={<SyncOutlined />} loading={loadingStockReadModelRepair} disabled={!stockReadModelAudit || repairCount <= 0}>
+                  Rebuild Projection{repairCount ? ` (${repairCount})` : ""}
+                </Button>
+              </Popconfirm>
+            </Col>
+            <Col xs={24} md={8}>
+              <Popconfirm
+                title="Cleanup data turunan yatim?"
+                description={(
+                  <Space direction="vertical" size={6}>
+                    <Text>Hanya stock_read_models tanpa master source aktif yang akan dihapus setelah backup.</Text>
+                    <Text type="secondary">Ketik <Text code>{STOCK_READ_MODEL_ORPHAN_CLEANUP_CONFIRM_KEYWORD}</Text>.</Text>
+                    <Input
+                      value={stockReadModelCleanupKeyword}
+                      onChange={(event) => setStockReadModelCleanupKeyword(event.target.value)}
+                      placeholder={STOCK_READ_MODEL_ORPHAN_CLEANUP_CONFIRM_KEYWORD}
+                    />
+                  </Space>
+                )}
+                okText="Ya, cleanup"
+                cancelText="Batal"
+                disabled={!stockReadModelAudit || orphanCount <= 0}
+                okButtonProps={{ disabled: !isStockReadModelCleanupKeywordValid }}
+                onOpenChange={(open) => { if (!open) setStockReadModelCleanupKeyword(""); }}
+                onConfirm={() => onCleanupStockReadModelOrphans({ confirmKeyword: stockReadModelCleanupKeyword })}
+              >
+                <Button block danger icon={<DeleteOutlined />} loading={loadingStockReadModelCleanup} disabled={!stockReadModelAudit || orphanCount <= 0}>
+                  Cleanup Orphan{orphanCount ? ` (${orphanCount})` : ""}
+                </Button>
+              </Popconfirm>
+            </Col>
+          </Row>
+          {stockReadModelAudit && (
+            <ImsNotice
+              variant={repairCount || orphanCount ? "data-quality" : "status"}
+              compact
+              title={repairCount || orphanCount ? "Audit menemukan data turunan yang perlu tindakan." : "Data turunan stok sudah sinkron."}
+              description={`Master: ${stockReadModelSummary.sourceRecords || 0}. Missing: ${stockReadModelSummary.missingCount || 0}. Stale: ${stockReadModelSummary.staleCount || 0}. Orphan: ${orphanCount}.`}
+            />
+          )}
+          {stockReadModelRows.some((record) => record.category !== "ok") && (
+            <DataTableView
+              className="app-data-table"
+              size="small"
+              rowKey={(record) => record.key || record.readModelId}
+              pagination={{ pageSize: 8 }}
+              dataSource={stockReadModelRows.filter((record) => record.category !== "ok")}
+              columns={[
+                { title: "Area", dataIndex: "sourceLabel", key: "sourceLabel", width: 150, render: (value) => renderCompactText(value, 135) },
+                { title: "Item", dataIndex: "itemName", key: "itemName", width: 220, render: (value) => renderCompactText(value, 200) },
+                { title: "Status", dataIndex: "category", key: "category", width: 135, render: (value) => <Tag color={STOCK_READ_MODEL_CATEGORY_COLORS[value] || "default"}>{formatStockReadModelCategory(value)}</Tag> },
+                { title: "Issue", dataIndex: "issue", key: "issue", render: (value) => renderCompactText(value, 380) },
+              ]}
+              mobileCardConfig={{
+                title: (record) => record.itemName || record.sourceLabel || "Data Stok",
+                subtitle: (record) => record.sourceLabel || record.readModelId,
+                tags: (record) => <Tag color={STOCK_READ_MODEL_CATEGORY_COLORS[record.category] || "default"}>{formatStockReadModelCategory(record.category)}</Tag>,
+                meta: [{ label: "Issue", value: (record) => record.issue || "-" }],
+              }}
+              scroll={{ x: 820 }}
+            />
+          )}
+          <ImsNotice
+            variant="status"
+            compact
+            title="Repair area lain tetap dinonaktifkan"
+            description={MAINTENANCE_DATA_TOOLS_UNAVAILABLE_MESSAGE}
+          />
+        </Space>
+      </Card>
+    );
+  }
 
   const stockAuditReady = hasAuditResult(stockAudit, stockRepairSummary);
   const stockSyncDisabled = !stockAuditReady || getRepairPlanCount(stockRepairSummary) <= 0;

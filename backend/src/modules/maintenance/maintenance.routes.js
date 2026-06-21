@@ -3,12 +3,16 @@ const { requireLocalAuth, requireLocalAdministrator } = require("../../middlewar
 const { IMPORT_BACKUP_MAX_BYTES } = require("./maintenance.service");
 const {
   createBackupController,
+  deleteOrphanStockReadModelsController,
   createRestorePlanController,
   downloadBackupController,
   executeRestoreController,
   exportMasterDataController,
+  getDataQualityAuditController,
   getMaintenanceStatusController,
+  getStockReadModelAuditController,
   importBackupController,
+  rebuildStockReadModelsController,
   listBackupsController,
   listRestoreLogsController,
 } = require("./maintenance.controller");
@@ -21,6 +25,10 @@ const backupImportParser = express.raw({
 });
 
 router.get("/status", ...requireAdmin, getMaintenanceStatusController);
+router.get("/data-audit", ...requireAdmin, getDataQualityAuditController);
+router.get("/stock-read-model-audit", ...requireAdmin, getStockReadModelAuditController);
+router.post("/stock-read-model-rebuild", ...requireAdmin, rebuildStockReadModelsController);
+router.post("/stock-read-model-orphan-cleanup", ...requireAdmin, deleteOrphanStockReadModelsController);
 router.get("/master-data-export", ...requireAdmin, exportMasterDataController);
 router.post("/backup", ...requireAdmin, createBackupController);
 router.get("/backups/:filename/download", ...requireAdmin, downloadBackupController);

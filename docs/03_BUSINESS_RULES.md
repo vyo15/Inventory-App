@@ -281,7 +281,7 @@ Reset destructive/testing lama sudah tidak tersedia di UI operasional. Jalur mai
 - Export Master/Checklist read-only.
 - Checklist manual sebelum maintenance besar.
 
-Audit Data dan Repair Aman otomatis belum diaktifkan pada backend SQLite aktif. UI wajib menampilkan status belum tersedia dan tidak boleh mencatat hasil sukses palsu dari service no-op.
+Audit Data read-only aktif terbatas untuk integrity SQLite, invariant stok, stock read model, registry backup, dan pasangan kas-ledger. Repair Aman hanya aktif untuk rebuild/cleanup `stock_read_models` sebagai data turunan dengan backup `pre-repair`, transaction, audit log, dan keyword cleanup. Repair stok utama, inventory log, transaksi, finance, production, payroll, dan HPP tetap dinonaktifkan; service no-op tidak boleh ditampilkan sebagai sukses.
 - Export Master/Checklist untuk review dan backup manual.
 
 Tab Reset Testing hanya menampilkan status nonaktif. Jangan mengaktifkan ulang reset testing tanpa desain guard baru, backup otomatis, preview dampak, keyword, dan audit log.
@@ -785,6 +785,9 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Maintenance hanya untuk admin, bukan flow harian user operasional.
 - Jalur utama pemulihan data adalah Backup & Restore resmi, bukan tombol reset transaksi/testing lama.
 - Repair stok tetap hanya menyamakan field turunan dan tidak boleh membuat inventory log palsu.
+- Rebuild stock read model hanya menulis tabel `stock_read_models` dari Product/Raw Material/Semi Finished; dilarang mengubah current/reserved/available stock pada master.
+- Cleanup orphan stock read model wajib keyword `BERSIHKAN DATA STOK`, backup `pre-repair`, transaction, dan audit log.
+- Import backup wajib atomic antara file package, `backup_logs`, dan audit log; kegagalan setelah file ditulis harus membersihkan file dan rollback registry.
 - Repair otomatis hanya boleh diaktifkan setelah backend SQLite menyediakan audit/preview nyata, guard, transaction, dan audit log resmi. Service no-op tidak boleh ditampilkan sebagai sukses.
 - Export Master/Checklist bersifat backup/review manual, bukan import atau restore otomatis.
 - Tab Reset Testing hanya menampilkan status nonaktif agar developer tidak mengira reset testing masih aktif.
@@ -1097,8 +1100,8 @@ Guard wajib:
 - Akses menu dan route Buku Besar Kas mengikuti finance sensitive area: Administrator only.
 
 ## Reset & Maintenance Development Rules
-- **Audit otomatis:** belum aktif sampai backend SQLite menyediakan implementasi read-only nyata. Stub/no-op tidak boleh menghasilkan status sukses atau evidence resmi.
-- **Repair otomatis:** belum aktif sampai audit nyata, preview, guard, transaction, dan audit log backend tersedia. Repair tidak boleh dibuat hanya di frontend.
+- **Audit otomatis:** subset read-only nyata sudah aktif di backend untuk integrity SQLite, invariant stok, projection stok, registry backup, dan kas-ledger. Stub/no-op area lain tidak boleh menghasilkan status sukses atau evidence resmi.
+- **Repair otomatis:** hanya stock read model missing/stale dan orphan projection yang aktif. Aksi wajib berdasarkan audit terbaru, membuat backup `pre-repair`, memakai transaction, audit log, dan keyword untuk cleanup. Repair area bisnis lain tidak boleh dibuat hanya di frontend.
 - **Reset:** reset testing lama nonaktif. Jika reset baru dibutuhkan, wajib desain guard baru dan approval khusus.
 - **Export data pokok:** direkomendasikan sebelum maintenance besar. Export bersifat backup/checklist, bukan import atau restore otomatis.
 - **Protected master:** tidak ikut reset default dan tidak boleh dilepas dari guard tanpa approval khusus.
@@ -1241,3 +1244,7 @@ Guard tetap berlaku:
 - Restore SQLite destructive tetap wajib admin lokal, preview/plan, file backup eksplisit, keyword guard, dan backup otomatis.
 
 Kontrak resmi: `docs/10_OFFLINE_DATABASE_CONTRACT.md`.
+
+## Update Rule Finance Manual vs System Idempotency — 2026-06-21
+- Cash In/Cash Out manual dengan `id` atau `code` yang sudah ada wajib ditolak `409 FINANCE_DUPLICATE_MANUAL_REFERENCE`; transaksi manual tidak boleh diam-diam meng-overwrite catatan kas lama.
+- Posting sistem dari Sale/Purchase/Payroll tetap idempotent berdasarkan source ID agar retry tidak membuat ledger duplikat. Guard manual tidak boleh memutus idempotency system side-effect.

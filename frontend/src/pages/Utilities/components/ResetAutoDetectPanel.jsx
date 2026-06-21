@@ -3,18 +3,25 @@ import { Button, Card, Col, Row, Space, Tag } from "antd";
 import DataTableView from "../../../components/Layout/Table/DataTableView";
 import ImsNotice from "../../../components/Layout/Feedback/ImsNotice";
 import { buildAutoDetectIssueSummaryMessage, getAuditIssueCountColor } from "../utils/resetMaintenanceUiHelpers";
-import { MAINTENANCE_DATA_TOOLS_AVAILABLE, MAINTENANCE_DATA_TOOLS_UNAVAILABLE_MESSAGE } from "../../../services/Maintenance/resetMaintenanceDataService";
+import {
+  MAINTENANCE_DATA_TOOLS_AVAILABLE,
+  MAINTENANCE_DATA_TOOLS_MODE,
+  MAINTENANCE_DATA_TOOLS_UNAVAILABLE_MESSAGE,
+} from "../../../services/Maintenance/resetMaintenanceDataService";
 
 const ResetAutoDetectPanel = ({
   autoBugSummary,
   loadingAutoDetect,
+  loadingDataQualityAudit,
   loadingStockAudit,
   loadingTransactionVariantAudit,
   onRunAllAudits,
+  onLoadDataQualityAudit,
   onLoadStockAudit,
   onLoadTransactionVariantAudit,
   auditOverviewRows,
   auditIssueRows,
+  dataQualityCategoryRows = [],
   renderCompactText,
 }) => {
   if (!MAINTENANCE_DATA_TOOLS_AVAILABLE) {
@@ -26,6 +33,54 @@ const ResetAutoDetectPanel = ({
           title="Audit otomatis belum diaktifkan"
           description={MAINTENANCE_DATA_TOOLS_UNAVAILABLE_MESSAGE}
         />
+      </Card>
+    );
+  }
+
+  if (MAINTENANCE_DATA_TOOLS_MODE === "safe_subset") {
+    return (
+      <Card title="Audit Kualitas Data" size="small" extra={<Tag color={autoBugSummary.color}>{autoBugSummary.status}</Tag>}>
+        <Space direction="vertical" size={12} style={{ width: "100%" }}>
+          <ImsNotice
+            variant="guidance"
+            compact
+            title="Audit read-only aktif"
+            description="Audit memeriksa integrity SQLite, invariant stok, data turunan stok, registry backup, serta pasangan kas-ledger. Tidak ada data bisnis yang diubah."
+          />
+          <Button
+            type="primary"
+            icon={<FileSearchOutlined />}
+            loading={loadingDataQualityAudit || loadingAutoDetect}
+            onClick={() => onLoadDataQualityAudit?.({ showProblemPreview: false })}
+          >
+            Jalankan Audit Aman
+          </Button>
+          <DataTableView
+            className="app-data-table"
+            size="small"
+            pagination={false}
+            dataSource={dataQualityCategoryRows}
+            columns={[
+              { title: "Area", dataIndex: "categoryLabel", key: "categoryLabel", width: 180, render: (value) => renderCompactText(value, 165) },
+              { title: "Issue", dataIndex: "count", key: "count", width: 90, render: (value) => <Tag color={getAuditIssueCountColor(value)}>{value || 0}</Tag> },
+              { title: "Contoh", dataIndex: "samplePreview", key: "samplePreview", render: (value) => renderCompactText(value, 360) },
+              { title: "Rekomendasi", dataIndex: "recommendation", key: "recommendation", render: (value) => renderCompactText(value, 360) },
+            ]}
+            mobileCardConfig={{
+              title: (record) => record.categoryLabel || "Area Audit",
+              subtitle: (record) => record.recommendation || "Rekomendasi audit",
+              tags: (record) => <Tag color={getAuditIssueCountColor(record.count)}>Issue {record.count || 0}</Tag>,
+              meta: [{ label: "Contoh", value: (record) => record.samplePreview || "Tidak ada temuan." }],
+            }}
+            scroll={{ x: 920 }}
+          />
+          <ImsNotice
+            variant="status"
+            compact
+            title="Repair otomatis dibatasi"
+            description={MAINTENANCE_DATA_TOOLS_UNAVAILABLE_MESSAGE}
+          />
+        </Space>
       </Card>
     );
   }

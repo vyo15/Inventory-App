@@ -1,3 +1,5 @@
+import { createClientId } from "../ids/createClientId";
+
 import {
   hydrateBomMaterialLineWithLiveCost,
   resolveBomStepPayrollSnapshot,
@@ -39,7 +41,7 @@ export const buildBomMaterialFormLine = ({ values, selectedItem, itemType }) => 
     item: selectedItem || {},
     line: {
       ...values,
-      id: values.id || `material-${Date.now()}`,
+      id: values.id || createClientId("material"),
       itemType,
       itemCode: selectedItem?.code || '',
       itemName: selectedItem?.name || '',
@@ -57,7 +59,7 @@ export const buildBomMaterialFormLine = ({ values, selectedItem, itemType }) => 
 export const buildBomStepFormLine = ({ values, selectedStep }) => ({
   ...values,
   ...resolveBomStepPayrollSnapshot(selectedStep || values || {}),
-  id: values.id || `step-${Date.now()}`,
+  id: values.id || createClientId("step"),
   stepCode: selectedStep?.code || '',
   stepName: selectedStep?.name || '',
 });
@@ -83,7 +85,7 @@ export const buildWorkLogMaterialUsageFormLine = ({ values, selectedItem }) => {
 
   return calculateMaterialUsageLine({
     ...values,
-    id: values.id || `usage-${Date.now()}`,
+    id: values.id || createClientId("usage"),
     itemCode: selectedItem?.code || '',
     itemName: selectedItem?.name || '',
     unit: values.unit || selectedItem?.unit || 'pcs',
@@ -117,7 +119,7 @@ export const buildWorkLogOutputFormLine = ({ values, selectedOutput }) => {
 
   return calculateOutputLine({
     ...values,
-    id: values.id || `output-${Date.now()}`,
+    id: values.id || createClientId("output"),
     outputCode: selectedOutput?.code || '',
     outputName: selectedOutput?.name || '',
     unit: values.unit || selectedOutput?.unit || 'pcs',

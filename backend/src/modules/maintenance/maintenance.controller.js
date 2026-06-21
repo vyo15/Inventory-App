@@ -4,9 +4,13 @@ const {
   createBackup,
   createRestorePlan,
   executeRestore,
+  getDataQualityAudit,
   getBackupDownload,
   getMaintenanceStatus,
+  getStockReadModelMaintenanceAudit,
   importBackupFile,
+  rebuildStockReadModels,
+  deleteOrphanStockReadModels,
   listBackups,
   listRestoreLogs,
 } = require("./maintenance.service");
@@ -17,6 +21,45 @@ const getMaintenanceStatusController = async (_req, res, next) => {
   try {
     const status = await getMaintenanceStatus();
     return success(res, "Status layanan database lokal berhasil dimuat", status);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const getDataQualityAuditController = async (_req, res, next) => {
+  try {
+    const result = await getDataQualityAudit();
+    return success(res, "Audit kualitas data selesai. Tidak ada data yang diubah.", result);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const getStockReadModelAuditController = async (_req, res, next) => {
+  try {
+    const result = await getStockReadModelMaintenanceAudit();
+    return success(res, "Audit data turunan stok selesai. Tidak ada data yang diubah.", result);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const rebuildStockReadModelsController = async (req, res, next) => {
+  try {
+    const result = await rebuildStockReadModels({ actor: getActor(req) });
+    return success(res, result.message || "Data turunan stok berhasil diperbaiki.", result);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const deleteOrphanStockReadModelsController = async (req, res, next) => {
+  try {
+    const result = await deleteOrphanStockReadModels({
+      confirmKeyword: req.body?.confirmKeyword,
+      actor: getActor(req),
+    });
+    return success(res, result.message || "Data turunan stok yatim berhasil dibersihkan.", result);
   } catch (error) {
     return next(error);
   }
@@ -136,9 +179,13 @@ module.exports = {
   createRestorePlanController,
   downloadBackupController,
   executeRestoreController,
+  deleteOrphanStockReadModelsController,
   exportMasterDataController,
+  getDataQualityAuditController,
   getMaintenanceStatusController,
+  getStockReadModelAuditController,
   importBackupController,
+  rebuildStockReadModelsController,
   listBackupsController,
   listRestoreLogsController,
 };

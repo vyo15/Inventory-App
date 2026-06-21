@@ -12,6 +12,7 @@ import { getMasterCodeMaintenanceAudit } from "../../../services/Maintenance/mas
 import { getPayrollSnapshotMaintenanceAudit } from "../../../services/Maintenance/payrollMaintenanceService";
 import { getTransactionVariantMaintenanceAudit } from "../../../services/Maintenance/transactionVariantMaintenanceService";
 import { getTransactionSideEffectRepairAudit } from "../../../services/Maintenance/transactionSideEffectRepairService";
+import { MAINTENANCE_DATA_TOOLS_MODE } from "../../../services/Maintenance/resetMaintenanceDataService";
 import { AUDIT_SUMMARY_AREAS } from "../utils/resetMaintenanceUiHelpers";
 
 const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
@@ -325,6 +326,10 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
   const handleRunAllAudits = useCallback(async () => {
     try {
       await handleLoadDataQualityAudit({ showProblemPreview: false });
+      if (MAINTENANCE_DATA_TOOLS_MODE === "safe_subset") {
+        showActionSuccess("Audit aman selesai. Area repair berisiko tinggi tetap dinonaktifkan.");
+        return;
+      }
       await handleLoadHppReconcileAudit();
       await handleLoadMasterCodeAudit();
       await handleLoadStockAudit();

@@ -13,6 +13,15 @@ const toInteger = (value = 0) => {
 
 const normalizeText = (value = "") => String(value ?? "").trim();
 const nowIso = () => new Date().toISOString();
+const MANUAL_FINANCE_SOURCE_MODULES = new Set(["cash_in_manual", "cash_out_manual"]);
+
+const createFinanceConflictError = (message) => {
+  const error = new Error(message);
+  error.publicMessage = message;
+  error.statusCode = 409;
+  error.errorCode = "FINANCE_DUPLICATE_MANUAL_REFERENCE";
+  return error;
+};
 
 
 const normalizeDate = (value) => {
@@ -113,6 +122,9 @@ const createFinanceMovement = async (db, {
   const normalizedDirection = direction === "out" ? "out" : "in";
   const tableName = normalizedDirection === "out" ? "expenses" : "incomes";
   const prefix = normalizedDirection === "out" ? "CSH-OUT" : "CSH-IN";
+  const effectiveSourceModule = normalizeText(
+    sourceModule || payload.sourceModule || (normalizedDirection === "out" ? "cash_out_manual" : "cash_in_manual"),
+  );
   const referenceNumber = await buildFinanceCode(db, tableName, prefix, payload);
   const movementId = normalizeText(payload.id || referenceNumber);
   const amount = Math.abs(toInteger(payload.amount ?? payload.totalAmount ?? payload.total ?? 0));
@@ -121,14 +133,26 @@ const createFinanceMovement = async (db, {
     throw new Error("Nominal kas wajib lebih dari 0.");
   }
 
+  if (MANUAL_FINANCE_SOURCE_MODULES.has(effectiveSourceModule)) {
+    const duplicate = await db.get(
+      `SELECT id, code FROM ${tableName} WHERE id = ? OR code = ? LIMIT 1`,
+      [movementId, referenceNumber],
+    );
+    if (duplicate) {
+      throw createFinanceConflictError(
+        `Referensi kas manual ${referenceNumber} sudah digunakan. Muat ulang data dan buat transaksi baru.`,
+      );
+    }
+  }
+
   const movementPayload = {
     ...payload,
     id: movementId,
     code: referenceNumber,
     referenceNumber,
     sourceRef: sourceRef || payload.sourceRef || referenceNumber,
-    sourceModule: sourceModule || payload.sourceModule || (normalizedDirection === "out" ? "cash_out_manual" : "cash_in_manual"),
-    sourceType: payload.sourceType || sourceModule || "manual",
+    sourceModule: effectiveSourceModule,
+    sourceType: payload.sourceType || effectiveSourceModule || "manual",
     sourceId: sourceId || payload.sourceId || movementId,
     amount,
     totalAmount: amount,
@@ -180,9 +204,14 @@ const markFinanceMovementDeleted = async (db, { tableName, id, actor = "system" 
     `UPDATE ${tableName} SET status = 'deleted', is_active = 0, payload_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
     [JSON.stringify(payload), id]
   );
+  const movementPayload = safeJsonParse(row.payload_json, {});
+  const sourceType = normalizeText(row.source_type || movementPayload.sourceModule || movementPayload.sourceType);
+  const ledgerId = `ledger_${id}`;
   await db.run(
-    `UPDATE money_movement_ledger SET status = 'deleted', is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE source_id = ?`,
-    [id]
+    `UPDATE money_movement_ledger
+     SET status = 'deleted', is_active = 0, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ? OR (source_id = ? AND source_type = ?)`,
+    [ledgerId, id, sourceType],
   );
 
   await createAuditLog({

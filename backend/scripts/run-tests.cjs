@@ -22,7 +22,11 @@ console.log(`[test] Menjalankan ${testFiles.length} file automated test backend.
 const result = spawnSync(
   process.execPath,
   ["--test", "--test-concurrency=1", ...testFiles],
-  { stdio: "inherit", shell: false }
+  {
+    stdio: "inherit",
+    shell: false,
+    env: { ...process.env, NODE_ENV: "test", IMS_LOG_TO_FILE: "false" },
+  }
 );
 
 if (result.error) {

@@ -1,5 +1,8 @@
+const { getDatabaseGeneration } = require("../db/connection");
+
 const normalizeText = (value) => String(value ?? "").trim();
 const normalizeCode = (value) => normalizeText(value).toUpperCase();
+const verifiedCounterBaselines = new Map();
 
 const formatBusinessDateStamp = (value = new Date()) => {
   const parsed = value instanceof Date ? value : new Date(value || Date.now());
@@ -52,30 +55,6 @@ const getCounterRow = (db, counterKey) => db.get(
   [normalizeText(counterKey)],
 );
 
-const getBusinessCodePreview = async (db, options = {}) => {
-  const {
-    counterKey,
-    prefix,
-    tableName,
-    columnName = "code",
-    minWidth = 3,
-  } = options;
-  const normalizedCounterKey = normalizeText(counterKey);
-  const normalizedPrefix = normalizeCode(prefix);
-  if (!normalizedCounterKey || !normalizedPrefix) {
-    throw new Error("Konfigurasi preview business code counter tidak lengkap.");
-  }
-
-  const counter = await getCounterRow(db, normalizedCounterKey);
-  const existingMax = await getExistingMaxSequence(db, {
-    tableName,
-    columnName,
-    prefix: normalizedPrefix,
-  });
-  const nextSequence = Math.max(Number(counter?.last_number || 0), existingMax) + 1;
-  return buildBusinessCode(normalizedPrefix, nextSequence, minWidth);
-};
-
 const ensureCounterBaseline = async (db, {
   counterKey,
   prefix,
@@ -87,6 +66,16 @@ const ensureCounterBaseline = async (db, {
   const normalizedPrefix = normalizeCode(prefix);
   if (!normalizedCounterKey || !normalizedPrefix) {
     throw new Error("Konfigurasi business code counter tidak lengkap.");
+  }
+
+  const currentCounter = await getCounterRow(db, normalizedCounterKey);
+  if (currentCounter && normalizeCode(currentCounter.prefix) !== normalizedPrefix) {
+    throw new Error(`Prefix business code counter ${normalizedCounterKey} tidak konsisten.`);
+  }
+
+  const databaseGeneration = getDatabaseGeneration();
+  if (currentCounter && verifiedCounterBaselines.get(normalizedCounterKey) === databaseGeneration) {
+    return currentCounter;
   }
 
   const existingMax = await getExistingMaxSequence(db, {
@@ -105,6 +94,19 @@ const ensureCounterBaseline = async (db, {
        updated_at = CURRENT_TIMESTAMP`,
     [normalizedCounterKey, normalizedPrefix, existingMax, normalizeText(notes)],
   );
+
+  const verifiedCounter = await getCounterRow(db, normalizedCounterKey);
+  if (!verifiedCounter) {
+    throw new Error(`Business code counter ${normalizedCounterKey} gagal diinisialisasi.`);
+  }
+  verifiedCounterBaselines.set(normalizedCounterKey, databaseGeneration);
+  return verifiedCounter;
+};
+
+const getBusinessCodePreview = async (db, options = {}) => {
+  const { prefix, minWidth = 3 } = options;
+  const counter = await ensureCounterBaseline(db, options);
+  return buildBusinessCode(prefix, Number(counter.last_number || 0) + 1, minWidth);
 };
 
 const reserveBusinessCode = async (db, options = {}) => {

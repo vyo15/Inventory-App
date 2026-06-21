@@ -1,3 +1,4 @@
+import { createClientId } from "../ids/createClientId";
 /* eslint-disable react-refresh/only-export-components */
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Modal, Space, Typography } from "antd";
@@ -67,7 +68,7 @@ const normalizeOptions = (status, options = {}) => {
   ].filter(Boolean);
 
   return {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    id: createClientId("feedback"),
     status: POPUP_STATUSES.has(status) ? status : "success",
     title: normalizedOptions.title || config.defaultTitle,
     content,

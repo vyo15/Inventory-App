@@ -1,8 +1,16 @@
 import { getSqliteMasterDataExport } from "../System/sqliteBackendStatusService";
 
-export const MAINTENANCE_DATA_TOOLS_AVAILABLE = false;
+export const MAINTENANCE_DATA_TOOL_CAPABILITIES = Object.freeze({
+  dataQualityAudit: true,
+  stockReadModelAudit: true,
+  stockReadModelRebuild: true,
+  stockReadModelOrphanCleanup: true,
+});
+
+export const MAINTENANCE_DATA_TOOLS_MODE = "safe_subset";
+export const MAINTENANCE_DATA_TOOLS_AVAILABLE = true;
 export const MAINTENANCE_DATA_TOOLS_UNAVAILABLE_MESSAGE =
-  "Audit dan repair otomatis belum tersedia pada backend SQLite aktif. Gunakan Backup & Restore resmi serta checklist manual; tidak ada data yang diubah.";
+  "Audit read-only dan repair data turunan stok tersedia. Repair stok utama, transaksi, finance, production, payroll, dan HPP otomatis tetap dinonaktifkan agar data bisnis tidak berubah tanpa kontrak yang teruji.";
 
 export const throwUnavailableMaintenanceTool = (label = "Maintenance tool") => {
   const error = new Error(`${label} belum tersedia pada backend SQLite aktif.`);

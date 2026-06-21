@@ -32,7 +32,11 @@ function findTrackedRuntimeArtifacts(trackedFiles = []) {
     ) {
       return false;
     }
-    return normalized.startsWith("data/") || normalized.startsWith("backups/");
+    return (
+      normalized.startsWith("data/")
+      || normalized.startsWith("backups/")
+      || normalized.startsWith("logs/")
+    );
   });
 }
 
@@ -149,7 +153,9 @@ function findUnsafeArchiveEntries(rawEntries = []) {
       normalized === "data" ||
       normalized.startsWith("data/") ||
       normalized === "backups" ||
-      normalized.startsWith("backups/")
+      normalized.startsWith("backups/") ||
+      normalized === "logs" ||
+      normalized.startsWith("logs/")
     ) {
       return true;
     }
@@ -162,6 +168,7 @@ function findUnsafeArchiveEntries(rawEntries = []) {
         "dist",
         "build",
         "coverage",
+        ".artifacts",
         ".cache",
         ".vite",
       ].includes(segment))

@@ -47,7 +47,9 @@ Module._load = function patchedLoad(request, parent, isMain) {
 
 const {
   closeDb,
+  getDatabaseGeneration,
   getDb,
+  getDbQueueStatus,
   runInTransaction,
   runSerializedDbOperation,
 } = require("../src/db/connection");
@@ -142,6 +144,7 @@ test("getDb tidak membuka ulang koneksi di tengah operasi restore eksklusif", as
   });
   await closed;
   const opensWhileClosed = openCount;
+  const generationWhileClosed = getDatabaseGeneration();
 
   const db = await getDb();
   const queuedRead = db.get("READ AFTER RESTORE");
@@ -152,6 +155,7 @@ test("getDb tidak membuka ulang koneksi di tengah operasi restore eksklusif", as
   await exclusive;
   assert.deepEqual(await queuedRead, { ok: 1 });
   assert.equal(openCount, opensWhileClosed + 1);
+  assert.equal(getDatabaseGeneration(), generationWhileClosed + 1);
 });
 
 test("rejection tidak meracuni queue dan context selesai tidak melewati serialisasi", async () => {
@@ -166,4 +170,38 @@ test("rejection tidak meracuni queue dan context selesai tidak melewati serialis
   const row = await db.get("AFTER FAILURE");
   assert.deepEqual(row, { ok: 1 });
   assert.equal(calls.some((entry) => entry === "get:AFTER FAILURE"), true);
+});
+
+
+test("queue diagnostics mencatat antrean, operasi aktif, dan failure tanpa menyimpan payload", async () => {
+  let releaseTransaction;
+  let markStarted;
+  const started = new Promise((resolve) => {
+    markStarted = resolve;
+  });
+  const gate = new Promise((resolve) => {
+    releaseTransaction = resolve;
+  });
+
+  const transaction = runInTransaction(async () => {
+    markStarted();
+    await gate;
+  }, { label: "diagnostic_transaction" });
+  await started;
+
+  const db = await getDb();
+  const queuedRead = db.get("DIAGNOSTIC READ");
+  await delay(10);
+  const during = getDbQueueStatus();
+  assert.equal(during.active.label, "diagnostic_transaction");
+  assert.equal(during.queued >= 1, true);
+  assert.equal("payload" in during.active, false);
+
+  releaseTransaction();
+  await transaction;
+  await queuedRead;
+  const after = getDbQueueStatus();
+  assert.equal(after.active, null);
+  assert.equal(after.queued, 0);
+  assert.equal(after.totalCompleted > 0, true);
 });

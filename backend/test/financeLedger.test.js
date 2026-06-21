@@ -68,14 +68,82 @@ test("hapus cash-out menonaktifkan expense dan pasangan ledger dalam satu transa
     },
   });
 
+  const db = await testDatabase.getDb();
+  await db.run(
+    `INSERT INTO money_movement_ledger
+      (id, code, status, is_active, source_type, source_id, payload_json)
+     VALUES (?, ?, 'active', 1, ?, ?, '{}')`,
+    ["ledger-unrelated-same-source-id", "LGR-UNRELATED", "legacy_other_source", "cash-out-001"],
+  );
+
   await deleteCashOut({ id: "cash-out-001", actor: "tester" });
 
-  const db = await testDatabase.getDb();
   const expense = await db.get("SELECT status, is_active FROM expenses WHERE id = 'cash-out-001'");
   const ledger = await db.get(
-    "SELECT status, is_active FROM money_movement_ledger WHERE source_id = 'cash-out-001'"
+    "SELECT status, is_active FROM money_movement_ledger WHERE id = 'ledger_cash-out-001'"
+  );
+  const unrelatedLedger = await db.get(
+    "SELECT status, is_active FROM money_movement_ledger WHERE id = 'ledger-unrelated-same-source-id'"
   );
 
   assert.deepEqual(expense, { status: "deleted", is_active: 0 });
   assert.deepEqual(ledger, { status: "deleted", is_active: 0 });
+  assert.deepEqual(unrelatedLedger, { status: "active", is_active: 1 });
+});
+
+
+test("duplicate referensi kas manual ditolak tanpa mengubah record dan ledger awal", async () => {
+  await commitCashIn({
+    actor: "tester",
+    payload: {
+      id: "cash-in-duplicate",
+      referenceNumber: "CSH-IN-DUPLICATE",
+      amount: 10000,
+      description: "Transaksi awal",
+    },
+  });
+
+  await assert.rejects(
+    commitCashIn({
+      actor: "tester",
+      payload: {
+        id: "cash-in-duplicate",
+        referenceNumber: "CSH-IN-DUPLICATE",
+        amount: 99999,
+        description: "Tidak boleh overwrite",
+      },
+    }),
+    (error) => error?.errorCode === "FINANCE_DUPLICATE_MANUAL_REFERENCE" && error?.statusCode === 409,
+  );
+
+  const db = await testDatabase.getDb();
+  const income = await db.get("SELECT total_amount FROM incomes WHERE id = ?", ["cash-in-duplicate"]);
+  const counts = await db.get(`
+    SELECT
+      (SELECT COUNT(*) FROM incomes WHERE id = 'cash-in-duplicate') AS income_count,
+      (SELECT COUNT(*) FROM money_movement_ledger WHERE source_id = 'cash-in-duplicate') AS ledger_count,
+      (SELECT COUNT(*) FROM audit_logs WHERE entity_id = 'cash-in-duplicate') AS audit_count
+  `);
+  assert.equal(income.total_amount, 10000);
+  assert.deepEqual(counts, { income_count: 1, ledger_count: 1, audit_count: 1 });
+});
+
+test("posting finance system tetap idempotent untuk source deterministik", async () => {
+  const payload = {
+    id: "sale-income-001",
+    referenceNumber: "SALE-INCOME-001",
+    amount: 25000,
+    sourceModule: "sale_income",
+    sourceId: "sale-001",
+  };
+  await commitCashIn({ actor: "system", payload });
+  await commitCashIn({ actor: "system", payload });
+
+  const db = await testDatabase.getDb();
+  const counts = await db.get(`
+    SELECT
+      (SELECT COUNT(*) FROM incomes WHERE id = 'sale-income-001') AS income_count,
+      (SELECT COUNT(*) FROM money_movement_ledger WHERE source_id = 'sale-income-001') AS ledger_count
+  `);
+  assert.deepEqual(counts, { income_count: 1, ledger_count: 1 });
 });
