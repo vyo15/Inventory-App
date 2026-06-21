@@ -10,6 +10,9 @@ function main() {
   const allowDirty = hasArg("--allow-dirty");
   const skipSource = hasArg("--skip-source");
 
+  console.log("[git:check] Cek runtime Node.js...");
+  run("node", ["scripts/check-node-version.cjs"]);
+
   if (skipSource) {
     console.log("[git:check] Source Git dilewati untuk quality check lokal.");
   } else {

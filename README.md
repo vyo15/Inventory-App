@@ -12,7 +12,7 @@ IMS Bunga Flanel adalah aplikasi inventory dan operasional UMKM yang berjalan se
 
 ## Menjalankan project
 
-Runtime resmi memakai **Node.js 22.12 sampai sebelum 23**. Versi rekomendasi project berada di `.nvmrc` dan `.node-version` (`22.16.0`).
+Runtime resmi memakai **Node.js 22.12 sampai sebelum 23**. Versi rekomendasi project berada di `.nvmrc` dan `.node-version` (`22.16.0`). Perintah `dev`, `test`, build/lint frontend, serta check backend akan berhenti lebih awal bila versi Node di luar rentang yang didukung.
 
 ```powershell
 npm run check:runtime

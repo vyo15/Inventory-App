@@ -264,7 +264,7 @@ Status cleanup bertahap yang dikunci di docs:
 - **Aktif/P1:** automated regression mencakup transaction paralel, read menunggu commit, queue setelah rollback, counter code paralel, baseline data historis, finance/ledger, purchase/stock, dan last-admin guard.
 - **Compatibility:** satu koneksi SQLite, WAL, `busy_timeout=5000`, schema, route, role guard, dan format data historis tetap dipertahankan. Serialization application-level ditambahkan di atas locking SQLite; bukan pengganti transaction database.
 - **Observability aktif:** coordinator mempublikasikan queue depth, active operation, slow wait/operation, failure terakhir, dan database generation melalui status maintenance. Slow wait/operation dicatat ke structured JSON logger tanpa payload bisnis.
-- **Runtime guard aktif:** Node.js didukung pada `>=22.12.0 <23`; versi rekomendasi `22.16.0` dikunci melalui `.nvmrc`, `.node-version`, package `engines`, CI, dan `npm run check:runtime`.
+- **Runtime guard aktif:** Node.js didukung pada `>=22.12.0 <23`; versi rekomendasi `22.16.0` dikunci melalui `.nvmrc`, `.node-version`, package `engines`, CI, dan `npm run check:runtime`. Runner `dev`, test/check backend, test/build/lint frontend, serta `git:check` melakukan fail-fast agar Node di luar rentang dukungan tidak hanya menghasilkan warning lalu tetap menjalankan IMS.
 
 ## Maintenance & Backup Center — 2026-06-07
 - **Aktif:** Reset & Maintenance Data menjadi Maintenance & Backup Center, bukan daftar tombol reset teknis.

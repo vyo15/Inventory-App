@@ -1,6 +1,14 @@
 #!/usr/bin/env node
 const { spawn } = require("node:child_process");
 const path = require("node:path");
+const { assertSupportedNodeVersion } = require("./check-node-version.cjs");
+
+try {
+  assertSupportedNodeVersion();
+} catch (error) {
+  console.error(error.message);
+  process.exit(1);
+}
 
 const rootDir = path.resolve(__dirname, "..");
 const isWindows = process.platform === "win32";

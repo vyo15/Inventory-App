@@ -288,6 +288,7 @@ Referensi detail: `docs/21_RESPONSIVE_UI_UX_STANDARD.md`.
 - [ ] Jika source berubah, docs terkait ikut diperbarui dalam patch yang sama.
 - [ ] GitHub Actions menjalankan source hygiene, backend check/test, frontend test/lint/build, dan bundle budget pada push/PR.
 - [ ] `npm run check:runtime` lulus pada Node `>=22.12.0 <23`; `.nvmrc`, `.node-version`, package engines, dan CI selaras.
+- [ ] Pada Node di luar rentang dukungan, `npm run dev`, `npm --prefix backend test`, `npm --prefix frontend build`, dan `npm run git:check:full` berhenti sebelum menjalankan proses aplikasi/test/build.
 - [ ] Frontend build tidak menampilkan circular manual-chunk warning dan `npm run check:bundle` melaporkan chunk terbesar di bawah budget.
 - [ ] Frontend Audit Data hanya menampilkan subset read-only nyata; Repair Aman hanya menampilkan projection stok yang didukung backend.
 - [ ] `npm test` dan `npm --prefix frontend run test:coverage` lulus sebelum merge.

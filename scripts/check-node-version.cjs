@@ -16,16 +16,31 @@ const isSupportedNodeVersion = (value = process.versions.node) => {
   return Boolean(version && version.major === 22 && version.minor >= 12);
 };
 
+const getUnsupportedNodeMessage = (value = process.versions.node) => (
+  `[runtime] Node.js ${value} tidak didukung. Gunakan ${SUPPORTED_NODE_RANGE} (rekomendasi .nvmrc 22.16.0).`
+);
+
+const assertSupportedNodeVersion = (value = process.versions.node) => {
+  if (isSupportedNodeVersion(value)) return true;
+  const error = new Error(getUnsupportedNodeMessage(value));
+  error.code = "UNSUPPORTED_NODE_VERSION";
+  throw error;
+};
+
 if (require.main === module) {
-  if (!isSupportedNodeVersion()) {
-    console.error(`[runtime] Node.js ${process.versions.node} tidak didukung. Gunakan ${SUPPORTED_NODE_RANGE} (rekomendasi .nvmrc 22.16.0).`);
+  try {
+    assertSupportedNodeVersion();
+    console.log(`[runtime] Node.js ${process.versions.node} sesuai ${SUPPORTED_NODE_RANGE}.`);
+  } catch (error) {
+    console.error(error.message);
     process.exit(1);
   }
-  console.log(`[runtime] Node.js ${process.versions.node} sesuai ${SUPPORTED_NODE_RANGE}.`);
 }
 
 module.exports = {
   SUPPORTED_NODE_RANGE,
+  assertSupportedNodeVersion,
+  getUnsupportedNodeMessage,
   isSupportedNodeVersion,
   parseNodeVersion,
 };

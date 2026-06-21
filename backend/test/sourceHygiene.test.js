@@ -63,7 +63,8 @@ test("backend test runner memakai discovery otomatis dan lockfile registry publi
   const backendLock = readRootFile("backend/package-lock.json");
   const frontendLock = readRootFile("frontend/package-lock.json");
 
-  assert.equal(backendPackage.scripts.test, "node scripts/run-tests.cjs");
+  assert.match(backendPackage.scripts.test, /check:runtime/);
+  assert.match(backendPackage.scripts.test, /node scripts\/run-tests\.cjs$/);
   assert.doesNotMatch(backendLock, /packages\.applied-caas-gateway/i);
   assert.doesNotMatch(frontendLock, /packages\.applied-caas-gateway/i);
   assert.doesNotMatch(frontendLock, /node_modules\/@ant-design\/charts/);

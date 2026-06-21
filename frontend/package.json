@@ -4,13 +4,14 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node ./node_modules/vite/bin/vite.js",
-    "build": "node ./node_modules/vite/bin/vite.js build",
-    "lint": "node ./node_modules/eslint/bin/eslint.js .",
-    "preview": "node ./node_modules/vite/bin/vite.js preview",
-    "test": "vitest run --pool=vmThreads --no-file-parallelism --maxWorkers=1",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage --pool=vmThreads --no-file-parallelism --maxWorkers=1"
+    "dev": "npm run check:runtime && node ./node_modules/vite/bin/vite.js",
+    "build": "npm run check:runtime && node ./node_modules/vite/bin/vite.js build",
+    "lint": "npm run check:runtime && node ./node_modules/eslint/bin/eslint.js .",
+    "preview": "npm run check:runtime && node ./node_modules/vite/bin/vite.js preview",
+    "test": "npm run check:runtime && vitest run --pool=vmThreads --no-file-parallelism --maxWorkers=1",
+    "test:watch": "npm run check:runtime && vitest",
+    "test:coverage": "npm run check:runtime && vitest run --coverage --pool=vmThreads --no-file-parallelism --maxWorkers=1",
+    "check:runtime": "node ../scripts/check-node-version.cjs"
   },
   "dependencies": {
     "@ant-design/icons": "^5.6.1",

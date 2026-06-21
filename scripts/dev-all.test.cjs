@@ -6,6 +6,8 @@ const { test } = require("node:test");
 const source = fs.readFileSync(path.resolve(__dirname, "dev-all.cjs"), "utf8");
 
 test("dev runner menunggu child exit dan tidak memotong graceful shutdown setelah 300 ms", () => {
+  assert.match(source, /assertSupportedNodeVersion/);
+  assert.match(source, /UNSUPPORTED_NODE_VERSION|error\.message/);
   assert.match(source, /SHUTDOWN_TIMEOUT_MS\s*=\s*10_000/);
   assert.match(source, /finishShutdownIfReady/);
   assert.doesNotMatch(source, /setTimeout\(\(\)\s*=>\s*process\.exit\(exitCode\),\s*300\)/);

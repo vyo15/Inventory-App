@@ -5,13 +5,14 @@
   "description": "IMS Bunga Flanel SQLite sidecar backend for full-offline LAN POC.",
   "main": "src/server.js",
   "scripts": {
-    "dev": "nodemon src/server.js",
-    "start": "node src/server.js",
+    "dev": "npm run check:runtime && nodemon src/server.js",
+    "start": "npm run check:runtime && node src/server.js",
     "check:syntax": "node scripts/check-all-js.cjs",
     "lint": "eslint \"src/**/*.{js,cjs,mjs}\" \"test/**/*.{js,cjs,mjs}\" \"scripts/**/*.{js,cjs,mjs}\"",
-    "check": "npm run check:syntax && npm run lint",
-    "test": "node scripts/run-tests.cjs",
-    "audit:sqlite-cutover": "node scripts/audit-sqlite-cutover-readiness.cjs"
+    "check": "npm run check:runtime && npm run check:syntax && npm run lint",
+    "test": "npm run check:runtime && node scripts/run-tests.cjs",
+    "audit:sqlite-cutover": "node scripts/audit-sqlite-cutover-readiness.cjs",
+    "check:runtime": "node ../scripts/check-node-version.cjs"
   },
   "dependencies": {
     "cors": "^2.8.5",

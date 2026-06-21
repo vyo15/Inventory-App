@@ -174,7 +174,7 @@ Jangan membuat perhitungan stok baru di UI.
 ## Status temuan P0–P3 setelah hardening 2026-06-21
 
 - **Selesai di source:** application-level serialization untuk singleton SQLite, central transaction helper, concurrency regression, runtime business counter, Date.now reference fallback pada flow resmi, backup/restore exclusivity, password maksimum 128 karakter, graceful shutdown WAL/SHM, atomic cleanup import backup, direct dependency declaration, serta standardisasi formatter `formatNumberId`.
-- **Masih proses release:** ZIP review terbaru berlabel `dirty` dan tidak membawa metadata `.git`; working tree clean, commit lengkap, dan kesamaan upstream hanya dapat dibuktikan pada mesin project melalui `npm run git:check:full` dan `npm run verify:source` setelah seluruh patch di-commit.
+- **Release artifact terbaru:** ZIP review `Inventory-App-20260621-235916017-main-1ad767f2-clean.zip` berlabel `clean` dan struktur source-nya lolos audit lokal. ZIP tetap tidak membawa metadata `.git`; working tree clean, commit lengkap, dan kesamaan upstream hanya dapat dibuktikan pada mesin project melalui `npm run git:check:full` dan `npm run verify:source`.
 - **Masih residual:** chunk terbesar setelah vendor split stabil sekitar 706.6 KiB dari budget 1074.2 KiB. React/React Router dan Day.js dipisahkan tanpa circular chunk; business/page modules tetap mengikuti route lazy.
 - **Masih residual dependency:** `xlsx@0.18.5` dan `esbuild@0.27.7` tetap terdokumentasi; tidak ada force upgrade/override major.
 - **Masih cleanup terpisah:** `production.service.js` tetap besar dan repository-mode compatibility masih memiliki importer aktif. Keduanya tidak dihapus/refactor dalam patch transaction karena risiko regression.
