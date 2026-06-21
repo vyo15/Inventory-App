@@ -1,4 +1,3 @@
-import React from 'react';
 import SummaryStatGrid from '../../Layout/Display/SummaryStatGrid';
 
 // -----------------------------------------------------------------------------

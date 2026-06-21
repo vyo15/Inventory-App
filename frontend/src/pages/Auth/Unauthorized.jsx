@@ -1,4 +1,3 @@
-import React from "react";
 import { Button, Result, Space, Tag, Typography } from "antd";
 import { HomeOutlined, LogoutOutlined, SafetyOutlined } from "@ant-design/icons";
 import { Link, useLocation } from "react-router-dom";

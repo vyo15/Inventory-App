@@ -10,7 +10,7 @@
 // - aktif untuk monitoring target; tidak mengubah stok, payroll, expense, atau HPP.
 // =====================================================
 
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
 import {
   Badge,
@@ -39,7 +39,6 @@ import {
   EyeOutlined,
   LinkOutlined,
   MoreOutlined,
-  PlusOutlined,
   StopOutlined,
 } from "@ant-design/icons";
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";

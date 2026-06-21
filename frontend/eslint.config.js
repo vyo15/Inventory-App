@@ -35,7 +35,22 @@ export default defineConfig([
       },
     },
     rules: {
+      // ESLint core tidak menghitung identifier JSX sebagai variable usage tanpa eslint-plugin-react.
+      // PascalCase tetap diabaikan untuk mencegah false positive, tetapi default React import
+      // dilarang karena project sudah memakai automatic JSX runtime dari Vite.
       "no-unused-vars": ["error", { varsIgnorePattern: "^[A-Z_]" }],
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "react",
+              importNames: ["default"],
+              message: "Gunakan automatic JSX runtime atau named imports dari react.",
+            },
+          ],
+        },
+      ],
     },
   },
   {

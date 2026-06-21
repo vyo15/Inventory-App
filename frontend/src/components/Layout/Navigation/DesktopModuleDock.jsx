@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import { Empty, Tooltip } from "antd";
 import { useLocation, useNavigate } from "react-router-dom";
 import sidebarRailMask from "../../../assets/layout/sidebar-rail-mask.svg";

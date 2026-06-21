@@ -1,4 +1,3 @@
-import React from "react";
 import { Button, Space, Tag, Tooltip } from "antd";
 import dayjs from "dayjs";
 import { formatNumberId } from "../../../utils/formatters/numberId";

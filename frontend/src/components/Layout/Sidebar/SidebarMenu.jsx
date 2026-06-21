@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Empty, Menu } from "antd";
 import { Link, useLocation } from "react-router-dom";
 import { sidebarMenuItems } from "../../../config/sidebarMenu";

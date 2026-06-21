@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from "react";
+import { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import ProtectedRoute from "../components/Auth/ProtectedRoute";
 import DataLoadingState from "../components/Layout/Feedback/DataLoadingState";

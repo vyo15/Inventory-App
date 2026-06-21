@@ -1,4 +1,4 @@
-import React from "react";
+import { isValidElement } from "react";
 import { Button, Space, Typography } from "antd";
 import "./PageHeader.css";
 
@@ -67,7 +67,7 @@ const PageHeader = ({
           {hasActions ? (
             <Space wrap className="page-header-action-group">
               {safeActions.map((actionItem, index) => {
-                if (React.isValidElement(actionItem)) {
+                if (isValidElement(actionItem)) {
                   return actionItem;
                 }
 

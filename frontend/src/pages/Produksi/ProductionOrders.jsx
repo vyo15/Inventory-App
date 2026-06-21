@@ -10,7 +10,7 @@
 // - reserve/release lama dipensiunkan dari UI utama
 // =====================================================
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Badge,
   Button,
@@ -31,7 +31,7 @@ import {
   Tag,
   Typography,
 } from "antd";
-import { EyeOutlined, PlusOutlined } from "@ant-design/icons";
+import { EyeOutlined } from "@ant-design/icons";
 import { toReferenceOptions } from "../../utils/produksi/productionReferenceHelpers";
 import {
   buildCountSummary,

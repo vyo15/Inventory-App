@@ -1,4 +1,3 @@
-import React from "react";
 import { Tag } from "antd";
 import { formatNumberId } from "../../../utils/formatters/numberId";
 

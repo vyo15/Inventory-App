@@ -83,10 +83,16 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
+const IPC_MESSAGES = Object.freeze({
+  READY: "IMS_BACKEND_READY",
+  SHUTDOWN_REQUEST: "IMS_SHUTDOWN_REQUEST",
+  SHUTDOWN_COMPLETED: "IMS_SHUTDOWN_COMPLETED",
+});
 let httpServer = null;
 let startupPromise = null;
 let shutdownPromise = null;
 let shutdownRequested = false;
+let processShutdownHandlersInstalled = false;
 
 const listenForRequests = () => new Promise((resolve, reject) => {
   const server = app.listen(env.port, env.host);
@@ -248,7 +254,67 @@ const shutdownServer = ({ reason = "manual", exitCode = 0, exitProcess = false }
   return shutdownPromise;
 };
 
+const sendIpcMessage = (message, callback) => {
+  if (typeof process.send !== "function" || !process.connected) return false;
+
+  try {
+    process.send(message, (error) => {
+      if (error) logger.warn("ims_local_server_ipc_send_failed", { error, type: message.type });
+      callback?.(error);
+    });
+    return true;
+  } catch (error) {
+    logger.warn("ims_local_server_ipc_send_failed", { error, type: message.type });
+    return false;
+  }
+};
+
+const exitAfterControlledShutdown = async (reason) => {
+  try {
+    const result = await shutdownServer({ reason, exitCode: 0, exitProcess: false });
+    let exited = false;
+    const finish = () => {
+      if (exited) return;
+      exited = true;
+      process.exit(result.exitCode);
+    };
+    const fallback = setTimeout(finish, 1_000);
+    fallback.unref();
+
+    const sent = sendIpcMessage({
+      type: IPC_MESSAGES.SHUTDOWN_COMPLETED,
+      reason,
+      exitCode: result.exitCode,
+    }, () => {
+      clearTimeout(fallback);
+      finish();
+    });
+
+    if (!sent) {
+      clearTimeout(fallback);
+      finish();
+    }
+  } catch (error) {
+    logger.error("ims_local_server_controlled_shutdown_failed", { reason, error });
+    process.exit(1);
+  }
+};
+
 const installProcessShutdownHandlers = () => {
+  if (processShutdownHandlersInstalled) return;
+  processShutdownHandlersInstalled = true;
+
+  process.on("message", (message) => {
+    if (message?.type !== IPC_MESSAGES.SHUTDOWN_REQUEST) return;
+    const reason = String(message.reason || "parent_request");
+    void exitAfterControlledShutdown(reason);
+  });
+
+  process.once("disconnect", () => {
+    if (shutdownRequested) return;
+    void shutdownServer({ reason: "parent_disconnect", exitCode: 1, exitProcess: true });
+  });
+
   process.once("SIGINT", () => {
     void shutdownServer({ reason: "SIGINT", exitCode: 0, exitProcess: true });
   });
@@ -279,14 +345,26 @@ const installProcessShutdownHandlers = () => {
 
 if (require.main === module) {
   installProcessShutdownHandlers();
-  startServer().catch((error) => {
-    logger.error("ims_local_server_start_failed", { error });
-    void shutdownServer({ reason: "startup_failure", exitCode: 1, exitProcess: true });
-  });
+  startServer()
+    .then((server) => {
+      if (!server) return;
+      const address = server.address();
+      const activePort = typeof address === "object" && address ? address.port : env.port;
+      sendIpcMessage({
+        type: IPC_MESSAGES.READY,
+        address: `http://localhost:${activePort}`,
+      });
+    })
+    .catch((error) => {
+      logger.error("ims_local_server_start_failed", { error });
+      void shutdownServer({ reason: "startup_failure", exitCode: 1, exitProcess: true });
+    });
 }
 
 module.exports = {
+  IPC_MESSAGES,
   app,
+  installProcessShutdownHandlers,
   shutdownServer,
   startServer,
 };

@@ -1,5 +1,7 @@
 const path = require("path");
 
+const backendRoot = path.resolve(__dirname, "../..");
+
 const parsePositiveInteger = (value, fallback) => {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
@@ -18,7 +20,7 @@ const parseOrigins = (value = "") => String(value || "")
 const resolveFromBackend = (value, fallback) => {
   const rawValue = value || fallback;
   if (path.isAbsolute(rawValue)) return rawValue;
-  return path.resolve(process.cwd(), rawValue);
+  return path.resolve(backendRoot, rawValue);
 };
 
 const env = {

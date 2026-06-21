@@ -3,11 +3,9 @@
 // Draft payroll diambil dari work log completed
 // =====================================================
 
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  Badge,
   Button,
-  Card,
   Col,
   DatePicker,
   Descriptions,
@@ -21,14 +19,12 @@ import {
   Row,
   Select,
   Space,
-  Statistic,
   Tag,
   Typography,
 } from "antd";
 import {
   EditOutlined,
   EyeOutlined,
-  PlusOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import ProductionFilterCard from "../../components/Produksi/shared/ProductionFilterCard";

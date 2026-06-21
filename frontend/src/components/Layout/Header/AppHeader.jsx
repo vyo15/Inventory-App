@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Button, Space, Tag } from "antd";
 import { LogoutOutlined, UserOutlined } from "@ant-design/icons";
 import useAuth from "../../../hooks/useAuth";

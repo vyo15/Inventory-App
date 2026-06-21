@@ -1,4 +1,3 @@
-import React from "react";
 import { Form, Modal } from "antd";
 import ResponsiveFormSection from "../Mobile/ResponsiveFormSection";
 import { showFormValidationFeedback } from "../../../utils/forms/formValidationFeedback";

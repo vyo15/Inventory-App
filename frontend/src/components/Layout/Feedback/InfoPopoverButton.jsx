@@ -1,4 +1,3 @@
-import React from "react";
 import { Button, Popover, Space, Typography } from "antd";
 import { InfoCircleOutlined } from "@ant-design/icons";
 import "./InfoPopoverButton.css";

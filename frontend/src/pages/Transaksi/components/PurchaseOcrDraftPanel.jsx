@@ -1,4 +1,3 @@
-import React from "react";
 import { Button, Progress, Tag, Upload } from "antd";
 import { UploadOutlined } from "@ant-design/icons";
 import ImsNotice from "../../../components/Layout/Feedback/ImsNotice";

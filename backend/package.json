@@ -5,7 +5,8 @@
   "description": "IMS Bunga Flanel SQLite sidecar backend for full-offline LAN POC.",
   "main": "src/server.js",
   "scripts": {
-    "dev": "npm run check:runtime && nodemon src/server.js",
+    "dev": "npm run check:runtime && node src/server.js",
+    "dev:watch": "npm run check:runtime && nodemon src/server.js",
     "start": "npm run check:runtime && node src/server.js",
     "check:syntax": "node scripts/check-all-js.cjs",
     "lint": "eslint \"src/**/*.{js,cjs,mjs}\" \"test/**/*.{js,cjs,mjs}\" \"scripts/**/*.{js,cjs,mjs}\"",

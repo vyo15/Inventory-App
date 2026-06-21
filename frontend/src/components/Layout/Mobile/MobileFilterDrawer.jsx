@@ -1,4 +1,3 @@
-import React from "react";
 import { Button, Drawer, Space, Typography } from "antd";
 import "./MobileFilterDrawer.css";
 

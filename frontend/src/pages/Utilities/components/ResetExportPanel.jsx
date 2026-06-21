@@ -1,4 +1,3 @@
-import React from "react";
 import { Button, Space, Statistic, Tag, Typography } from "antd";
 import { DownloadOutlined, EyeOutlined } from "@ant-design/icons";
 

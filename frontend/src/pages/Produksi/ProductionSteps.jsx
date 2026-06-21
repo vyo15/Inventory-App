@@ -4,7 +4,7 @@
 // relasi karyawan, dan relasi BOM.
 // =====================================================
 
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Badge,
   Button,
@@ -31,7 +31,6 @@ import {
 import {
   EditOutlined,
   EyeOutlined,
-  PlusOutlined,
 } from "@ant-design/icons";
 import {
   BASIS_TYPE_MAP,

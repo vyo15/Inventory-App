@@ -20,6 +20,8 @@ npm run install:all
 npm run dev
 ```
 
+`npm run dev` menjalankan backend dan frontend dari satu terminal. Saat dihentikan dengan `Ctrl+C`, runner meminta backend menutup HTTP dan SQLite melalui channel internal, menunggu checkpoint WAL selesai, lalu menghentikan frontend. Jangan menutup terminal sebelum log `[dev] seluruh layanan berhenti.` muncul.
+
 Alamat default:
 
 - Frontend: `http://localhost:5173/Inventory-App/`
@@ -50,7 +52,7 @@ Gunakan menu **Maintenance & Backup Center**. Restore penuh hanya menerima File 
 
 Jangan menyalin file SQLite aktif secara manual saat backend berjalan.
 
-Database runtime memakai mode WAL. Saat backend aktif, folder `data/` dapat berisi file utama `.sqlite` beserta `.sqlite-wal` dan `.sqlite-shm`; ketiganya adalah satu database logis. Hentikan layanan dengan `Ctrl+C` dan tunggu log shutdown selesai agar backend melakukan checkpoint serta menutup database. Jangan menghapus WAL/SHM secara manual. Backup portable tetap satu file `.imsbackup`.
+Database runtime memakai mode WAL. Saat backend aktif, folder `data/` dapat berisi file utama `.sqlite` beserta `.sqlite-wal` dan `.sqlite-shm`; ketiganya adalah satu database logis. Hentikan root runner dengan `Ctrl+C` satu kali dan tunggu log `ims_local_server_shutdown_completed`, `[dev] backend menutup database dengan aman.`, serta `[dev] seluruh layanan berhenti.` Jangan menghapus WAL/SHM secara manual. Backup portable tetap satu file `.imsbackup`.
 
 ## Source ZIP untuk review
 

@@ -1,4 +1,3 @@
-import React from 'react';
 import { Card, Space, Tag, Typography } from 'antd';
 import formatNumber from '../../../utils/formatters/numberId';
 import { isProductionWorkLogCompleted } from '../../../utils/produksi/productionFlowGuards';

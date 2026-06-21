@@ -1,8 +1,8 @@
-import React from "react";
+import { Component } from "react";
 import { Alert, Button, Card, Space } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 
-class OfflineDevPanelErrorBoundary extends React.Component {
+class OfflineDevPanelErrorBoundary extends Component {
   constructor(props) {
     super(props);
     this.state = { error: null };

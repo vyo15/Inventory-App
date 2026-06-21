@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { Children, cloneElement, isValidElement, useMemo, useState } from 'react';
 import { Button, Card, Col, Row } from 'antd';
 import { FilterOutlined } from '@ant-design/icons';
 import MobileFilterDrawer from '../../Layout/Mobile/MobileFilterDrawer';
@@ -17,12 +17,12 @@ const ProductionFilterCard = ({
   mobileFilterSubtitle = 'Search utama tetap terlihat. Filter tambahan dipindahkan ke panel mobile agar halaman produksi lebih ringkas.',
 }) => {
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
-  const childItems = useMemo(() => React.Children.toArray(children).filter(Boolean), [children]);
+  const childItems = useMemo(() => Children.toArray(children).filter(Boolean), [children]);
   const safeMobilePrimaryCount = Math.max(0, Number(mobilePrimaryCount) || 0);
   const shouldUseMobileDrawer = Boolean(mobileCompact && childItems.length > safeMobilePrimaryCount);
 
   const decorateChild = (child, index) => {
-    if (!shouldUseMobileDrawer || !React.isValidElement(child)) {
+    if (!shouldUseMobileDrawer || !isValidElement(child)) {
       return child;
     }
 
@@ -30,7 +30,7 @@ const ProductionFilterCard = ({
       ? 'ims-production-filter-card__primary'
       : 'ims-production-filter-card__advanced';
 
-    return React.cloneElement(child, {
+    return cloneElement(child, {
       className: [child.props.className, mobileClassName].filter(Boolean).join(' '),
     });
   };

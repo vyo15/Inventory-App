@@ -1,4 +1,3 @@
-import React from "react";
 import "./DataLoadingState.css";
 
 /* eslint-disable react-refresh/only-export-components --

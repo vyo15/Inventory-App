@@ -8,6 +8,8 @@ IMS berjalan dengan database SQLite lokal melalui backend Node.js. Semua data ut
 npm run dev
 ```
 
+Perintah tersebut otomatis menjalankan backend dan frontend dalam satu terminal. Tidak perlu membuka dua command terpisah.
+
 Default akses:
 
 - Backend: `http://localhost:3001`
@@ -19,7 +21,7 @@ Untuk HP/laptop lain satu jaringan, buka frontend lewat IP laptop server.
 
 - Database runtime: `data/ims-sqlite-sidecar.sqlite`
 - Saat layanan aktif, file `ims-sqlite-sidecar.sqlite-wal` dan `ims-sqlite-sidecar.sqlite-shm` dapat muncul. Itu normal dan tetap satu database, bukan tiga database berbeda.
-- Hentikan aplikasi dengan `Ctrl+C`, lalu tunggu log `ims_local_server_shutdown_completed`. Setelah shutdown normal, WAL/SHM akan dilepas. Jangan menghapus sidecar secara manual.
+- Hentikan aplikasi dengan `Ctrl+C` satu kali. Tunggu log `ims_local_server_shutdown_completed`, `[dev] backend menutup database dengan aman.`, dan `[dev] seluruh layanan berhenti.` Setelah itu WAL/SHM akan dilepas. Jangan menghapus sidecar secara manual.
 - Backup resmi: `backups/sqlite/`
 - Backup harian: `backups/sqlite/daily/`
 - Backup bulanan: `backups/sqlite/monthly/`

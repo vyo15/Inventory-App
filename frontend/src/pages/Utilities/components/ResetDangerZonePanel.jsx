@@ -1,4 +1,3 @@
-import React from "react";
 import { Button, Space, Tag, Typography } from "antd";
 import { DatabaseOutlined, FileSearchOutlined, LockOutlined, SafetyOutlined } from "@ant-design/icons";
 import ImsNotice from "../../../components/Layout/Feedback/ImsNotice";

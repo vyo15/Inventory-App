@@ -56,7 +56,7 @@ Konsekuensi:
 ## Area yang sudah matang
 
 - Struktur frontend/backend sudah terpisah.
-- Runner root `npm run dev` menjalankan backend dan frontend.
+- Runner root `npm run dev` menjalankan backend dan frontend sebagai child Node langsung dari satu terminal; backend tidak lagi melewati wrapper npm/Nodemon pada mode utama.
 - Backup SQLite resmi sudah tersedia dengan checksum, manifest, dan restore guarded.
 - Auth lokal sudah aktif dengan user/role/status di SQLite.
 - Module Runtime Status tersedia di backend dan UI maintenance.
@@ -75,7 +75,8 @@ Konsekuensi:
 - Soft-delete kas hanya menonaktifkan ledger dengan ID deterministik atau pasangan `source_id` + `source_type`; ledger legacy lain dengan ID sumber sama tidak ikut tersentuh. Audit pasangan kas-ledger memakai kriteria yang sama.
 - `business_code_counters` existing sudah aktif untuk managed code lintas generic master/config, customer/supplier/pricing, transaksi, stock adjustment, finance, dan production. Baseline historis diverifikasi sekali per generasi koneksi database dan diverifikasi ulang setelah close/reopen seperti restore; preview tidak mereservasi dan server response final menjadi authority.
 - Backup lifecycle dan restore full-replace memegang akses database eksklusif sehingga snapshot/file swap tidak berjalan bersama request operasional.
-- Backend memiliki graceful shutdown: HTTP server ditutup, WAL di-checkpoint `TRUNCATE`, dan koneksi SQLite ditutup sebelum exit pada `SIGINT`/`SIGTERM`; dev runner menunggu child exit dan tidak lagi memotong cleanup setelah 300 ms.
+- Backend memiliki graceful shutdown: HTTP server ditutup, WAL di-checkpoint `TRUNCATE`, dan koneksi SQLite ditutup sebelum exit. Root dev runner memakai IPC internal, menunggu acknowledgement penutupan database, baru menghentikan frontend; force-stop hanya fallback setelah 10 detik.
+- Resolusi path runtime tidak lagi bergantung pada `process.cwd()`. Root runner, backend standalone dari root, dan backend dari folder `backend/` memakai database, backup, dan log yang sama.
 - Import backup sekarang menunggu transaction/audit commit di dalam blok cleanup; jika audit gagal, row `backup_logs` di-rollback dan file import ikut dihapus.
 - Session browser memakai cookie host-only `HttpOnly; SameSite=Lax`; response login tidak mengirim raw token ke JavaScript, endpoint auth memakai `Cache-Control: no-store`, dan header identitas Express dinonaktifkan.
 - Bearer legacy ditolak secara default. Compatibility hanya dapat diaktifkan sementara melalui `IMS_AUTH_ALLOW_LEGACY_BEARER=true` untuk migrasi perangkat lama; flow baru tetap memakai cookie HttpOnly dan tidak menulis token ke `localStorage`.
@@ -84,7 +85,7 @@ Konsekuensi:
 - Runner command Windows menjalankan `npm.cmd`/`npx.cmd` melalui `cmd.exe`, sehingga shortcut quality gate tidak gagal dengan `spawnSync ... EINVAL` pada Node.js Windows.
 - Production P4 memusatkan create PO dari Planning, Start Production, Complete Work Log, auto payroll, Payroll Paid, finance posting, dan HPP reconcile pada transaction backend SQLite.
 - Generic production CRUD tidak lagi dapat dipakai untuk melewati lifecycle sensitif Planning, Production Order, Work Log, atau Payroll.
-- Test discovery source saat ini mencakup 131 test backend pada 29 file, 82 test frontend pada 23 file, dan 9 test tooling. Tambahan backend melindungi FIFO database coordinator, transaction/read concurrency, runtime counter code, password maksimum, serta compatibility backup mock. Coverage backend mencakup rollback/idempotency produksi, backup/restore guarded, auth migration, serta source ZIP hygiene; coverage frontend mencakup auth, role guard, transaksi, endpoint atomic produksi, restore guarded, export XLSX, Dashboard, dan error login.
+- Test discovery source saat ini mencakup 135 test backend pada 30 file, 82 test frontend pada 23 file, dan 11 test tooling. Tambahan backend melindungi FIFO database coordinator, transaction/read concurrency, runtime counter code, password maksimum, serta compatibility backup mock. Coverage backend mencakup rollback/idempotency produksi, backup/restore guarded, auth migration, serta source ZIP hygiene; coverage frontend mencakup auth, role guard, transaksi, endpoint atomic produksi, restore guarded, export XLSX, Dashboard, dan error login.
 
 ## Tech debt aktif yang masih perlu dijaga
 

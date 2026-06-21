@@ -1,4 +1,3 @@
-import React from "react";
 import dayjs from "dayjs";
 import { SEMI_FINISHED_CATEGORY_MAP, SEMI_FINISHED_GROUP_MAP } from "../../../constants/semiFinishedMaterialOptions";
 import formatNumber from "../../../utils/formatters/numberId";

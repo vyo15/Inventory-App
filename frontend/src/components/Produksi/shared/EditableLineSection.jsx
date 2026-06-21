@@ -1,4 +1,3 @@
-import React from 'react';
 import { Alert, Button, Divider, Space, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import DataTableView from '../../Layout/Table/DataTableView';

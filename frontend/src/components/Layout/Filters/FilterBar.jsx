@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import { Children, cloneElement, isValidElement, useMemo, useState } from "react";
 import { Button, Col, Row, Space } from "antd";
 import { FilterOutlined } from "@ant-design/icons";
 import MobileFilterDrawer from "../Mobile/MobileFilterDrawer";
@@ -25,12 +25,12 @@ const FilterBar = ({
   mobileFilterButtonLabel = "Filter",
 }) => {
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
-  const childItems = useMemo(() => React.Children.toArray(children).filter(Boolean), [children]);
+  const childItems = useMemo(() => Children.toArray(children).filter(Boolean), [children]);
   const safeMobilePrimaryCount = Math.max(0, Number(mobilePrimaryCount) || 0);
   const shouldUseMobileDrawer = Boolean(mobileCompact && childItems.length > safeMobilePrimaryCount);
 
   const decorateChild = (child, index) => {
-    if (!shouldUseMobileDrawer || !React.isValidElement(child)) {
+    if (!shouldUseMobileDrawer || !isValidElement(child)) {
       return child;
     }
 
@@ -38,7 +38,7 @@ const FilterBar = ({
       ? "filter-bar-mobile-primary"
       : "filter-bar-mobile-advanced";
 
-    return React.cloneElement(child, {
+    return cloneElement(child, {
       className: [child.props.className, mobileClassName].filter(Boolean).join(" "),
     });
   };

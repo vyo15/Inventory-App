@@ -6,10 +6,24 @@ Status saat ini: database lokal menjadi runtime utama untuk modul operasional. M
 
 ## Jalankan
 
+Mode utama yang direkomendasikan menjalankan backend dan frontend dari root project:
+
+```bash
+npm run dev
+```
+
+Untuk backend saja tanpa auto-reload:
+
 ```bash
 cd backend
 npm install
 npm run dev
+```
+
+Auto-reload Nodemon tetap tersedia sebagai mode pengembangan opsional:
+
+```bash
+npm run dev:watch
 ```
 
 Layanan lokal default berjalan di:
@@ -89,7 +103,9 @@ data/ims-sqlite-sidecar.sqlite
 backups/sqlite/
 ```
 
-Saat backend aktif dalam mode WAL, SQLite dapat membuat `ims-sqlite-sidecar.sqlite-wal` dan `ims-sqlite-sidecar.sqlite-shm`. Ketiga file tersebut adalah satu database logis. Shutdown melalui `SIGINT`/`SIGTERM`/`SIGHUP` (serta `SIGBREAK` di Windows) menjalankan checkpoint WAL, menutup HTTP server, lalu menutup koneksi database. Setelah shutdown normal, WAL/SHM harus dilepas. Jangan menghapus sidecar secara manual ketika layanan masih aktif.
+Saat backend aktif dalam mode WAL, SQLite dapat membuat `ims-sqlite-sidecar.sqlite-wal` dan `ims-sqlite-sidecar.sqlite-shm`. Ketiga file tersebut adalah satu database logis. Root runner menjalankan backend sebagai child Node langsung dan memakai IPC internal untuk meminta checkpoint WAL serta penutupan koneksi sebelum frontend dihentikan. Backend standalone tetap menangani `SIGINT`/`SIGTERM`/`SIGHUP` dan `SIGBREAK` di Windows. Setelah shutdown normal, WAL/SHM harus dilepas. Jangan menghapus sidecar secara manual ketika layanan masih aktif.
+
+Path database, backup, dan log relatif dihitung dari folder `backend/`, bukan `process.cwd()`. Menjalankan backend dari root repository maupun dari folder `backend/` tetap menunjuk runtime `data/`, `backups/`, dan `logs/` yang sama.
 
 Folder/file runtime tidak boleh masuk git atau patch.
 

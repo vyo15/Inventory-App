@@ -6,6 +6,12 @@ const { spawn } = require("node:child_process");
 const { once } = require("node:events");
 const { test } = require("node:test");
 
+const IPC_MESSAGES = Object.freeze({
+  READY: "IMS_BACKEND_READY",
+  SHUTDOWN_REQUEST: "IMS_SHUTDOWN_REQUEST",
+  SHUTDOWN_COMPLETED: "IMS_SHUTDOWN_COMPLETED",
+});
+
 const waitForOutput = (child, pattern, timeoutMs = 15_000) => new Promise((resolve, reject) => {
   let output = "";
   const timer = setTimeout(() => {
@@ -120,38 +126,7 @@ const verifyRequestedShutdown = async (t, reason) => {
   const dbPath = path.join(tempDir, "data", "ims-test.sqlite");
   const backupDir = path.join(tempDir, "backups");
   const backendRoot = path.resolve(__dirname, "..");
-  const serverPath = path.join(backendRoot, "src", "server.js");
-  const script = `
-    const { startServer, shutdownServer } = require(${JSON.stringify(serverPath)});
-
-    process.on("message", async (message) => {
-      if (message?.type !== "shutdown") return;
-      try {
-        const result = await shutdownServer({
-          reason: message.reason,
-          exitCode: 0,
-          exitProcess: false,
-        });
-        const finish = () => process.exit(result.exitCode);
-        if (process.send) {
-          process.send({ type: "shutdown-complete", exitCode: result.exitCode }, finish);
-        } else {
-          finish();
-        }
-      } catch (error) {
-        console.error(error);
-        process.exit(1);
-      }
-    });
-
-    startServer()
-      .then(() => process.send?.({ type: "ready" }))
-      .catch((error) => {
-        console.error(error);
-        process.exit(1);
-      });
-  `;
-  const child = spawn(process.execPath, ["-e", script], {
+  const child = spawn(process.execPath, [path.join(backendRoot, "src", "server.js")], {
     cwd: backendRoot,
     env: {
       ...process.env,
@@ -171,13 +146,13 @@ const verifyRequestedShutdown = async (t, reason) => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  await waitForChildMessage(child, "ready");
+  await waitForChildMessage(child, IPC_MESSAGES.READY);
   assert.equal(fs.existsSync(dbPath), true);
   assert.equal(fs.existsSync(`${dbPath}-wal`), true);
   assert.equal(fs.existsSync(`${dbPath}-shm`), true);
 
-  child.send({ type: "shutdown", reason });
-  const completed = await waitForChildMessage(child, "shutdown-complete");
+  child.send({ type: IPC_MESSAGES.SHUTDOWN_REQUEST, reason });
+  const completed = await waitForChildMessage(child, IPC_MESSAGES.SHUTDOWN_COMPLETED);
   const [code, exitSignal] = await waitForExit(child);
 
   assert.equal(completed.exitCode, 0);
@@ -200,6 +175,10 @@ for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"]) {
     await verifyPlatformShutdown(t, signal);
   });
 }
+
+test("permintaan IPC runner menunggu checkpoint WAL dan penutupan database", async (t) => {
+  await verifyRequestedShutdown(t, "runner_ipc_shutdown");
+});
 
 test("startup failure menutup database dan tidak meninggalkan WAL/SHM", async (t) => {
   const net = require("node:net");

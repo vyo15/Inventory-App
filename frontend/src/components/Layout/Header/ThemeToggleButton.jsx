@@ -1,4 +1,3 @@
-import React from "react";
 import { FloatButton } from "antd";
 import { HiOutlineMoon, HiOutlineSun } from "react-icons/hi2";
 

@@ -5,14 +5,13 @@
 // - BOM target semi_finished_material = material boleh raw / semi_finished_material
 // =====================================================
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { buildCountSummary, createKeywordMatcher, matchActiveStatus, matchFieldValue } from '../../utils/produksi/productionPageHelpers';
 import { getBomMaterialItemOptions, getBomTargetOptions, toReferenceOptions } from '../../utils/produksi/productionReferenceHelpers';
 import ProductionPageHeader from '../../components/Produksi/shared/ProductionPageHeader';
 import ProductionSummaryCards from '../../components/Produksi/shared/ProductionSummaryCards';
 import ProductionFilterCard from '../../components/Produksi/shared/ProductionFilterCard';
 import EditableLineSection from '../../components/Produksi/shared/EditableLineSection';
-import ReadonlyLineSection from '../../components/Produksi/shared/ReadonlyLineSection';
 import DataTableView from '../../components/Layout/Table/DataTableView';
 import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
 import ImsNotice from "../../components/Layout/Feedback/ImsNotice";
@@ -43,11 +42,9 @@ import {
   DeleteOutlined,
   EditOutlined,
   EyeOutlined,
-  PlusOutlined,
 } from "@ant-design/icons";
 import {
   BOM_MATERIAL_ITEM_TYPE_MAP,
-  BOM_MATERIAL_VARIANT_STRATEGY_MAP,
   BOM_TARGET_TYPE_MAP,
   calculateBomTotals,
   DEFAULT_BOM_MATERIAL_LINE,

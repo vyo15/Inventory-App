@@ -4,7 +4,7 @@
 // untuk analisa biaya realisasi per output
 // =====================================================
 
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button, Col, Empty, Input, Select, Space, Tooltip, Typography, message, Tag } from "antd";
 import { FileExcelOutlined } from "@ant-design/icons";
 import { getCompletedProductionWorkLogs } from "../../services/Produksi/productionWorkLogsService";

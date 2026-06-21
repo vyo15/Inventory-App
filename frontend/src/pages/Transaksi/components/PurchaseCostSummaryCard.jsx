@@ -1,4 +1,3 @@
-import React from "react";
 import { Form, InputNumber, Space, Tag } from "antd";
 import { formatNumberId } from "../../../utils/formatters/numberId";
 import { formatCurrencyId as formatCurrencyIdr } from "../../../utils/formatters/currencyId";

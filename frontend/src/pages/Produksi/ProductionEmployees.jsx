@@ -3,7 +3,7 @@
 // Master operator/karyawan produksi
 // =====================================================
 
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Badge,
   Button,
@@ -31,7 +31,6 @@ import {
 import {
   EditOutlined,
   EyeOutlined,
-  PlusOutlined,
 } from "@ant-design/icons";
 import {
   DEFAULT_PRODUCTION_EMPLOYEE_FORM,

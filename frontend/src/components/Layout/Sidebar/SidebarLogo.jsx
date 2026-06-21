@@ -1,4 +1,3 @@
-import React from "react";
 import flanelKarawangMark from "../../../assets/branding/flanel-karawang-mark.png";
 import "./SidebarLogo.css";
 

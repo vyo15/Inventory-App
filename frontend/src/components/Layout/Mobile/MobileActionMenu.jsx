@@ -1,4 +1,3 @@
-import React from "react";
 import { Button, Dropdown, Space } from "antd";
 import { MoreOutlined } from "@ant-design/icons";
 import "./MobileActionMenu.css";

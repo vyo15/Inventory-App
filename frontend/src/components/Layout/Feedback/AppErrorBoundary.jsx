@@ -1,4 +1,4 @@
-import React from "react";
+import { Component } from "react";
 import { Alert, Button, Result, Space, Typography } from "antd";
 import { BugOutlined, ReloadOutlined } from "@ant-design/icons";
 
@@ -16,7 +16,7 @@ Dipakai oleh:
 Catatan guard:
 - Komponen ini hanya UI fallback. Jangan menaruh logic repair data, reset, stock mutation, atau auto-write di sini.
 ===================================================== */
-class AppErrorBoundary extends React.Component {
+class AppErrorBoundary extends Component {
   constructor(props) {
     super(props);
     this.state = {

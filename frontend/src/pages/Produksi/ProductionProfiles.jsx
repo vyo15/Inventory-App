@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Badge,
   Button,
@@ -21,7 +21,7 @@ import {
   Tooltip,
   Typography,
 } from 'antd';
-import { PlusOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
+import { EditOutlined, EyeOutlined } from '@ant-design/icons';
 import {
   DEFAULT_PRODUCTION_PROFILE_FORM,
   PRODUCTION_PROFILE_TYPES,

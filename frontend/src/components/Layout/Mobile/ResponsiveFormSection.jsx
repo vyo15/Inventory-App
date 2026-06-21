@@ -1,4 +1,3 @@
-import React from "react";
 import { Card, Typography } from "antd";
 import "./ResponsiveFormSection.css";
 

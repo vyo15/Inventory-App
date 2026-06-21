@@ -1,4 +1,3 @@
-import React from "react";
 import { Alert, Button, Empty } from "antd";
 import DataLoadingState from "../Feedback/DataLoadingState";
 import "./MobileStateBlock.css";

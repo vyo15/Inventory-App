@@ -1,4 +1,3 @@
-import React from "react";
 import { Button, Descriptions, Drawer, Space, Typography } from "antd";
 import "./MobileDetailDrawer.css";
 

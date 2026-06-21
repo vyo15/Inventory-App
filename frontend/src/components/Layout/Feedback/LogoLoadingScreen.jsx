@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import logoMark from "../../../assets/branding/flanel-karawang-mark.png";
 import "./LogoLoadingScreen.css";
 

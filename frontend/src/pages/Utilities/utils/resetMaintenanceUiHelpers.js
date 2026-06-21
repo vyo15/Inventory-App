@@ -1,4 +1,4 @@
-import React from "react";
+import { createElement } from "react";
 import { Alert, Space, Tag, Typography } from "antd";
 
 const { Text } = Typography;
@@ -61,7 +61,7 @@ export const renderCompactText = (value, maxWidth = 220, fallback = "-") => {
     return fallback;
   }
 
-  return React.createElement(
+  return createElement(
     Text,
     {
       style: { display: "inline-block", maxWidth: "100%", width: maxWidth },
@@ -76,7 +76,7 @@ export const renderCompactTag = (value, maxWidth = 160, fallback = "-") => {
     return fallback;
   }
 
-  return React.createElement(
+  return createElement(
     Tag,
     {
       title: String(value),
@@ -136,23 +136,23 @@ export const ResetActionGuide = ({
 }) => {
   const meta = ACTION_RISK_META[risk] || ACTION_RISK_META.maintenance;
 
-  return React.createElement(Alert, {
+  return createElement(Alert, {
     type: risk === "destructive" ? "warning" : "info",
     showIcon: true,
-    message: React.createElement(
+    message: createElement(
       Space,
       { wrap: true },
-      React.createElement("span", null, description),
-      React.createElement(Tag, { color: meta.color }, meta.label),
+      createElement("span", null, description),
+      createElement(Tag, { color: meta.color }, meta.label),
     ),
-    description: React.createElement(
+    description: createElement(
       Space,
       { direction: "vertical", size: 2 },
-      React.createElement(Text, null, React.createElement(Text, { strong: true }, "Preview:"), ` ${preview}`),
-      React.createElement(Text, null, React.createElement(Text, { strong: true }, "Target:"), ` ${scope}`),
-      React.createElement(Text, null, React.createElement(Text, { strong: true }, "Dampak:"), ` ${impact}`),
-      React.createElement(Text, null, React.createElement(Text, { strong: true }, "Konfirmasi:"), ` ${confirmation}`),
-      React.createElement(Text, null, React.createElement(Text, { strong: true }, "Audit/Error Trail:"), ` ${audit}`),
+      createElement(Text, null, createElement(Text, { strong: true }, "Preview:"), ` ${preview}`),
+      createElement(Text, null, createElement(Text, { strong: true }, "Target:"), ` ${scope}`),
+      createElement(Text, null, createElement(Text, { strong: true }, "Dampak:"), ` ${impact}`),
+      createElement(Text, null, createElement(Text, { strong: true }, "Konfirmasi:"), ` ${confirmation}`),
+      createElement(Text, null, createElement(Text, { strong: true }, "Audit/Error Trail:"), ` ${audit}`),
     ),
   });
 };
