@@ -1,10 +1,11 @@
 import { PRODUCT_DEFAULT_FORM } from '../../../services/MasterData/productsService';
 import { formatStockWithUnitId } from '../../../utils/formatters/stockUnit';
-import { getVariantAwareStockStatusMeta } from '../../../utils/stock/stockHelpers';
+import { getVariantAwareStockStatusMeta, hasSafeZeroStockSnapshot } from '../../../utils/stock/stockHelpers';
 import {
   COLOR_VARIANT_MAP,
   ensureAtLeastOneVariant,
 } from '../../../utils/variants/variantHelpers';
+import { getMasterStockSummary } from '../../../utils/variants/variantStockNormalizer';
 
 export const buildFormValues = (record = {}) => {
   const hasVariants = record?.hasVariants === true || (record?.variants || []).length > 0;
@@ -46,41 +47,14 @@ export const getVariantDisplayLabel = (variant = {}, index = 0) => (
   || `Varian ${index + 1}`
 );
 
-export const hasSafeZeroMasterStock = (record = {}) => {
-  const currentStock = Number(record.currentStock ?? record.stock ?? 0);
-  const reservedStock = Number(record.reservedStock || 0);
-  const availableStock = Number(record.availableStock ?? Math.max(currentStock - reservedStock, 0));
-
-  return currentStock <= 0 && reservedStock <= 0 && availableStock <= 0;
-};
+export const hasSafeZeroMasterStock = hasSafeZeroStockSnapshot;
 
 export const compactCellClassNames = {
   stack: 'ims-cell-stack ims-cell-stack-tight',
   meta: 'ims-cell-meta',
 };
 
-export const getProductStockSummary = (record = {}) => {
-  if (record?.hasVariants) {
-    const variants = Array.isArray(record.variants) ? record.variants : [];
-    const currentStock = variants.reduce((sum, item) => sum + Number(item?.currentStock || 0), 0);
-    const reservedStock = variants.reduce((sum, item) => sum + Number(item?.reservedStock || 0), 0);
-
-    return {
-      currentStock,
-      reservedStock,
-      availableStock: Math.max(currentStock - reservedStock, 0),
-    };
-  }
-
-  const currentStock = Number(record.currentStock ?? record.stock ?? 0);
-  const reservedStock = Number(record.reservedStock || 0);
-
-  return {
-    currentStock,
-    reservedStock,
-    availableStock: Number(record.availableStock ?? Math.max(currentStock - reservedStock, 0)),
-  };
-};
+export const getProductStockSummary = getMasterStockSummary;
 
 export const getProductStatusMeta = (record = {}) => {
   const availableStock = Number(record.availableStock ?? record.currentStock ?? record.stock ?? 0);

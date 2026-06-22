@@ -10,6 +10,7 @@ import {
 } from "antd";
 import { formatNumberId, parseIntegerIdInput } from "../../../utils/formatters/numberId";
 import ResponsiveFormSection from "../../../components/Layout/Mobile/ResponsiveFormSection";
+import RupiahInputNumber from "../../../components/Layout/Forms/RupiahInputNumber";
 import { showFormValidationFeedback } from "../../../utils/forms/formValidationFeedback";
 import {
   getSupplierOptionLabel,
@@ -422,12 +423,11 @@ const PurchaseFormModal = ({
                 : "Isi harga aktual barang yang dibeli."
             }
           >
-            <InputNumber
+            <RupiahInputNumber
               min={0}
               step={1}
               precision={0}
-              className="ims-filter-control"
-              addonBefore="Rp"
+              inputClassName="ims-filter-control"
               formatter={(value) => formatNumberId(value)}
               parser={parseIntegerIdInput}
               onChange={() => {
@@ -444,12 +444,11 @@ const PurchaseFormModal = ({
                   label="Ongkir"
                   style={{ flex: 1, minWidth: 180 }}
                 >
-                  <InputNumber
+                  <RupiahInputNumber
                     min={0}
                     step={1}
                     precision={0}
-                    className="ims-filter-control"
-                    addonBefore="Rp"
+                    inputClassName="ims-filter-control"
                     formatter={(value) => formatNumberId(value)}
                     parser={parseIntegerIdInput}
                   />
@@ -460,12 +459,11 @@ const PurchaseFormModal = ({
                   label="Diskon Ongkir"
                   style={{ flex: 1, minWidth: 180 }}
                 >
-                  <InputNumber
+                  <RupiahInputNumber
                     min={0}
                     step={1}
                     precision={0}
-                    className="ims-filter-control"
-                    addonBefore="Rp"
+                    inputClassName="ims-filter-control"
                     formatter={(value) => formatNumberId(value)}
                     parser={parseIntegerIdInput}
                   />
@@ -478,12 +476,11 @@ const PurchaseFormModal = ({
                   label="Voucher / Koin / Potongan"
                   style={{ flex: 1, minWidth: 180 }}
                 >
-                  <InputNumber
+                  <RupiahInputNumber
                     min={0}
                     step={1}
                     precision={0}
-                    className="ims-filter-control"
-                    addonBefore="Rp"
+                    inputClassName="ims-filter-control"
                     formatter={(value) => formatNumberId(value)}
                     parser={parseIntegerIdInput}
                   />
@@ -494,12 +491,11 @@ const PurchaseFormModal = ({
                   label="Biaya Layanan"
                   style={{ flex: 1, minWidth: 180 }}
                 >
-                  <InputNumber
+                  <RupiahInputNumber
                     min={0}
                     step={1}
                     precision={0}
-                    className="ims-filter-control"
-                    addonBefore="Rp"
+                    inputClassName="ims-filter-control"
                     formatter={(value) => formatNumberId(value)}
                     parser={parseIntegerIdInput}
                   />

@@ -19,6 +19,7 @@ const buildSections = (moduleItem) => {
       {
         key: `${moduleItem?.key || "module"}-items`,
         label: "",
+        description: "",
         icon: null,
         items: directChildren,
       },
@@ -27,8 +28,9 @@ const buildSections = (moduleItem) => {
 
   return directChildren.map((childItem) => ({
     key: childItem.key,
-    label: childItem.label,
-    icon: childItem.icon,
+    label: childItem.hubLabel || childItem.label,
+    description: childItem.hubDescription || childItem.description || "",
+    icon: childItem.hubIcon || childItem.icon,
     items: childItem.children || [childItem],
   }));
 };
@@ -64,14 +66,28 @@ const ModuleHub = ({ moduleKey, menuKey }) => {
     return <Navigate to="/unauthorized" replace />;
   }
 
+  const ModuleIcon = moduleItem.hubIcon || moduleItem.icon;
+  const moduleDescription =
+    moduleItem.hubDescription ||
+    moduleItem.description ||
+    "Pilih halaman yang ingin dibuka.";
+
   return (
     <div className="module-hub-page">
       <header className="module-hub-header">
-        <div className="module-hub-eyebrow">
-          {moduleItem.hubEyebrow || "Module Workspace"}
+        {ModuleIcon ? (
+          <span className="module-hub-header-icon" aria-hidden="true">
+            <ModuleIcon />
+          </span>
+        ) : null}
+
+        <div className="module-hub-header-copy">
+          <div className="module-hub-eyebrow">
+            {moduleItem.hubEyebrow || "Module Workspace"}
+          </div>
+          <h1>{moduleItem.hubTitle || moduleItem.label}</h1>
+          <p>{moduleDescription}</p>
         </div>
-        <h1>{moduleItem.label}</h1>
-        <p>{moduleItem.description || "Pilih halaman yang ingin dibuka."}</p>
       </header>
 
       {sections.length > 0 ? (
@@ -83,16 +99,36 @@ const ModuleHub = ({ moduleKey, menuKey }) => {
               <section key={section.key} className="module-hub-section">
                 {section.label ? (
                   <div className="module-hub-section-heading">
-                    {SectionIcon ? <SectionIcon /> : null}
-                    <h2>{section.label}</h2>
+                    {SectionIcon ? (
+                      <span
+                        className="module-hub-section-icon"
+                        aria-hidden="true"
+                      >
+                        <SectionIcon />
+                      </span>
+                    ) : null}
+
+                    <div className="module-hub-section-copy">
+                      <h2>{section.label}</h2>
+                      {section.description ? (
+                        <p>{section.description}</p>
+                      ) : null}
+                    </div>
                   </div>
                 ) : null}
 
                 <div className="module-hub-grid">
                   {section.items.map((menuItem) => {
+                    const itemLabel = menuItem.hubLabel || menuItem.label;
+                    const itemDescription =
+                      menuItem.hubDescription ||
+                      menuItem.description ||
+                      `Buka halaman ${itemLabel}.`;
                     const IconComponent =
+                      menuItem.hubIcon ||
                       menuItem.icon ||
                       SectionIcon ||
+                      moduleItem.hubIcon ||
                       moduleItem.icon ||
                       FileTextOutlined;
 
@@ -103,19 +139,19 @@ const ModuleHub = ({ moduleKey, menuKey }) => {
                         className="module-hub-card"
                         onClick={() => menuItem.path && navigate(menuItem.path)}
                         disabled={!menuItem.path}
+                        aria-label={`Buka ${itemLabel}`}
                       >
-                        <span className="module-hub-card-icon">
+                        <span className="module-hub-card-icon" aria-hidden="true">
                           <IconComponent />
                         </span>
                         <span className="module-hub-card-copy">
-                          <strong>{menuItem.label}</strong>
-                          <span>
-                            {menuItem.description ||
-                              `Buka halaman ${menuItem.label}.`}
-                          </span>
+                          <strong>{itemLabel}</strong>
+                          <span>{itemDescription}</span>
                         </span>
-                        <span className="module-hub-card-footer">
-                          <span>Buka halaman</span>
+                        <span
+                          className="module-hub-card-action"
+                          aria-hidden="true"
+                        >
                           <RightOutlined />
                         </span>
                       </button>

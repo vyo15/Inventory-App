@@ -29,3 +29,6 @@ class ResizeObserverMock {
 
 globalThis.ResizeObserver = ResizeObserverMock;
 window.scrollTo = () => {};
+const originalGetComputedStyle = window.getComputedStyle.bind(window);
+window.getComputedStyle = (element) => originalGetComputedStyle(element);
+

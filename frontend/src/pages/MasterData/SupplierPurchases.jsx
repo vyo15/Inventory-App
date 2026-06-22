@@ -42,6 +42,7 @@ import PageSection from '../../components/Layout/Page/PageSection';
 import DataTableView from '../../components/Layout/Table/DataTableView';
 import MobileDetailDrawer from '../../components/Layout/Mobile/MobileDetailDrawer';
 import ResponsiveFormSection from '../../components/Layout/Mobile/ResponsiveFormSection';
+import RupiahInputNumber from '../../components/Layout/Forms/RupiahInputNumber';
 import ImsNotice from '../../components/Layout/Feedback/ImsNotice';
 import { DataRefreshIndicator, getDataTableEmptyText } from '../../components/Layout/Feedback/DataLoadingState';
 import { listenRawMaterials } from '../../services/MasterData/rawMaterialsService';
@@ -1145,7 +1146,7 @@ const SupplierPurchases = () => {
 
                       <Col xs={24} md={12}>
                         <Form.Item {...restField} name={[name, 'supplierItemPrice']} label="Harga Barang Supplier">
-                          <InputNumber min={0} step={1} precision={0} style={{ width: '100%' }} addonBefore="Rp" formatter={(value) => formatNumberId(value)} parser={parseIntegerIdInput} />
+                          <RupiahInputNumber min={0} step={1} precision={0} formatter={(value) => formatNumberId(value)} parser={parseIntegerIdInput} />
                         </Form.Item>
                       </Col>
 
@@ -1167,19 +1168,19 @@ const SupplierPurchases = () => {
                               --------------------------------------------------------- */}
                               <Col xs={24} md={12}>
                                 <Form.Item {...restField} name={[name, 'estimatedShippingCost']} label="Ongkir Default">
-                                  <InputNumber min={0} step={1} precision={0} style={{ width: '100%' }} addonBefore="Rp" formatter={(value) => formatNumberId(value)} parser={parseIntegerIdInput} />
+                                  <RupiahInputNumber min={0} step={1} precision={0} formatter={(value) => formatNumberId(value)} parser={parseIntegerIdInput} />
                                 </Form.Item>
                               </Col>
 
                               <Col xs={24} md={12}>
                                 <Form.Item {...restField} name={[name, 'serviceFee']} label="Biaya Layanan Default">
-                                  <InputNumber min={0} step={1} precision={0} style={{ width: '100%' }} addonBefore="Rp" formatter={(value) => formatNumberId(value)} parser={parseIntegerIdInput} />
+                                  <RupiahInputNumber min={0} step={1} precision={0} formatter={(value) => formatNumberId(value)} parser={parseIntegerIdInput} />
                                 </Form.Item>
                               </Col>
 
                               <Col xs={24} md={12}>
                                 <Form.Item {...restField} name={[name, 'discount']} label="Voucher Default">
-                                  <InputNumber min={0} step={1} precision={0} style={{ width: '100%' }} addonBefore="Rp" formatter={(value) => formatNumberId(value)} parser={parseIntegerIdInput} />
+                                  <RupiahInputNumber min={0} step={1} precision={0} formatter={(value) => formatNumberId(value)} parser={parseIntegerIdInput} />
                                 </Form.Item>
                               </Col>
                             </>

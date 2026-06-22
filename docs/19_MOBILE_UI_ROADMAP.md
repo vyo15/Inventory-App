@@ -208,7 +208,7 @@ Guardrail yang tetap berlaku:
 
 ### Update tambahan M4 line section
 
-- `components/Produksi/shared/EditableLineSection.jsx` dan `ReadonlyLineSection.jsx` sekarang memakai `DataTableView` sehingga tabel material/step/output produksi juga mendapat mobile card/list fallback.
+- `components/Produksi/shared/EditableLineSection.jsx` memakai `DataTableView` sehingga tabel material/step/output produksi mendapat mobile card/list fallback. `ReadonlyLineSection.jsx` sudah dihapus karena tidak memiliki importer dan seluruh kebutuhan aktif sudah dicakup komponen editable tersebut.
 - Default mobile card line section hanya bersifat ringkasan presentational dan tidak mengubah add/edit/delete line handler yang dikirim oleh page pemanggil.
 
 ## Update 2026-06-05 - Mobile Clean v2: Hilangkan Banner Runtime Teknis

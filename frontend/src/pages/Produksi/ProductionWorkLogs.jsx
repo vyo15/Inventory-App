@@ -89,6 +89,30 @@ import {
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data historis decimal tidak dimigrasi otomatis.
 // Behavior: input baru no-decimal; business rules dan schema/alur data utama tetap sama.
 
+const buildWorkLogLineActionColumn = ({ deleteTitle, isLocked, onDelete, onEdit }) => ({
+  title: "Aksi",
+  width: 140,
+  render: (_, record, index) => (
+    isLocked ? (
+      <Typography.Text type="secondary" className="ims-cell-meta">Terkunci dari PO</Typography.Text>
+    ) : (
+      <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
+        <Button className="ims-action-button" size="small" onClick={() => onEdit(index, record)}>
+          Edit
+        </Button>
+        <Popconfirm
+          title={deleteTitle}
+          onConfirm={() => onDelete(index)}
+          okText="Ya"
+          cancelText="Batal"
+        >
+          <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />} />
+        </Popconfirm>
+      </Space>
+    )
+  ),
+});
+
 const getProductionPayrollsForWorkLogDisplaySafely = async () => {
   try {
     return await getAllProductionPayrolls();
@@ -1414,29 +1438,12 @@ const ProductionWorkLogs = () => {
                 width: 150,
                 render: (value) => formatCurrency(value),
               },
-              {
-                title: "Aksi",
-                width: 140,
-                render: (_, record, index) => (
-                  editingRecord?.productionOrderId ? (
-                    <Typography.Text type="secondary" className="ims-cell-meta">Terkunci dari PO</Typography.Text>
-                  ) : (
-                    <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-                      <Button className="ims-action-button" size="small" onClick={() => openMaterialModal(index, record)}>
-                        Edit
-                      </Button>
-                      <Popconfirm
-                        title="Hapus material usage ini?"
-                        onConfirm={() => handleRemoveMaterialUsage(index)}
-                        okText="Ya"
-                        cancelText="Batal"
-                      >
-                        <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />} />
-                      </Popconfirm>
-                    </Space>
-                  )
-                ),
-              },
+              buildWorkLogLineActionColumn({
+                deleteTitle: "Hapus material usage ini?",
+                isLocked: Boolean(editingRecord?.productionOrderId),
+                onDelete: handleRemoveMaterialUsage,
+                onEdit: openMaterialModal,
+              }),
             ]}
           />
 
@@ -1474,29 +1481,12 @@ const ProductionWorkLogs = () => {
                   </Typography.Text>
                 ),
               },
-              {
-                title: "Aksi",
-                width: 140,
-                render: (_, record, index) => (
-                  editingRecord?.productionOrderId ? (
-                    <Typography.Text type="secondary" className="ims-cell-meta">Terkunci dari PO</Typography.Text>
-                  ) : (
-                    <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-                      <Button className="ims-action-button" size="small" onClick={() => openOutputModal(index, record)}>
-                        Edit
-                      </Button>
-                      <Popconfirm
-                        title="Hapus output ini?"
-                        onConfirm={() => handleRemoveOutput(index)}
-                        okText="Ya"
-                        cancelText="Batal"
-                      >
-                        <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />} />
-                      </Popconfirm>
-                    </Space>
-                  )
-                ),
-              },
+              buildWorkLogLineActionColumn({
+                deleteTitle: "Hapus output ini?",
+                isLocked: Boolean(editingRecord?.productionOrderId),
+                onDelete: handleRemoveOutput,
+                onEdit: openOutputModal,
+              }),
             ]}
           />
 

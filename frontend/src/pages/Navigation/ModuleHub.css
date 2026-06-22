@@ -1,24 +1,59 @@
 /* =====================================================
 SECTION: Module Hub — AKTIF / GUARDED
 Fungsi:
-- menyajikan child route sebagai card compact pada content area.
+- menyajikan child route sebagai workspace compact pada content area.
 - aman untuk light/dark mode, desktop, tablet, dan mobile.
 ===================================================== */
 .module-hub-page {
   width: 100%;
-  max-width: 1560px;
+  max-width: 1480px;
   margin: 0 auto;
 }
 
 .module-hub-header {
-  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 22px;
+  padding: 20px 22px;
+  border: 1px solid var(--ims-border-color-soft);
+  border-radius: 20px;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--ims-bg-card) 96%, var(--ims-color-primary-soft)),
+      var(--ims-bg-card)
+    );
+  box-shadow: var(--ims-shadow-soft);
+}
+
+.module-hub-header-icon {
+  flex: 0 0 auto;
+  width: 50px;
+  height: 50px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid
+    color-mix(in srgb, var(--ims-color-primary) 24%, var(--ims-border-color));
+  border-radius: 15px;
+  color: var(--ims-color-primary-active);
+  background: var(--ims-color-primary-softer);
+}
+
+.module-hub-header-icon .anticon {
+  font-size: 23px;
+}
+
+.module-hub-header-copy {
+  min-width: 0;
 }
 
 .module-hub-eyebrow {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: 8px;
+  margin-bottom: 5px;
   color: var(--ims-color-primary-active);
   font-size: var(--ims-font-size-caption-plus);
   font-weight: var(--ims-font-weight-strong);
@@ -28,7 +63,7 @@ Fungsi:
 
 .module-hub-eyebrow::before {
   content: "";
-  width: 24px;
+  width: 18px;
   height: 3px;
   border-radius: 999px;
   background: var(--ims-color-brand-gold);
@@ -37,15 +72,15 @@ Fungsi:
 .module-hub-header h1 {
   margin: 0;
   color: var(--ims-text-primary);
-  font-size: clamp(28px, 3vw, 40px);
+  font-size: clamp(27px, 2.8vw, 34px);
   font-weight: var(--ims-font-weight-display);
   line-height: var(--ims-line-height-heading);
   letter-spacing: var(--ims-letter-spacing-title);
 }
 
 .module-hub-header p {
-  max-width: 760px;
-  margin: 9px 0 0;
+  max-width: 820px;
+  margin: 7px 0 0;
   color: var(--ims-text-secondary);
   font-size: var(--ims-font-size-helper);
   line-height: var(--ims-line-height-readable);
@@ -53,7 +88,7 @@ Fungsi:
 
 .module-hub-sections {
   display: grid;
-  gap: 24px;
+  gap: 22px;
 }
 
 .module-hub-section {
@@ -63,42 +98,66 @@ Fungsi:
 .module-hub-section-heading {
   display: flex;
   align-items: center;
-  gap: 9px;
-  margin-bottom: 12px;
-  color: var(--ims-text-primary);
+  gap: 11px;
+  margin-bottom: 11px;
 }
 
-.module-hub-section-heading .anticon {
+.module-hub-section-icon {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ims-border-color-soft);
+  border-radius: 11px;
   color: var(--ims-color-primary-active);
-  font-size: 18px;
+  background: var(--ims-color-primary-softer);
+}
+
+.module-hub-section-icon .anticon {
+  font-size: 17px;
+}
+
+.module-hub-section-copy {
+  min-width: 0;
 }
 
 .module-hub-section-heading h2 {
   margin: 0;
-  font-size: 17px;
+  color: var(--ims-text-primary);
+  font-size: 16px;
   font-weight: var(--ims-font-weight-strong);
+  line-height: var(--ims-line-height-title);
+}
+
+.module-hub-section-heading p {
+  margin: 3px 0 0;
+  color: var(--ims-text-secondary);
+  font-size: var(--ims-font-size-caption-plus);
+  line-height: var(--ims-line-height-readable);
 }
 
 .module-hub-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  gap: 12px;
 }
 
 .module-hub-card {
   position: relative;
   min-width: 0;
-  min-height: 188px;
+  min-height: 152px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  padding: 18px;
+  padding: 16px;
   overflow: hidden;
   border: 1px solid var(--ims-border-color-soft);
-  border-radius: 20px;
+  border-radius: 16px;
   color: var(--ims-text-primary);
   background: var(--ims-bg-card);
-  box-shadow: var(--ims-shadow-soft);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--ims-text-primary) 7%, transparent);
   text-align: left;
   cursor: pointer;
   transition:
@@ -108,33 +167,20 @@ Fungsi:
     background-color 0.18s ease;
 }
 
-.module-hub-card::before {
-  content: "";
-  position: absolute;
-  top: -30px;
-  inset-inline-end: -25px;
-  width: 98px;
-  height: 98px;
-  border-radius: 50%;
-  background: var(--ims-color-primary-softer);
-}
-
-.module-hub-card::after {
-  content: "";
-  position: absolute;
-  inset-inline-start: 0;
-  inset-inline-end: 45%;
-  bottom: 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--ims-color-brand-gold), transparent);
-}
-
 .module-hub-card:hover,
 .module-hub-card:focus-visible {
-  border-color: color-mix(in srgb, var(--ims-color-primary) 40%, var(--ims-border-color));
-  background: color-mix(in srgb, var(--ims-bg-card) 94%, var(--ims-color-primary-softer));
+  border-color: color-mix(
+    in srgb,
+    var(--ims-color-primary) 42%,
+    var(--ims-border-color)
+  );
+  background: color-mix(
+    in srgb,
+    var(--ims-bg-card) 95%,
+    var(--ims-color-primary-soft)
+  );
   box-shadow: var(--ims-shadow-elevated);
-  transform: translateY(-3px);
+  transform: translateY(-2px);
 }
 
 .module-hub-card:focus-visible {
@@ -150,19 +196,35 @@ Fungsi:
 .module-hub-card-icon {
   position: relative;
   z-index: 1;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid color-mix(in srgb, var(--ims-color-primary) 20%, var(--ims-border-color-soft));
-  border-radius: 14px;
+  border: 1px solid
+    color-mix(in srgb, var(--ims-color-primary) 22%, var(--ims-border-color-soft));
+  border-radius: 12px;
   color: var(--ims-color-primary-active);
   background: var(--ims-color-primary-softer);
+  transition:
+    color 0.18s ease,
+    border-color 0.18s ease,
+    background-color 0.18s ease;
+}
+
+.module-hub-card:hover .module-hub-card-icon,
+.module-hub-card:focus-visible .module-hub-card-icon {
+  border-color: color-mix(
+    in srgb,
+    var(--ims-color-primary) 40%,
+    var(--ims-border-color)
+  );
+  color: var(--ims-color-primary);
+  background: var(--ims-color-primary-soft);
 }
 
 .module-hub-card-icon .anticon {
-  font-size: 20px;
+  font-size: 19px;
 }
 
 .module-hub-card-copy {
@@ -170,20 +232,21 @@ Fungsi:
   z-index: 1;
   min-width: 0;
   display: block;
-  margin-top: 16px;
+  margin-top: 13px;
+  padding-inline-end: 28px;
 }
 
 .module-hub-card-copy strong {
   display: block;
   color: var(--ims-text-primary);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: var(--ims-font-weight-strong);
   line-height: var(--ims-line-height-title);
 }
 
 .module-hub-card-copy > span {
   display: -webkit-box;
-  margin-top: 6px;
+  margin-top: 5px;
   overflow: hidden;
   color: var(--ims-text-secondary);
   font-size: var(--ims-font-size-caption-plus);
@@ -192,19 +255,34 @@ Fungsi:
   -webkit-line-clamp: 3;
 }
 
-.module-hub-card-footer {
+.module-hub-card-action {
   position: absolute;
-  inset-inline: 18px;
-  bottom: 16px;
+  top: 16px;
+  inset-inline-end: 16px;
   z-index: 1;
-  display: flex;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  padding-top: 12px;
-  border-top: 1px solid var(--ims-border-color-soft);
+  justify-content: center;
+  border-radius: 9px;
+  color: var(--ims-text-muted);
+  background: transparent;
+  transition:
+    color 0.18s ease,
+    background-color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.module-hub-card:hover .module-hub-card-action,
+.module-hub-card:focus-visible .module-hub-card-action {
   color: var(--ims-color-primary-active);
-  font-size: var(--ims-font-size-caption-plus);
-  font-weight: var(--ims-font-weight-strong);
+  background: var(--ims-color-primary-softer);
+  transform: translateX(2px);
+}
+
+.module-hub-card-action .anticon {
+  font-size: 13px;
 }
 
 @media (max-width: 1100px) {
@@ -215,58 +293,104 @@ Fungsi:
 
 @media (max-width: 767px) {
   .module-hub-header {
+    align-items: flex-start;
+    gap: 13px;
     margin-bottom: 18px;
+    padding: 16px;
+    border-radius: 17px;
+  }
+
+  .module-hub-header-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 13px;
+  }
+
+  .module-hub-header-icon .anticon {
+    font-size: 20px;
   }
 
   .module-hub-header h1 {
-    font-size: 28px;
+    font-size: 26px;
+  }
+
+  .module-hub-header p {
+    margin-top: 5px;
+    font-size: var(--ims-font-size-caption-plus);
   }
 
   .module-hub-sections {
     gap: 20px;
   }
 
+  .module-hub-section-heading {
+    align-items: flex-start;
+    margin-bottom: 10px;
+  }
+
+  .module-hub-section-icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .module-hub-section-heading h2 {
+    font-size: 15px;
+  }
+
+  .module-hub-section-heading p {
+    font-size: 11px;
+  }
+
   .module-hub-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+    grid-template-columns: 1fr;
+    gap: 9px;
   }
 
   .module-hub-card {
-    min-height: 156px;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) 28px;
+    align-items: start;
+    column-gap: 12px;
     padding: 14px;
-    border-radius: 16px;
-    box-shadow: 0 10px 24px rgba(16, 32, 51, 0.08);
+    border-radius: 14px;
+    box-shadow: 0 7px 18px color-mix(in srgb, var(--ims-text-primary) 6%, transparent);
   }
 
   .module-hub-card-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 12px;
+    grid-column: 1;
+    grid-row: 1;
   }
 
   .module-hub-card-copy {
-    margin-top: 11px;
+    grid-column: 2;
+    grid-row: 1;
+    margin-top: 0;
+    padding-inline-end: 0;
   }
 
   .module-hub-card-copy strong {
-    font-size: 13px;
+    font-size: 14px;
   }
 
   .module-hub-card-copy > span {
-    font-size: 10px;
+    margin-top: 4px;
+    font-size: 11px;
     -webkit-line-clamp: 2;
   }
 
-  .module-hub-card-footer {
-    inset-inline: 14px;
-    bottom: 12px;
-    padding-top: 9px;
-    font-size: 10px;
+  .module-hub-card-action {
+    position: static;
+    grid-column: 3;
+    grid-row: 1;
+    align-self: center;
   }
 }
 
-@media (max-width: 374px) {
-  .module-hub-grid {
-    grid-template-columns: 1fr;
+@media (prefers-reduced-motion: reduce) {
+  .module-hub-card,
+  .module-hub-card-icon,
+  .module-hub-card-action {
+    transition: none;
   }
 }

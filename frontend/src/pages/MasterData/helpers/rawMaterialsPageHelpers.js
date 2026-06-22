@@ -3,7 +3,8 @@ import { getSupplierDisplayName, getSupplierLink, getSupplierOptionLabel } from 
 import { parseIntegerIdInput } from '../../../utils/formatters/numberId';
 import { formatStockWithUnitId } from '../../../utils/formatters/stockUnit';
 import { ensureAtLeastOneRawMaterialVariant } from '../../../utils/variants/rawMaterialVariantHelpers';
-import { getVariantAwareStockStatusMeta } from '../../../utils/stock/stockHelpers';
+import { getVariantAwareStockStatusMeta, hasSafeZeroStockSnapshot } from '../../../utils/stock/stockHelpers';
+import { getMasterStockSummary } from '../../../utils/variants/variantStockNormalizer';
 
 // -----------------------------------------------------------------------------
 // Opsi satuan bahan baku.
@@ -61,13 +62,7 @@ export const getRuleModeLabel = (mode, ruleId, pricingRuleMap = {}) => {
 
 
 
-export const hasSafeZeroMasterStock = (record = {}) => {
-  const currentStock = Number(record.currentStock ?? record.stock ?? 0);
-  const reservedStock = Number(record.reservedStock || 0);
-  const availableStock = Number(record.availableStock ?? Math.max(currentStock - reservedStock, 0));
-
-  return currentStock <= 0 && reservedStock <= 0 && availableStock <= 0;
-};
+export const hasSafeZeroMasterStock = hasSafeZeroStockSnapshot;
 
 export const compactCellStyles = {
   stack: { display: 'flex', flexDirection: 'column', gap: 2 },
@@ -392,27 +387,6 @@ export const getRawMaterialStatusMeta = (record = {}) => {
   return { color: 'green', label: 'Aman' };
 };
 
-export const getRawMaterialStockSummary = (record = {}) => {
-  if (record?.hasVariants) {
-    const variants = Array.isArray(record.variants) ? record.variants : [];
-    const currentStock = variants.reduce((sum, item) => sum + Number(item?.currentStock || 0), 0);
-    const reservedStock = variants.reduce((sum, item) => sum + Number(item?.reservedStock || 0), 0);
-
-    return {
-      currentStock,
-      reservedStock,
-      availableStock: Math.max(currentStock - reservedStock, 0),
-    };
-  }
-
-  const currentStock = Number(record.currentStock ?? record.stock ?? 0);
-  const reservedStock = Number(record.reservedStock || 0);
-
-  return {
-    currentStock,
-    reservedStock,
-    availableStock: Number(record.availableStock ?? Math.max(currentStock - reservedStock, 0)),
-  };
-};
+export const getRawMaterialStockSummary = getMasterStockSummary;
 
 

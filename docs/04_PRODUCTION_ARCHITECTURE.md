@@ -228,7 +228,10 @@ Setiap perubahan di modul produksi sebaiknya selalu diuji terhadap:
 ## Update Boundary Produksi Setelah Cleanup Stok — 2026-04-25
 - Cleanup stok umum tidak memindahkan logic posting stok produksi ke helper page.
 - Flow produksi final tetap guarded: BOM → Production Order → Work Log → Payroll → HPP Analysis.
-- Backend `backend/src/modules/production/production.service.js` menjadi transaction boundary untuk start/complete Work Log karena proses tersebut harus memotong material, menambah output, menutup status, membuat payroll, mereconcile HPP, dan mencatat audit secara atomic.
+- Public facade produksi tetap `backend/src/modules/production/production.service.js`, sehingga controller, route, dan caller existing tidak berubah.
+- `production.order.service.js` menangani lifecycle Planning/Production Order dan Start Production; `production.guards.js` menangani direct-write guard serta router definition; `production.shared.js` menampung primitive transaksi/normalisasi bersama; `production.calculations.js` hanya berisi kalkulasi deterministik tanpa akses database.
+- `production.service.js` tetap menjadi boundary eksekusi untuk Complete Work Log, payroll, HPP reconciliation, finance posting, dan audit. Semua operasi database guarded tetap memakai transaction resmi; pemisahan file tidak memindahkan mutasi stok atau business rule ke UI.
+- Public export facade sebelum dan sesudah pemisahan diverifikasi identik dan struktur modul dilindungi regression test `backend/test/serviceArchitecture.unit.test.js`.
 - Collection `productions` tetap dianggap data historis layer yang hanya disentuh maintenance/reset/audit scoped. File service data historis `src/services/Produksi/productionService.js` tidak ditemukan di source `Inventory-App.zip` terbaru, sehingga docs lama yang menyebut file tersebut sebagai file aktif harus dianggap outdated.
 
 ## Update Guarded Integration Stok & Log — 2026-04-25

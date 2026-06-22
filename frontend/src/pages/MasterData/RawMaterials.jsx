@@ -10,7 +10,6 @@ import {
   Form,
   Input,
   InputNumber,
-  Popconfirm,
   Row,
   Select,
   Space,
@@ -19,12 +18,7 @@ import {
   Typography,
   message,
 } from 'antd';
-import {
-  DeleteOutlined,
-  EditOutlined,
-  EyeOutlined,
-  PlusOutlined,
-} from '@ant-design/icons';
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { formatNumberId } from '../../utils/formatters/numberId';
 import { formatCurrencyId } from '../../utils/formatters/currencyId';
@@ -55,6 +49,8 @@ import {
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import MobileDetailDrawer from '../../components/Layout/Mobile/MobileDetailDrawer';
 import ResponsiveFormSection from '../../components/Layout/Mobile/ResponsiveFormSection';
+import MasterRecordActions from './components/MasterRecordActions';
+import { buildMasterRecordMobileActions } from './components/masterRecordActionHelpers';
 import { isVariantStockEmpty } from '../../utils/variants/variantArchiveHelpers';
 
 import { listenPurchaseRecords } from '../../services/Transaksi/purchasesService';
@@ -567,28 +563,16 @@ const RawMaterials = () => {
       width: 170,
       className: 'app-table-action-column',
       render: (_, record) => (
-        <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-          {/* AKTIF / GUARDED: action bahan baku disusun 3 baris agar mudah diklik; handler detail/edit/toggle tetap flow existing. */}
-          <Button className="ims-action-button ims-action-button--block" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
-            Detail
-          </Button>
-          <Button className="ims-action-button ims-action-button--block" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            Edit
-          </Button>
-          <Popconfirm
-            title={record.isActive === false ? 'Aktifkan kembali bahan baku?' : 'Nonaktifkan bahan baku?'}
-            description={
-              record.isActive === false
-                ? 'Bahan baku akan aktif kembali untuk dipakai pada transaksi baru.'
-                : 'Bahan baku tidak akan muncul sebagai pilihan data baru, tetapi histori tetap aman.'
-            }
-            okText="Ya"
-            cancelText="Batal"
-            onConfirm={() => handleToggleActive(record)}
-          >
-            <Button className="ims-action-button ims-action-button--block" size="small">{record.isActive === false ? 'Aktifkan' : 'Nonaktifkan'}</Button>
-          </Popconfirm>
-        </Space>
+        <MasterRecordActions
+          record={record}
+          onDetail={handleViewDetail}
+          onEdit={handleEdit}
+          onToggle={handleToggleActive}
+          toggleTitle={record.isActive === false ? 'Aktifkan kembali bahan baku?' : 'Nonaktifkan bahan baku?'}
+          toggleDescription={record.isActive === false
+            ? 'Bahan baku akan aktif kembali untuk dipakai pada transaksi baru.'
+            : 'Bahan baku tidak akan muncul sebagai pilihan data baru, tetapi histori tetap aman.'}
+        />
       ),
     },
   ];
@@ -611,13 +595,18 @@ const RawMaterials = () => {
       { label: 'Varian', value: (record) => (record.hasVariants ? `${formatNumberId(record.variantCount || 0)} varian` : 'Tidak') },
     ],
     onCardClick: (record) => handleViewDetail(record),
-    primaryActions: [
-      { key: 'detail', label: 'Detail', icon: <EyeOutlined />, onClick: (record) => handleViewDetail(record) },
-    ],
-    moreActions: (record) => [
-      { key: 'edit', label: 'Edit', icon: <EditOutlined />, onClick: () => handleEdit(record) },
-      { key: 'toggle', label: record.isActive === false ? 'Aktifkan' : 'Nonaktifkan', onClick: () => handleToggleActive(record) },
-    ],
+    primaryActions: (record) => buildMasterRecordMobileActions({
+      record,
+      onDetail: handleViewDetail,
+      onEdit: handleEdit,
+      onToggle: handleToggleActive,
+    }).primaryActions,
+    moreActions: (record) => buildMasterRecordMobileActions({
+      record,
+      onDetail: handleViewDetail,
+      onEdit: handleEdit,
+      onToggle: handleToggleActive,
+    }).moreActions,
   };
 
   return (

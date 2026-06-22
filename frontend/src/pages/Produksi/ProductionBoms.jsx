@@ -93,6 +93,27 @@ import { showFormValidationFeedback } from '../../utils/forms/formValidationFeed
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data historis decimal tidak dimigrasi otomatis.
 // Behavior: input baru no-decimal; business rules dan schema/alur data utama tetap sama.
 
+const buildBomLineActionColumn = ({ deleteTitle, onDelete, onEdit }) => ({
+  title: "Aksi",
+  width: 140,
+  className: "app-table-action-column",
+  render: (_, record, index) => (
+    <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
+      <Button className="ims-action-button" size="small" onClick={() => onEdit(index, record)}>
+        Edit
+      </Button>
+      <Popconfirm
+        title={deleteTitle}
+        onConfirm={() => onDelete(index)}
+        okText="Ya"
+        cancelText="Batal"
+      >
+        <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />} />
+      </Popconfirm>
+    </Space>
+  ),
+});
+
 const ProductionBoms = () => {
   // SECTION: state loading dan data utama
   const [loading, setLoading] = useState(false);
@@ -1227,27 +1248,12 @@ const ProductionBoms = () => {
                     </Space>
                   ),
                 },
-                {
-                  // Nested/subtable editor sengaja tetap non-sticky karena tidak punya masalah horizontal scroll nyata.
-                  title: "Aksi",
-                  width: 140,
-                  className: "app-table-action-column",
-                  render: (_, record, index) => (
-                    <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-                      <Button className="ims-action-button" size="small" onClick={() => openMaterialModal(index, record)}>
-                        Edit
-                      </Button>
-                      <Popconfirm
-                        title="Hapus material line ini?"
-                        onConfirm={() => handleRemoveMaterialLine(index)}
-                        okText="Ya"
-                        cancelText="Batal"
-                      >
-                        <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />} />
-                      </Popconfirm>
-                    </Space>
-                  ),
-                },
+                // Nested/subtable editor sengaja tetap non-sticky karena tidak punya masalah horizontal scroll nyata.
+                buildBomLineActionColumn({
+                  deleteTitle: "Hapus material line ini?",
+                  onDelete: handleRemoveMaterialLine,
+                  onEdit: openMaterialModal,
+                }),
               ];
 
               const stepColumns = [
@@ -1278,27 +1284,12 @@ const ProductionBoms = () => {
                     </Space>
                   ),
                 },
-                {
-                  // Nested/subtable editor sengaja tetap non-sticky karena aksi masih langsung terlihat di dalam modal BOM.
-                  title: "Aksi",
-                  width: 140,
-                  className: "app-table-action-column",
-                  render: (_, record, index) => (
-                    <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-                      <Button className="ims-action-button" size="small" onClick={() => openStepModal(index, record)}>
-                        Edit
-                      </Button>
-                      <Popconfirm
-                        title="Hapus step line ini?"
-                        onConfirm={() => handleRemoveStepLine(index)}
-                        okText="Ya"
-                        cancelText="Batal"
-                      >
-                        <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />} />
-                      </Popconfirm>
-                    </Space>
-                  ),
-                },
+                // Nested/subtable editor sengaja tetap non-sticky karena aksi masih langsung terlihat di dalam modal BOM.
+                buildBomLineActionColumn({
+                  deleteTitle: "Hapus step line ini?",
+                  onDelete: handleRemoveStepLine,
+                  onEdit: openStepModal,
+                }),
               ];
 
               return (

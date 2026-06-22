@@ -379,7 +379,74 @@ const UserManagement = () => {
     }
   };
 
-  // Kolom ringkas; jangan ubah guard RBAC dan handler aksi.
+  // Satu renderer dipakai tabel desktop dan mobile card agar guard aksi selalu konsisten.
+  const renderUserActions = (record) => {
+    const canManage = canManageUserProfile({
+      actorRole,
+      targetRole: record.role,
+      targetUid: record.authUid,
+      actorUid,
+    });
+    const isSelfProfile = Boolean(actorUid && record.authUid === actorUid);
+    const isLastActiveAdministrator =
+      record.role === ROLES.ADMINISTRATOR &&
+      record.status === USER_STATUS.ACTIVE &&
+      activeAdministratorCount <= 1;
+    const deleteGuardReason = getDeleteGuardReason({
+      canManage,
+      isLastActiveAdministrator,
+      isSelfProfile,
+    });
+    const canDelete = !deleteGuardReason;
+
+    return (
+      <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
+        <Button
+          className="ims-action-button"
+          icon={<EditOutlined />}
+          disabled={!canManage}
+          onClick={() => openEditModal(record)}
+        >
+          Edit
+        </Button>
+        <Button
+          className="ims-action-button"
+          icon={
+            record.status === USER_STATUS.ACTIVE ? (
+              <StopOutlined />
+            ) : (
+              <CheckCircleOutlined />
+            )
+          }
+          disabled={!canManage}
+          danger={record.status === USER_STATUS.ACTIVE}
+          loading={
+            isUpdatingStatus &&
+            statusChangeRequest?.userRecord?.authUid === record.authUid
+          }
+          onClick={() => handleOpenStatusModal(record)}
+        >
+          {record.status === USER_STATUS.ACTIVE ? "Nonaktifkan" : "Aktifkan"}
+        </Button>
+        <Tooltip title={deleteGuardReason || "Hapus user."}>
+          <span style={{ display: "block", width: "100%" }}>
+            <Button
+              className="ims-action-button"
+              danger
+              icon={<DeleteOutlined />}
+              disabled={!canDelete}
+              loading={isDeletingProfile && deleteTarget?.authUid === record.authUid}
+              onClick={() => handleOpenDeleteModal(record)}
+            >
+              Hapus Akun
+            </Button>
+          </span>
+        </Tooltip>
+      </Space>
+    );
+  };
+
+  // Kolom ringkas; guard RBAC dan handler aksi tetap sama.
   const columns = [
     {
       title: "User",
@@ -414,71 +481,7 @@ const UserManagement = () => {
       title: "Aksi",
       key: "actions",
       width: 210,
-      render: (_, record) => {
-        const canManage = canManageUserProfile({
-          actorRole,
-          targetRole: record.role,
-          targetUid: record.authUid,
-          actorUid,
-        });
-        const isSelfProfile = Boolean(actorUid && record.authUid === actorUid);
-        const isLastActiveAdministrator =
-          record.role === ROLES.ADMINISTRATOR &&
-          record.status === USER_STATUS.ACTIVE &&
-          activeAdministratorCount <= 1;
-        const deleteGuardReason = getDeleteGuardReason({
-          canManage,
-          isLastActiveAdministrator,
-          isSelfProfile,
-        });
-        const canDelete = !deleteGuardReason;
-
-        return (
-          <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-            <Button
-              className="ims-action-button"
-              icon={<EditOutlined />}
-              disabled={!canManage}
-              onClick={() => openEditModal(record)}
-            >
-              Edit
-            </Button>
-            <Button
-              className="ims-action-button"
-              icon={
-                record.status === USER_STATUS.ACTIVE ? (
-                  <StopOutlined />
-                ) : (
-                  <CheckCircleOutlined />
-                )
-              }
-              disabled={!canManage}
-              danger={record.status === USER_STATUS.ACTIVE}
-              loading={
-                isUpdatingStatus &&
-                statusChangeRequest?.userRecord?.authUid === record.authUid
-              }
-              onClick={() => handleOpenStatusModal(record)}
-            >
-              {record.status === USER_STATUS.ACTIVE ? "Nonaktifkan" : "Aktifkan"}
-            </Button>
-            <Tooltip title={deleteGuardReason || "Hapus user."}>
-              <span style={{ display: "block", width: "100%" }}>
-                <Button
-                  className="ims-action-button"
-                  danger
-                  icon={<DeleteOutlined />}
-                  disabled={!canDelete}
-                  loading={isDeletingProfile && deleteTarget?.authUid === record.authUid}
-                  onClick={() => handleOpenDeleteModal(record)}
-                >
-                  Hapus Akun
-                </Button>
-              </span>
-            </Tooltip>
-          </Space>
-        );
-      },
+      render: (_, record) => renderUserActions(record),
     },
   ];
 
@@ -526,71 +529,7 @@ const UserManagement = () => {
       { label: 'Role', value: (record) => ROLE_LABELS[record.role] || record.role || '-' },
       { label: 'Status', value: (record) => USER_STATUS_LABELS[record.status] || record.status || '-' },
     ],
-    actions: (record) => {
-      const canManage = canManageUserProfile({
-        actorRole,
-        targetRole: record.role,
-        targetUid: record.authUid,
-        actorUid,
-      });
-      const isSelfProfile = Boolean(actorUid && record.authUid === actorUid);
-      const isLastActiveAdministrator =
-        record.role === ROLES.ADMINISTRATOR &&
-        record.status === USER_STATUS.ACTIVE &&
-        activeAdministratorCount <= 1;
-      const deleteGuardReason = getDeleteGuardReason({
-        canManage,
-        isLastActiveAdministrator,
-        isSelfProfile,
-      });
-      const canDelete = !deleteGuardReason;
-
-      return (
-        <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-          <Button
-            className="ims-action-button"
-            icon={<EditOutlined />}
-            disabled={!canManage}
-            onClick={() => openEditModal(record)}
-          >
-            Edit
-          </Button>
-          <Button
-            className="ims-action-button"
-            icon={
-              record.status === USER_STATUS.ACTIVE ? (
-                <StopOutlined />
-              ) : (
-                <CheckCircleOutlined />
-              )
-            }
-            disabled={!canManage}
-            danger={record.status === USER_STATUS.ACTIVE}
-            loading={
-              isUpdatingStatus &&
-              statusChangeRequest?.userRecord?.authUid === record.authUid
-            }
-            onClick={() => handleOpenStatusModal(record)}
-          >
-            {record.status === USER_STATUS.ACTIVE ? 'Nonaktifkan' : 'Aktifkan'}
-          </Button>
-          <Tooltip title={deleteGuardReason || 'Hapus user.'}>
-            <span style={{ display: 'block', width: '100%' }}>
-              <Button
-                className="ims-action-button"
-                danger
-                icon={<DeleteOutlined />}
-                disabled={!canDelete}
-                loading={isDeletingProfile && deleteTarget?.authUid === record.authUid}
-                onClick={() => handleOpenDeleteModal(record)}
-              >
-                Hapus Akun
-              </Button>
-            </span>
-          </Tooltip>
-        </Space>
-      );
-    },
+    actions: (record) => renderUserActions(record),
   };
 
   return (

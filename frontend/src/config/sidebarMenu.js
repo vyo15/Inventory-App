@@ -16,6 +16,16 @@ import {
   ToolOutlined,
   CalendarOutlined,
   UserSwitchOutlined,
+  PlayCircleOutlined,
+  SettingOutlined,
+  LineChartOutlined,
+  FileDoneOutlined,
+  FormOutlined,
+  OrderedListOutlined,
+  ProfileOutlined,
+  UnorderedListOutlined,
+  DollarCircleOutlined,
+  CalculatorOutlined,
 } from "@ant-design/icons";
 import { APP_ROUTES } from "./appRoutes";
 import { ROLE_GROUPS } from "../utils/auth/roleAccess";
@@ -144,33 +154,50 @@ export const sidebarMenuItems = [
     icon: BuildOutlined,
     label: "Produksi",
     hubPath: APP_ROUTES.PRODUCTION.HUB,
+    hubEyebrow: "Workspace Produksi",
+    hubDescription:
+      "Kelola pekerjaan produksi dari perencanaan, pelaksanaan, pencatatan hasil, hingga evaluasi biaya.",
     allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
     children: [
       {
         key: "production-operation",
         icon: CalendarOutlined,
+        hubIcon: PlayCircleOutlined,
         label: "Production Operation",
+        hubLabel: "Operasional Produksi",
+        hubDescription:
+          "Alur kerja harian: susun planning, buat order, lalu catat hasil produksi.",
         allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
         children: [
           {
             key: "production-planning",
             label: "Production Planning",
+            hubLabel: "Planning Produksi",
+            hubDescription:
+              "Susun kebutuhan, target, dan jadwal produksi sebelum order dibuat.",
             path: APP_ROUTES.PRODUCTION.PLANNING,
             icon: CalendarOutlined,
+            hubIcon: CalendarOutlined,
             allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
           },
           {
             key: "production-orders",
             label: "Order Produksi",
+            hubDescription:
+              "Jalankan dan pantau order produksi yang berasal dari planning.",
             path: APP_ROUTES.PRODUCTION.ORDERS,
             icon: FileTextOutlined,
+            hubIcon: FileDoneOutlined,
             allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
           },
           {
             key: "production-work-logs",
             label: "Work Log Produksi",
+            hubDescription:
+              "Catat progres, hasil kerja, serta pemakaian aktual pada setiap order.",
             path: APP_ROUTES.PRODUCTION.WORK_LOGS,
             icon: FileTextOutlined,
+            hubIcon: FormOutlined,
             allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
           },
         ],
@@ -178,42 +205,63 @@ export const sidebarMenuItems = [
       {
         key: "production-setup",
         icon: ToolOutlined,
+        hubIcon: SettingOutlined,
         label: "Production Setup",
+        hubLabel: "Pengaturan Produksi",
+        hubDescription:
+          "Siapkan tahapan, pekerja, template, semi product, dan resep produksi.",
         allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
         children: [
           {
             key: "production-steps",
             label: "Tahapan Produksi",
+            hubDescription:
+              "Atur urutan tahapan kerja yang digunakan dalam proses produksi.",
             path: APP_ROUTES.PRODUCTION.STEPS,
             icon: ApartmentOutlined,
+            hubIcon: OrderedListOutlined,
             allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
           },
           {
             key: "production-employees",
             label: "Karyawan Produksi",
+            hubDescription:
+              "Kelola pekerja yang digunakan pada work log dan payroll produksi.",
             path: APP_ROUTES.PRODUCTION.EMPLOYEES,
             icon: TeamOutlined,
+            hubIcon: TeamOutlined,
             allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
           },
           {
             key: "production-profiles",
             label: "Production Profile / Template",
+            hubLabel: "Template Produksi",
+            hubDescription:
+              "Buat template tahapan dan standar kerja untuk proses berulang.",
             path: APP_ROUTES.PRODUCTION.PROFILES,
             icon: FileTextOutlined,
+            hubIcon: ProfileOutlined,
             allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
           },
           {
             key: "semi-finished-materials",
             label: "Semi Product",
+            hubLabel: "Produk Setengah Jadi",
+            hubDescription:
+              "Kelola produk setengah jadi yang dipakai pada proses berikutnya.",
             path: APP_ROUTES.PRODUCTION.SEMI_FINISHED_MATERIALS,
             icon: ClusterOutlined,
+            hubIcon: BuildOutlined,
             allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
           },
           {
             key: "production-boms",
             label: "BOM / Resep Produksi",
+            hubDescription:
+              "Tetapkan komposisi bahan dan kebutuhan standar setiap produk.",
             path: APP_ROUTES.PRODUCTION.BOMS,
             icon: DeploymentUnitOutlined,
+            hubIcon: UnorderedListOutlined,
             allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
           },
         ],
@@ -221,21 +269,31 @@ export const sidebarMenuItems = [
       {
         key: "production-cost-analysis",
         icon: MoneyCollectOutlined,
+        hubIcon: LineChartOutlined,
         label: "Cost & Analysis",
+        hubLabel: "Biaya & Analisis",
+        hubDescription:
+          "Tinjau payroll final dan HPP berdasarkan data produksi aktual.",
         allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
         children: [
           {
             key: "production-payrolls",
             label: "Payroll Produksi",
+            hubDescription:
+              "Tinjau dan selesaikan upah berdasarkan work log produksi.",
             path: APP_ROUTES.PRODUCTION.PAYROLLS,
             icon: MoneyCollectOutlined,
+            hubIcon: DollarCircleOutlined,
             allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
           },
           {
             key: "production-hpp-analysis",
             label: "Analisis HPP Produksi",
+            hubDescription:
+              "Analisis biaya material aktual, payroll final, dan overhead.",
             path: APP_ROUTES.PRODUCTION.HPP_ANALYSIS,
             icon: AppstoreOutlined,
+            hubIcon: CalculatorOutlined,
             allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
           },
         ],

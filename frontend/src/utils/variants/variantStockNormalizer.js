@@ -1,4 +1,4 @@
-import { calculateAvailableStock, toNumber } from '../stock/stockHelpers';
+import { calculateAvailableStock, normalizeStockSnapshot, toNumber } from '../stock/stockHelpers';
 
 // =====================================================
 // VARIANT STOCK NORMALIZER - SINGLE SOURCE OF TRUTH.
@@ -185,6 +185,24 @@ export const calculateVariantStockTotals = (variants = [], options = {}) => {
     availableStock: calculateVariantAvailableStock(currentStock, reservedStock),
     variantCount: normalizedVariants.length,
     activeVariantCount: activeVariants.length,
+  };
+};
+
+export const getMasterStockSummary = (record = {}) => {
+  if (record?.hasVariants) {
+    const totals = calculateVariantStockTotals(record.variants || [], { filterEmptyLabel: false });
+    return {
+      currentStock: totals.currentStock,
+      reservedStock: totals.reservedStock,
+      availableStock: totals.availableStock,
+    };
+  }
+
+  const snapshot = normalizeStockSnapshot(record);
+  return {
+    currentStock: snapshot.currentStock,
+    reservedStock: snapshot.reservedStock,
+    availableStock: Number(record.availableStock ?? snapshot.availableStock),
   };
 };
 

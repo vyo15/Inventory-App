@@ -4,7 +4,7 @@
 
 Status: **AKTIF / SOURCE-VERIFIED / SQLITE-FIRST**.
 
-Source aktual ZIP `Inventory-App-20260621-231755191-main-9e6581f4-dirty.zip` menunjukkan IMS berjalan dengan arsitektur:
+Source aktual ZIP `Inventory-App-20260622-202512318-main-a99017ed-dirty.zip` menunjukkan IMS berjalan dengan arsitektur:
 
 - Frontend React/Vite.
 - Backend Node.js Express sebagai satu-satunya akses database.
@@ -85,7 +85,7 @@ Konsekuensi:
 - Runner command Windows menjalankan `npm.cmd`/`npx.cmd` melalui `cmd.exe`, sehingga shortcut quality gate tidak gagal dengan `spawnSync ... EINVAL` pada Node.js Windows.
 - Production P4 memusatkan create PO dari Planning, Start Production, Complete Work Log, auto payroll, Payroll Paid, finance posting, dan HPP reconcile pada transaction backend SQLite.
 - Generic production CRUD tidak lagi dapat dipakai untuk melewati lifecycle sensitif Planning, Production Order, Work Log, atau Payroll.
-- Test discovery source saat ini mencakup 135 test backend pada 30 file, 82 test frontend pada 23 file, dan 11 test tooling. Tambahan backend melindungi FIFO database coordinator, transaction/read concurrency, runtime counter code, password maksimum, serta compatibility backup mock. Coverage backend mencakup rollback/idempotency produksi, backup/restore guarded, auth migration, serta source ZIP hygiene; coverage frontend mencakup auth, role guard, transaksi, endpoint atomic produksi, restore guarded, export XLSX, Dashboard, dan error login.
+- Test discovery source saat ini mencakup 140 deklarasi test backend pada 33 file, 103 test frontend pada 33 file, dan 11 test tooling. Coverage baru melindungi facade/split arsitektur Production dan Maintenance, kalkulasi produksi, snapshot audit, User Management guard, BOM, Work Log, Cash In/Out, shared input Rupiah, filter Produksi, serta aksi Master Data. Test backend yang memakai SQLite native tetap wajib dijalankan pada runtime lokal dengan binding `sqlite3` aktif.
 
 ## Tech debt aktif yang masih perlu dijaga
 
@@ -166,7 +166,8 @@ Jangan membuat perhitungan stok baru di UI.
 - CORS default hanya menerima origin dengan hostname yang sama seperti backend atau pasangan loopback `localhost`/`127.0.0.1`. Origin tambahan harus didaftarkan eksplisit melalui `IMS_SQLITE_CORS_ORIGIN` dipisahkan koma; wildcard tidak dipakai untuk credentialed cookie.
 - Bearer fallback default `false`. Aktifkan `IMS_AUTH_ALLOW_LEGACY_BEARER=true` hanya sementara jika masih ada perangkat lama yang perlu dimigrasikan melalui `/api/auth/me`, lalu kembalikan ke `false`.
 - Login dan bootstrap rate limiting memakai in-memory store karena IMS berjalan single-process di LAN. Counter akan reset saat backend restart; gunakan store eksternal hanya jika arsitektur berubah menjadi multi-process/multi-instance.
-- Automated test sudah mencakup atomic core Production, backup/restore guarded, source hygiene, auth frontend, role guard, ProtectedRoute, Dashboard, dan error login. Coverage belum mencakup seluruh variasi halaman transaksi/report/produksi dan interaksi maintenance kompleks; area tersebut tetap wajib menjalani checklist manual.
+- Automated test sudah mencakup atomic core Production, backup/restore guarded, source hygiene, auth frontend, role guard, ProtectedRoute, Dashboard, error login, User Management guard, BOM, Work Log, Cash In/Out, shared input Rupiah, dan aksi Master Data. Coverage belum mencakup seluruh variasi halaman transaksi/report/produksi dan interaksi maintenance kompleks; area tersebut tetap wajib menjalani checklist manual.
+- Input nominal Rupiah aktif memakai `RupiahInputNumber` berbasis `Space.Compact`; penggunaan deprecated `InputNumber addonBefore` sudah dihapus dari Cash, Supplier Purchase, dan Purchase Form tanpa mengubah Form payload. Products dan Raw Materials berbagi komponen aksi presentational, sedangkan handler, stock guard, dan payload masing-masing tetap berada di page/service domainnya.
 - Test runner menemukan seluruh file `*.test.js` secara otomatis. `npm run check`, `git check`, dan pre-push wajib gagal jika automated test gagal.
 - Source readiness menolak file runtime di `data/` atau `backups/` yang ter-track; script clean ZIP menjalankan guard sebelum `git archive` lalu memverifikasi artifact ZIP aktual. ZIP dengan path backslash, folder runtime/generated, database, backup, atau struktur source tidak lengkap akan ditolak dan dihapus. Hapus artifact dari Git index dengan `git rm --cached` tanpa menghapus backup lokal yang masih diperlukan.
 - Backend quality gate menjalankan syntax check untuk `src/`, `test/`, dan `scripts/`, lalu ESLint correctness baseline (`js.configs.recommended`, `no-unused-vars`, dan `no-duplicate-imports`). Rule style/formatter belum dipaksakan agar tidak mencampur cleanup massal dengan perubahan business logic.
@@ -175,10 +176,10 @@ Jangan membuat perhitungan stok baru di UI.
 ## Status temuan P0–P3 setelah hardening 2026-06-21
 
 - **Selesai di source:** application-level serialization untuk singleton SQLite, central transaction helper, concurrency regression, runtime business counter, Date.now reference fallback pada flow resmi, backup/restore exclusivity, password maksimum 128 karakter, graceful shutdown WAL/SHM, atomic cleanup import backup, direct dependency declaration, serta standardisasi formatter `formatNumberId`.
-- **Release artifact terbaru:** ZIP review `Inventory-App-20260621-235916017-main-1ad767f2-clean.zip` berlabel `clean` dan struktur source-nya lolos audit lokal. ZIP tetap tidak membawa metadata `.git`; working tree clean, commit lengkap, dan kesamaan upstream hanya dapat dibuktikan pada mesin project melalui `npm run git:check:full` dan `npm run verify:source`.
+- **Source review terbaru:** ZIP `Inventory-App-20260622-202512318-main-a99017ed-dirty.zip` menjadi source of truth audit ini. Label `dirty` berarti status staging/commit belum boleh diasumsikan dari arsip; working tree clean, commit lengkap, dan kesamaan upstream hanya dapat dibuktikan pada mesin project melalui `npm run git:check:full` dan `npm run verify:source`.
 - **Masih residual:** chunk terbesar setelah vendor split stabil sekitar 706.6 KiB dari budget 1074.2 KiB. React/React Router dan Day.js dipisahkan tanpa circular chunk; business/page modules tetap mengikuti route lazy.
 - **Masih residual dependency:** `xlsx@0.18.5` dan `esbuild@0.27.7` tetap terdokumentasi; tidak ada force upgrade/override major.
-- **Masih cleanup terpisah:** `production.service.js` tetap besar dan repository-mode compatibility masih memiliki importer aktif. Keduanya tidak dihapus/refactor dalam patch transaction karena risiko regression.
+- **Arsitektur service setelah cleanup:** public facade Produksi tetap di `production.service.js`; lifecycle Planning/Order dipisah ke `production.order.service.js`, guard/router ke `production.guards.js`, primitive bersama ke `production.shared.js`, dan kalkulasi murni ke `production.calculations.js`. Maintenance memisahkan audit/repair data quality ke `maintenance.dataQuality.service.js` tanpa memindahkan backup/restore/rollback dari facade. Pemisahan transaction domain yang lebih jauh tetap ditunda sampai full SQLite regression lokal lulus. Repository-mode compatibility masih memiliki importer aktif dan belum dihapus.
 - **Quality evidence aktif:** frontend critical-flow coverage memakai provider V8 dengan threshold baseline dan CI mengunggah `coverage-summary.json` bersama CycloneDX SBOM backend/frontend.
 - **Masih hardening non-blocker:** TypeScript source dan breached-password screening online belum ditambahkan. OpenAPI administrator-only, security headers tanpa dependency, structured JSON logger/rotation, password umum lokal, Node runtime pinning, dan queue telemetry sudah aktif.
 
@@ -259,9 +260,10 @@ Test discovery otomatis menemukan bahwa empat file regression Production P4 suda
 - P0 inventory master/variant guard, Stock Read Model write block, dan Pricing Rule batch atomic sudah tersedia di source aktual dan dilindungi regression test.
 - Restore sekarang memakai staged candidate + swap database dan automatic rollback jika migrasi, post-validation, atau audit restore gagal.
 - Audit read-only dan repair stock read model kini memakai backend nyata. UI hanya mengaktifkan subset aman tersebut; tool stok utama/transaksi/finance/production/payroll/HPP yang masih no-op tetap tidak ditampilkan sebagai berhasil.
+- Normalisasi snapshot audit stock read model dipisahkan ke `backend/src/modules/maintenance/maintenance.auditHelpers.js` dan dilindungi unit test. Public API `maintenance.service.js`, backup/restore, keyword konfirmasi, pre-repair backup, transaction repair, dan audit log tidak berubah.
 - Internal link Dashboard/stock helper memakai `APP_ROUTES`; child route lama tetap hanya compatibility redirect.
 - Dead compatibility files yang tidak mempunyai importer dihapus setelah usage scan.
 - GitHub Actions quality gate dan README root ditambahkan.
 - Legacy Bearer sekarang opt-in dan default nonaktif; flag hanya dipakai sementara untuk migrasi perangkat lama.
-- Refactor besar `production.service.js`, perluasan coverage ke seluruh page besar, dan penghapusan repository-mode compatibility tetap pekerjaan terpisah karena menyentuh architecture/dependency dan tidak aman dicampur dengan hardening ini.
+- Refactor domain Produksi sudah memisahkan Planning/Order, guard/router, primitive bersama, dan kalkulasi murni sambil menjaga public facade identik. Complete Work Log, stock mutation, payroll, HPP, finance, dan audit tetap berada pada boundary backend resmi. Maintenance memisahkan data-quality audit/repair dari backup/restore facade. Pemisahan lebih jauh dan penghapusan repository-mode compatibility tetap pekerjaan terpisah setelah full SQLite regression lokal.
 - Placeholder frontend `businessCodeGenerator.js` dan `businessCodeCounterService.js` tetap dihapus karena tidak mempunyai importer. Tabel existing `business_code_counters` sekarang dipakai runtime melalui helper backend bersama; concurrency code allocation dilindungi transaction dan regression test.

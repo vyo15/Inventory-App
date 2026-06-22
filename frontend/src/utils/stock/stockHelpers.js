@@ -28,6 +28,15 @@ export const normalizeStockSnapshot = (item = {}, stockField = 'currentStock') =
   };
 };
 
+export const hasSafeZeroStockSnapshot = (record = {}) => {
+  const snapshot = normalizeStockSnapshot(record);
+  const availableStock = Number(record.availableStock ?? snapshot.availableStock);
+
+  return snapshot.currentStock <= 0
+    && snapshot.reservedStock <= 0
+    && availableStock <= 0;
+};
+
 export const calculateWeightedAverage = (previousQty, previousCost, incomingQty, incomingCost) => {
   const prevQty = toNumber(previousQty);
   const prevCost = toNumber(previousCost);

@@ -1,9 +1,9 @@
 # MASTER CONTEXT — IMS Bunga Flanel
 
-Dokumen ini dibuat berdasarkan audit langsung terhadap source code aplikasi. Update terbaru 2026-06-21 memakai ZIP `Inventory-App-20260621-231755191-main-9e6581f4-dirty.zip` sebagai sumber kebenaran utama, bukan template umum atau docs lama.
+Dokumen ini dibuat berdasarkan audit langsung terhadap source code aplikasi. Update terbaru 2026-06-22 memakai ZIP `Inventory-App-20260622-202512318-main-a99017ed-dirty.zip` sebagai sumber kebenaran utama, bukan template umum atau docs lama.
 
-Update verifikasi source aktual — 2026-06-21:
-- source yang divalidasi: ZIP `Inventory-App-20260621-231755191-main-9e6581f4-dirty.zip` dengan root project source pada arsip;
+Update verifikasi source aktual — 2026-06-22:
+- source yang divalidasi: ZIP `Inventory-App-20260622-202512318-main-a99017ed-dirty.zip` dengan root project source pada arsip;
 - runtime utama source aktual adalah React/Vite frontend + Node.js Express backend + SQLite file lokal/LAN;
 - `backend/src/server.js` mendaftarkan endpoint `/api/**` untuk Auth, master data, stock, transaksi, finance, production, reports, maintenance, dan audit log;
 - `frontend/src/context/AuthContext.jsx` memakai `localAuthService` dan `authMode: "sqlite"`; nama state auth lama yang masih tersisa hanya compatibility internal untuk actor label lama, bukan runtime auth lama;
@@ -73,6 +73,8 @@ IMS Bunga Flanel adalah aplikasi inventory dan operasional usaha yang mencakup:
 - `src/router/AppRoutes.jsx` adalah peta route utama
 - `src/services/**` berisi service utama untuk master data, pricing, inventory, produksi, dan reset utilitas
 - `src/services/Produksi/**` aktual berisi service granular: `productionBomsService.js`, `productionEmployeesService.js`, `productionOrdersService.js`, `productionPayrollsService.js`, `productionPlanningService.js`, `productionProfilesService.js`, `productionStepsService.js`, `productionWorkLogsService.js`, dan `semiFinishedMaterialsService.js`
+- Backend produksi menjaga public facade di `backend/src/modules/production/production.service.js`; lifecycle Planning/Order berada di `production.order.service.js`, guard/router di `production.guards.js`, primitive transaksi bersama di `production.shared.js`, dan kalkulasi deterministik di `production.calculations.js`. Mutasi stok, completion Work Log, payroll/HPP, finance posting, dan audit tetap melalui transaction backend resmi.
+- Backend Maintenance menjaga public facade di `backend/src/modules/maintenance/maintenance.service.js`; audit/repair data quality berada di `maintenance.dataQuality.service.js`, sedangkan normalizer snapshot murni berada di `maintenance.auditHelpers.js`. Backup/restore, file swap, rollback, dan confirm guard tetap berada di facade Maintenance.
 - `src/pages/**` berisi implementasi halaman per modul
 
 ## Route Utama yang Aktif

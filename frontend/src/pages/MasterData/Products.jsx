@@ -11,7 +11,6 @@ import {
   Form,
   Input,
   InputNumber,
-  Popconfirm,
   Row,
   Select,
   Space,
@@ -21,11 +20,7 @@ import {
   Typography,
   message,
 } from 'antd';
-import {
-  EditOutlined,
-  EyeOutlined,
-  PlusOutlined,
-} from '@ant-design/icons';
+import { PlusOutlined } from '@ant-design/icons';
 import { formatNumberId, parseIntegerIdInput } from '../../utils/formatters/numberId';
 import { formatCurrencyId } from '../../utils/formatters/currencyId';
 import { formatDateId } from '../../utils/formatters/dateId';
@@ -38,6 +33,8 @@ import DataTableView from '../../components/Layout/Table/DataTableView';
 import MobileDetailDrawer from '../../components/Layout/Mobile/MobileDetailDrawer';
 import InfoPopoverButton from '../../components/Layout/Feedback/InfoPopoverButton';
 import ResponsiveFormSection from '../../components/Layout/Mobile/ResponsiveFormSection';
+import MasterRecordActions from './components/MasterRecordActions';
+import { buildMasterRecordMobileActions } from './components/masterRecordActionHelpers';
 import { listCategories } from '../../data/repositories/categoriesRepository';
 
 import { ensureAtLeastOneVariant } from '../../utils/variants/variantHelpers';
@@ -489,23 +486,13 @@ const Products = () => {
       width: '14%',
       className: 'app-table-action-column',
       render: (_, record) => (
-        <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-          {/* AKTIF / GUARDED: kolom Aksi produk dibuat 3 baris agar Detail/Edit/Status rapi tanpa scroll horizontal; handler produk dan flow stok tetap tidak diubah. */}
-          <Button className="ims-action-button ims-action-button--block" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
-            Detail
-          </Button>
-          <Button className="ims-action-button ims-action-button--block" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            Edit
-          </Button>
-          <Popconfirm
-            title={record.isActive === false ? 'Aktifkan kembali produk?' : 'Nonaktifkan produk?'}
-            okText="Ya"
-            cancelText="Batal"
-            onConfirm={() => handleToggleActive(record)}
-          >
-            <Button className="ims-action-button ims-action-button--block" size="small">{record.isActive === false ? 'Aktifkan' : 'Nonaktifkan'}</Button>
-          </Popconfirm>
-        </Space>
+        <MasterRecordActions
+          record={record}
+          onDetail={handleViewDetail}
+          onEdit={handleEdit}
+          onToggle={handleToggleActive}
+          toggleTitle={record.isActive === false ? 'Aktifkan kembali produk?' : 'Nonaktifkan produk?'}
+        />
       ),
     },
   ];
@@ -530,13 +517,18 @@ const Products = () => {
       { label: 'Varian', value: (record) => (record.hasVariants ? `${formatNumberId(record.variantCount || 0)} varian` : 'Tidak') },
     ],
     onCardClick: (record) => handleViewDetail(record),
-    primaryActions: [
-      { key: 'detail', label: 'Detail', icon: <EyeOutlined />, onClick: (record) => handleViewDetail(record) },
-    ],
-    moreActions: (record) => [
-      { key: 'edit', label: 'Edit', icon: <EditOutlined />, onClick: () => handleEdit(record) },
-      { key: 'toggle', label: record.isActive === false ? 'Aktifkan' : 'Nonaktifkan', onClick: () => handleToggleActive(record) },
-    ],
+    primaryActions: (record) => buildMasterRecordMobileActions({
+      record,
+      onDetail: handleViewDetail,
+      onEdit: handleEdit,
+      onToggle: handleToggleActive,
+    }).primaryActions,
+    moreActions: (record) => buildMasterRecordMobileActions({
+      record,
+      onDetail: handleViewDetail,
+      onEdit: handleEdit,
+      onToggle: handleToggleActive,
+    }).moreActions,
   };
 
   return (
@@ -670,7 +662,7 @@ const Products = () => {
           ===================================================== */}
           <Row gutter={16}>
             <Col xs={24} md={12}>
-              <Form.Item name="name" label="Nama Produk" rules={[{ required: true, message: 'Nama produk wajib diisi.' }]}> 
+              <Form.Item name="name" label="Nama Produk" rules={[{ required: true, message: 'Nama produk wajib diisi.' }]}>
                 <Input placeholder="Contoh: Bunga Mawar Flanel" />
               </Form.Item>
             </Col>
@@ -745,7 +737,7 @@ const Products = () => {
               />
             </Col>
             <Col xs={24} md={8}>
-              <Form.Item name="price" label="Harga Jual" rules={[{ required: true, message: 'Harga jual wajib diisi.' }]}> 
+              <Form.Item name="price" label="Harga Jual" rules={[{ required: true, message: 'Harga jual wajib diisi.' }]}>
                 <InputNumber
                   style={{ width: '100%' }}
                   min={0}
@@ -877,7 +869,7 @@ const Products = () => {
                             <Input />
                           </Form.Item>
                           <Col xs={24} md={6}>
-                            <Form.Item {...field} name={[field.name, 'color']} label={`Nama ${variantLabelValue || 'Varian'}`} rules={[{ required: true, message: 'Nama varian wajib diisi' }]}> 
+                            <Form.Item {...field} name={[field.name, 'color']} label={`Nama ${variantLabelValue || 'Varian'}`} rules={[{ required: true, message: 'Nama varian wajib diisi' }]}>
                               <Input placeholder="Contoh: Merah, Ukuran S, Motif Polkadot" />
                             </Form.Item>
                           </Col>

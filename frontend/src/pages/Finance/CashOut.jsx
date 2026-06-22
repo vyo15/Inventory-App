@@ -2,10 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Button,
   Col,
-  DatePicker,
   Form,
-  Input,
-  InputNumber,
   Popconfirm,
   Select,
   Space,
@@ -24,9 +21,10 @@ import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
-import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numberId";
+import { formatNumberId } from "../../utils/formatters/numberId";
 import { createCashOutTransaction, deleteCashOutTransaction, listenCashOutRecords } from "../../services/Finance/financeService";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import CashTransactionFormFields from "./components/CashTransactionFormFields";
 import {
   buildFinanceMonthOptions,
   buildFinanceRecordYearOptions,
@@ -99,6 +97,29 @@ const getSavingMeta = (value) => {
     label: "Sesuai Referensi",
     color: "default",
   };
+};
+
+const renderCashOutActions = (record = {}, onDelete) => {
+  const sourceMeta = resolveExpenseSourceMeta(record);
+
+  if (!sourceMeta.deletable) {
+    return <Tag color={sourceMeta.color}>Otomatis</Tag>;
+  }
+
+  return (
+    <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
+      <Popconfirm
+        title="Yakin hapus transaksi ini?"
+        onConfirm={() => onDelete(record.id)}
+        okText="Ya"
+        cancelText="Tidak"
+      >
+        <Button className="ims-action-button" danger icon={<DeleteOutlined />}>
+          Hapus
+        </Button>
+      </Popconfirm>
+    </Space>
+  );
 };
 
 const CashOut = () => {
@@ -354,28 +375,7 @@ const CashOut = () => {
         key: "action",
         width: 140,
         className: "app-table-action-column",
-        render: (_, record) => {
-          const sourceMeta = resolveExpenseSourceMeta(record);
-
-          if (!sourceMeta.deletable) {
-            return <Tag color={sourceMeta.color}>Otomatis</Tag>;
-          }
-
-          return (
-            <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-              <Popconfirm
-                title="Yakin hapus transaksi ini?"
-                onConfirm={() => handleDeleteTransaction(record.id)}
-                okText="Ya"
-                cancelText="Tidak"
-              >
-                <Button className="ims-action-button" danger icon={<DeleteOutlined />}>
-                  Hapus
-                </Button>
-              </Popconfirm>
-            </Space>
-          );
-        },
+        render: (_, record) => renderCashOutActions(record, handleDeleteTransaction),
       },
     ],
     [],
@@ -403,28 +403,7 @@ const CashOut = () => {
       } },
       { label: 'Supplier', value: (record) => record.supplierName || '-' },
     ],
-    actions: (record) => {
-      const sourceMeta = resolveExpenseSourceMeta(record);
-
-      if (!sourceMeta.deletable) {
-        return <Tag color={sourceMeta.color}>Otomatis</Tag>;
-      }
-
-      return (
-        <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-          <Popconfirm
-            title="Yakin hapus transaksi ini?"
-            onConfirm={() => handleDeleteTransaction(record.id)}
-            okText="Ya"
-            cancelText="Tidak"
-          >
-            <Button className="ims-action-button" danger icon={<DeleteOutlined />}>
-              Hapus
-            </Button>
-          </Popconfirm>
-        </Space>
-      );
-    },
+    actions: (record) => renderCashOutActions(record, handleDeleteTransaction),
   };
 
   /* =====================================================
@@ -550,53 +529,12 @@ const CashOut = () => {
         form={form}
         onFinish={handleAddTransaction}
       >
-        <Form.Item
-          name="type"
-          label="Tipe Pengeluaran"
-          rules={[{ required: true, message: "Harap pilih tipe pengeluaran!" }]}
-          initialValue="Biaya Lain-lain"
-        >
-          <Select placeholder="Pilih Tipe">
-            <Option value="Pembelian">Pembelian</Option>
-            <Option value="Gaji">Gaji</Option>
-            <Option value="Biaya Operasional">Biaya Operasional</Option>
-            <Option value="Biaya Lain-lain">Biaya Lain-lain</Option>
-          </Select>
-        </Form.Item>
-
-        <Form.Item
-          name="amount"
-          label="Jumlah"
-          rules={[{ required: true, message: "Harap masukkan jumlah!" }]}
-        >
-          {/* AKTIF/GUARDED: class shared menjaga lebar field form kas keluar tetap konsisten tanpa ubah payload transaksi. */}
-          <InputNumber
-            min={0}
-            step={1}
-            precision={0}
-            className="ims-filter-control"
-            addonBefore="Rp"
-            formatter={(value) => formatNumberId(value)}
-            parser={parseIntegerIdInput}
-          />
-        </Form.Item>
-
-        <Form.Item
-          name="description"
-          label="Deskripsi"
-          rules={[{ required: true, message: "Harap masukkan deskripsi!" }]}
-        >
-          <Input.TextArea rows={3} />
-        </Form.Item>
-
-        <Form.Item
-          name="date"
-          label="Tanggal"
-          rules={[{ required: true, message: "Harap pilih tanggal!" }]}
-          initialValue={dayjs()}
-        >
-          <DatePicker className="ims-filter-control" />
-        </Form.Item>
+        <CashTransactionFormFields
+          typeLabel="Tipe Pengeluaran"
+          typeRequiredMessage="Harap pilih tipe pengeluaran!"
+          typeOptions={["Pembelian", "Gaji", "Biaya Operasional", "Biaya Lain-lain"]}
+          defaultType="Biaya Lain-lain"
+        />
       </PageFormModal>
     </>
   );

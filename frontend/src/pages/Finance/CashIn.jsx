@@ -1,10 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Col,
-  DatePicker,
   Form,
-  Input,
-  InputNumber,
   Select,
   Tag,
   Typography,
@@ -21,9 +18,16 @@ import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
-import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numberId";
+import { formatNumberId } from "../../utils/formatters/numberId";
 import { createCashInTransaction, listenCashInRecords } from "../../services/Finance/financeService";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import CashTransactionFormFields from "./components/CashTransactionFormFields";
+import {
+  buildFinanceMonthOptions,
+  buildFinanceRecordYearOptions,
+  filterFinanceRecordsByPeriod,
+  getCurrentFinanceYear,
+} from "./helpers/financePeriodHelpers";
 
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
@@ -35,16 +39,7 @@ import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/La
 const { Option } = Select;
 const { Text } = Typography;
 
-// =========================
-// SECTION: Konstanta tampilan periode
-// Fungsi:
-// - menjaga filter bulan dan label bulan tetap konsisten
-// - menghindari penulisan ulang array bulan di beberapa halaman finance
-// =========================
-const MONTH_OPTIONS = Array.from({ length: 12 }).map((_, index) => ({
-  label: dayjs().month(index).format("MMMM"),
-  value: index,
-}));
+const MONTH_OPTIONS = buildFinanceMonthOptions();
 
 const CashIn = () => {
   // =========================
@@ -58,7 +53,7 @@ const CashIn = () => {
   // =========================
   // SECTION: Filter periode
   // =========================
-  const currentYear = dayjs().year();
+  const currentYear = getCurrentFinanceYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState("all");
 
@@ -85,26 +80,18 @@ const CashIn = () => {
   // =========================
   // SECTION: Derived data filter & summary
   // =========================
-  const yearOptions = useMemo(() => {
-    const availableYears = cashIns
-      .map((item) => (item.date?.toDate ? dayjs(item.date.toDate()).year() : null))
-      .filter(Boolean);
+  const yearOptions = useMemo(
+    () => buildFinanceRecordYearOptions(cashIns, currentYear),
+    [cashIns, currentYear],
+  );
 
-    return [...new Set([currentYear, ...availableYears])].sort((left, right) => right - left);
-  }, [cashIns, currentYear]);
-
-  const filteredCashIns = useMemo(() => {
-    return cashIns.filter((item) => {
-      if (!item.date?.toDate) return false;
-
-      const itemDate = dayjs(item.date.toDate());
-      const matchesYear = itemDate.year() === selectedYear;
-      const matchesMonth =
-        selectedMonth === "all" ? true : itemDate.month() === Number(selectedMonth);
-
-      return matchesYear && matchesMonth;
-    });
-  }, [cashIns, selectedMonth, selectedYear]);
+  const filteredCashIns = useMemo(
+    () => filterFinanceRecordsByPeriod(cashIns, {
+      year: selectedYear,
+      month: selectedMonth,
+    }),
+    [cashIns, selectedMonth, selectedYear],
+  );
 
   const summary = useMemo(() => {
     return filteredCashIns.reduce(
@@ -407,51 +394,12 @@ const CashIn = () => {
         form={form}
         onFinish={handleAddTransaction}
       >
-        <Form.Item
-          name="type"
-          label="Tipe Pemasukan"
-          rules={[{ required: true, message: "Harap pilih tipe pemasukan!" }]}
-          initialValue="Pendapatan Lain-lain"
-        >
-          <Select placeholder="Pilih Tipe">
-            <Option value="Penjualan">Penjualan</Option>
-            <Option value="Pendapatan Lain-lain">Pendapatan Lain-lain</Option>
-          </Select>
-        </Form.Item>
-
-        <Form.Item
-          name="amount"
-          label="Jumlah"
-          rules={[{ required: true, message: "Harap masukkan jumlah!" }]}
-        >
-          {/* AKTIF/GUARDED: helper class shared dipakai untuk lebar kontrol form kas masuk tanpa ubah behavior transaksi. */}
-          <InputNumber
-            min={0}
-            step={1}
-            precision={0}
-            className="ims-filter-control"
-            addonBefore="Rp"
-            formatter={(value) => formatNumberId(value)}
-            parser={parseIntegerIdInput}
-          />
-        </Form.Item>
-
-        <Form.Item
-          name="description"
-          label="Deskripsi"
-          rules={[{ required: true, message: "Harap masukkan deskripsi!" }]}
-        >
-          <Input.TextArea rows={3} />
-        </Form.Item>
-
-        <Form.Item
-          name="date"
-          label="Tanggal"
-          rules={[{ required: true, message: "Harap pilih tanggal!" }]}
-          initialValue={dayjs()}
-        >
-          <DatePicker className="ims-filter-control" />
-        </Form.Item>
+        <CashTransactionFormFields
+          typeLabel="Tipe Pemasukan"
+          typeRequiredMessage="Harap pilih tipe pemasukan!"
+          typeOptions={["Penjualan", "Pendapatan Lain-lain"]}
+          defaultType="Pendapatan Lain-lain"
+        />
       </PageFormModal>
     </>
   );
