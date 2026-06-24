@@ -1,8 +1,6 @@
 import { listFinanceExpenses, listFinanceIncomes } from "../Finance/financeService";
 import { getInventoryLogs } from "../Inventory/inventoryService";
 import { getStockIssueReadModels, getStockReadModelRows } from "../Inventory/stockReadModelService";
-import { listenProducts } from "../MasterData/productsService";
-import { listenRawMaterials } from "../MasterData/rawMaterialsService";
 import { getAllProductionOrders } from "../Produksi/productionOrdersService";
 import { getAllProductionPayrolls } from "../Produksi/productionPayrollsService";
 import { getAllProductionPlans } from "../Produksi/productionPlanningService";
@@ -11,7 +9,6 @@ import { fetchSalesRecords } from "../Transaksi/salesService";
 import { canAccessRoute, ROUTE_ACCESS_KEYS } from "../../utils/auth/roleAccess";
 import { APP_ROUTES } from "../../config/appRoutes";
 
-const LISTENER_TIMEOUT_MS = 7000;
 const DASHBOARD_SCAN_LIMIT = 1000;
 
 const EMPTY_PLANNING_PERIOD_SUMMARY = {
@@ -90,59 +87,6 @@ const getTimeValue = (record = {}) => getDateValue(record)?.getTime?.() || 0;
 
 const sortByLatestDate = (rows = []) => [...toArray(rows)].sort((left, right) => getTimeValue(right) - getTimeValue(left));
 
-const onceFromListener = (listener, { timeoutMs = LISTENER_TIMEOUT_MS } = {}) => new Promise((resolve, reject) => {
-  let settled = false;
-  let cleanupPending = false;
-  let listenerRegistered = false;
-  let unsubscribe = null;
-  let timer = null;
-
-  const cleanup = () => {
-    if (timer) {
-      clearTimeout(timer);
-      timer = null;
-    }
-
-    try {
-      if (typeof unsubscribe === "function") unsubscribe();
-    } catch {
-      // Listener cleanup is best-effort only.
-    }
-  };
-
-  const settle = (handler, value) => {
-    if (settled) return;
-    settled = true;
-    handler(value);
-
-    if (listenerRegistered) {
-      cleanup();
-    } else {
-      cleanupPending = true;
-    }
-  };
-
-  timer = setTimeout(() => {
-    settle(reject, new Error("Timeout membaca data listener Dashboard."));
-  }, timeoutMs);
-
-  try {
-    const maybeUnsubscribe = listener(
-      (rows) => settle(resolve, toArray(rows)),
-      (error) => settle(reject, error),
-    );
-
-    unsubscribe = typeof maybeUnsubscribe === "function" ? maybeUnsubscribe : () => {};
-    listenerRegistered = true;
-
-    if (cleanupPending) {
-      cleanup();
-    }
-  } catch (error) {
-    settle(reject, error);
-  }
-});
-
 const readDashboardSection = async (key, loader, fallback) => {
   try {
     const rows = await loader();
@@ -183,7 +127,7 @@ const getStockRoute = (row = {}, role) => {
 const getStockTypeLabel = (row = {}) => {
   const sourceType = normalizeStatus(row.sourceType);
   if (sourceType === "product") return "Produk";
-  if (sourceType === "semi_finished") return "Semi Finished";
+  if (sourceType === "semi_finished") return "Produk Setengah Jadi";
   return "Bahan Baku";
 };
 
@@ -193,14 +137,22 @@ const getDashboardSourceType = (row = {}) => {
   return sourceType || "stock";
 };
 
-const getStockSeverity = ({ stock = 0, minStock = 0 } = {}) => {
-  if (stock <= 0) return { label: "Kosong", color: "red" };
-  if (minStock > 0 && stock <= Math.max(1, Math.floor(minStock / 2))) return { label: "Sangat rendah", color: "orange" };
-  return { label: "Menipis", color: "gold" };
+const getStockSeverity = ({ stock = 0, currentStock = 0, reservedStock = 0, minStock = 0 } = {}) => {
+  if (stock < 0 || currentStock < 0) return { label: "Minus", color: "red", rank: 0 };
+  if (stock <= 0) return { label: "Kosong", color: "red", rank: 1 };
+  if (reservedStock > currentStock && reservedStock > 0) {
+    return { label: "Dipesan melebihi stok", color: "red", rank: 2 };
+  }
+  if (minStock > 0 && stock <= Math.max(1, Math.floor(minStock / 2))) {
+    return { label: "Sangat rendah", color: "gold", rank: 3 };
+  }
+  return { label: "Menipis", color: "gold", rank: 4 };
 };
 
 const mapLowStockRow = (row = {}, role) => {
   const stock = toNumber(row.availableStock ?? row.currentStock ?? row.stock);
+  const currentStock = toNumber(row.currentStock ?? row.stock);
+  const reservedStock = toNumber(row.reservedStock);
   const minStock = toNumber(row.minStockAlert ?? row.minStock);
   const sourceId = row.sourceId || row.itemId || row.id || row.code || row.readModelId || "";
   const name = row.name || row.itemName || row.productName || row.materialName || row.targetName || row.code || "Item stok";
@@ -213,10 +165,12 @@ const mapLowStockRow = (row = {}, role) => {
     type: getStockTypeLabel(row),
     sourceType: getDashboardSourceType(row),
     stock,
+    currentStock,
+    reservedStock,
     minStock,
     unit: row.stockUnit || row.unit || "pcs",
     to: getStockRoute(row, role),
-    severity: getStockSeverity({ stock, minStock }),
+    severity: getStockSeverity({ stock, currentStock, reservedStock, minStock }),
     affectedVariantSummary: row.affectedVariantSummary || row.variantSummary || row.variantLabel || "",
     restockSupplierId: row.restockSupplierId || row.lastSupplierId || row.supplierId || "",
     restockSupplierName: row.restockSupplierName || row.lastSupplierName || row.supplierName || "",
@@ -224,6 +178,25 @@ const mapLowStockRow = (row = {}, role) => {
     lastPurchasePrice: toNumber(row.lastPurchasePrice || row.referencePrice || row.price),
   };
 };
+
+export const sortStockIssuesByUrgency = (rows = []) => [...toArray(rows)].sort((left, right) => {
+  const rankDifference = toNumber(left?.severity?.rank) - toNumber(right?.severity?.rank);
+  if (rankDifference !== 0) return rankDifference;
+
+  const leftDeficit = Math.max(toNumber(left?.minStock) - toNumber(left?.stock), 0);
+  const rightDeficit = Math.max(toNumber(right?.minStock) - toNumber(right?.stock), 0);
+  if (leftDeficit !== rightDeficit) return rightDeficit - leftDeficit;
+
+  const leftRatio = toNumber(left?.minStock) > 0
+    ? toNumber(left?.stock) / toNumber(left?.minStock)
+    : Number.POSITIVE_INFINITY;
+  const rightRatio = toNumber(right?.minStock) > 0
+    ? toNumber(right?.stock) / toNumber(right?.minStock)
+    : Number.POSITIVE_INFINITY;
+  if (leftRatio !== rightRatio) return leftRatio - rightRatio;
+
+  return safeTrim(left?.name).localeCompare(safeTrim(right?.name), "id");
+});
 
 const mapStockAuditRow = (row = {}, role) => {
   const currentStock = toNumber(row.currentStock ?? row.stock);
@@ -395,18 +368,6 @@ export const normalizeDashboardData = mergeDashboardData;
 export const readDashboardData = async ({ maxListItems = 5, role } = {}) => {
   const readDefinitions = [
     {
-      key: "products",
-      routeKey: ROUTE_ACCESS_KEYS.PRODUCTS,
-      loader: () => onceFromListener(listenProducts),
-      fallback: toArray,
-    },
-    {
-      key: "raw_materials",
-      routeKey: ROUTE_ACCESS_KEYS.RAW_MATERIALS,
-      loader: () => onceFromListener(listenRawMaterials),
-      fallback: toArray,
-    },
-    {
       key: "stock_issues",
       routeKey: ROUTE_ACCESS_KEYS.STOCK_MANAGEMENT,
       loader: () => getStockIssueReadModels({ maxResults: DASHBOARD_SCAN_LIMIT, includeMeta: true }),
@@ -463,7 +424,7 @@ export const readDashboardData = async ({ maxListItems = 5, role } = {}) => {
     {
       key: "inventory_logs",
       routeKey: ROUTE_ACCESS_KEYS.STOCK_MANAGEMENT,
-      loader: () => getInventoryLogs({ limit: DASHBOARD_SCAN_LIMIT }),
+      loader: () => getInventoryLogs({ limit: Math.max(maxListItems, 1) }),
       fallback: toArray,
     },
   ];
@@ -481,8 +442,11 @@ export const readDashboardData = async ({ maxListItems = 5, role } = {}) => {
   const failedReads = reads.filter((read) => read.failed).map((read) => read.key);
 
   const lowStockResult = byKey.stock_issues || { rows: [], meta: {} };
-  const lowStockRows = toArray(lowStockResult.rows).map((row) => mapLowStockRow(row, role));
-  const stockAuditRows = toArray(byKey.stock_read_models).map((row) => mapStockAuditRow(row, role));
+  const lowStockRows = sortStockIssuesByUrgency(
+    toArray(lowStockResult.rows).map((row) => mapLowStockRow(row, role)),
+  );
+  const rawStockAuditRows = toArray(byKey.stock_read_models);
+  const stockAuditRows = rawStockAuditRows.map((row) => mapStockAuditRow(row, role));
   const recentActivities = normalizeActivityRows(byKey.inventory_logs, maxListItems);
   const sales = sortByLatestDate(byKey.sales);
   const incomes = sortByLatestDate(byKey.incomes);
@@ -511,8 +475,6 @@ export const readDashboardData = async ({ maxListItems = 5, role } = {}) => {
     },
     planningSummary,
     summary: {
-      productCount: toArray(byKey.products).length,
-      rawMaterialCount: toArray(byKey.raw_materials).length,
       salesCount: sales.length,
       incomeTotal: incomes.reduce((sum, item) => sum + toNumber(item.totalAmount ?? item.amount ?? item.total), 0),
       expenseTotal: expenses.reduce((sum, item) => sum + toNumber(item.totalAmount ?? item.amount ?? item.total), 0),

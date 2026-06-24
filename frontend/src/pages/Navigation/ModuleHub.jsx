@@ -83,7 +83,7 @@ const ModuleHub = ({ moduleKey, menuKey }) => {
 
         <div className="module-hub-header-copy">
           <div className="module-hub-eyebrow">
-            {moduleItem.hubEyebrow || "Module Workspace"}
+            {moduleItem.hubEyebrow || "Workspace Modul"}
           </div>
           <h1>{moduleItem.hubTitle || moduleItem.label}</h1>
           <p>{moduleDescription}</p>

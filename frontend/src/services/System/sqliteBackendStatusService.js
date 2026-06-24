@@ -146,6 +146,13 @@ export const getSqliteRestoreLogs = async () => fetchSqliteJson("/api/maintenanc
   headers: getStoredSqliteAuthHeaders(),
 });
 
+export const getSqliteAuditLogs = async ({ module = "maintenance", limit = 50 } = {}) => {
+  const query = new URLSearchParams({ module, limit: String(limit) });
+  return fetchSqliteJson(`/api/audit-logs?${query.toString()}`, {
+    headers: getStoredSqliteAuthHeaders(),
+  });
+};
+
 export const getSqliteAuthStatus = async () => fetchSqliteJson("/api/auth/status");
 
 export const executeSqliteRestore = async (values = {}, token = "") => fetchSqliteJson("/api/maintenance/restore-execute", {

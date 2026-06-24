@@ -192,7 +192,7 @@ Yang sudah dikunci:
 
 Guardrail yang tetap berlaku:
 
-- Patch mobile ini tidak mengubah schema SQLite, auth, route guard, stock mutation, purchase/sales/return commit, finance ledger, production material usage, payroll final, HPP, backup/restore, atau reset testing.
+- Patch mobile ini tidak mengubah schema SQLite, auth, route guard, stock mutation, purchase/sales/return commit, finance ledger, production material usage, payroll final, HPP, backup/restore, atau maintenance destructive flow.
 - Sales tetap tidak boleh memiliki cancel/delete.
 - Restore/reset tetap harus guarded dan tidak boleh dibuat shortcut mobile tanpa confirm keyword.
 - Setiap phase berikutnya wajib update dokumen ini, `docs/09_UI_THEME_GUIDE.md`, dan `docs/06_TEST_CHECKLIST.md` bila ada perubahan standar/QA.
@@ -241,7 +241,7 @@ Halaman yang ikut terdampak secara UI-only:
 Guardrail:
 
 - Perubahan ini hanya presentational/responsive.
-- Tidak mengubah schema SQLite, query service, stock mutation, purchase/sales/return commit, finance ledger, production material usage, payroll final, HPP, backup/restore, reset testing, route, atau role guard.
+- Tidak mengubah schema SQLite, query service, stock mutation, purchase/sales/return commit, finance ledger, production material usage, payroll final, HPP, backup/restore, maintenance destructive flow, route, atau role guard.
 - Filter tetap memakai state halaman existing; tombol Terapkan di drawer hanya menutup panel karena value sudah controlled oleh halaman.
 
 Checklist QA tambahan M7:

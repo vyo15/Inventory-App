@@ -1,13 +1,53 @@
 import { formatCurrencyId } from '../../../utils/formatters/currencyId';
-import { canAccessRoute } from '../../../utils/auth/roleAccess';
+import { canAccessRoute, ROUTE_ACCESS_KEYS } from '../../../utils/auth/roleAccess';
 
 
 export const filterDashboardQuickActionsByRole = (actions = [], role) =>
   actions.filter(({ routeKey }) => canAccessRoute(routeKey, role));
 
 export const MAX_DASHBOARD_LIST_ITEMS = 5;
-export const MAX_DASHBOARD_ALERT_ITEMS = 6;
+export const MAX_DASHBOARD_ALERT_ITEMS = 8;
 export const MAX_PLANNING_PRIORITY_ITEMS = 3;
+
+export const DASHBOARD_PRIORITY = Object.freeze({
+  CRITICAL: Object.freeze({ label: 'P0', rank: 0, color: 'red' }),
+  HIGH: Object.freeze({ label: 'P1', rank: 1, color: 'gold' }),
+  NORMAL: Object.freeze({ label: 'P2', rank: 2, color: 'blue' }),
+});
+
+const STOCK_READ_MODEL_WARNING_KEYS = new Set([
+  'stock_item_read_models_empty_fallback',
+  'stock_item_read_models_issue_query_fallback',
+  'stock_item_read_models_fallback',
+  'stock_issues',
+  'stock_read_models',
+]);
+
+export const formatDashboardLoadWarning = (failedReads = [], role) => {
+  if (!Array.isArray(failedReads) || failedReads.length === 0) return '';
+
+  const uniqueFailedReads = [...new Set(failedReads.filter(Boolean))];
+  const hasStockReadModelFallback = uniqueFailedReads.some((key) =>
+    STOCK_READ_MODEL_WARNING_KEYS.has(key));
+
+  if (hasStockReadModelFallback) {
+    const followUp = canAccessRoute(ROUTE_ACCESS_KEYS.RESET_MAINTENANCE, role)
+      ? 'Jika peringatan berulang, buka Database Center lalu jalankan audit/perbaikan stok.'
+      : 'Jika peringatan berulang, hubungi Administrator agar audit/perbaikan stok dapat dijalankan.';
+
+    return [
+      'Data stok lokal belum siap atau layanan lokal belum mengembalikan data stok lengkap.',
+      'Dashboard tetap memakai data aman agar monitoring tidak kosong.',
+      followUp,
+    ].join(' ');
+  }
+
+  return [
+    'Sebagian data Dashboard belum siap.',
+    'Data lain tetap ditampilkan untuk monitoring; periksa layanan lokal, koneksi jaringan,',
+    'atau status modul aplikasi bila peringatan berulang.',
+  ].join(' ');
+};
 
 export const EMPTY_PLANNING_PERIOD_SUMMARY = {
   count: 0,
@@ -37,6 +77,19 @@ export const getNumericValue = (value) => {
 
   return 0;
 };
+
+export const sortDashboardAlertItems = (items = []) => [...items].sort((left, right) => {
+  const rankDifference = getNumericValue(left?.priority?.rank) - getNumericValue(right?.priority?.rank);
+  if (rankDifference !== 0) return rankDifference;
+
+  const countDifference = getNumericValue(right?.count) - getNumericValue(left?.count);
+  if (countDifference !== 0) return countDifference;
+
+  return String(left?.label || '').localeCompare(String(right?.label || ''), 'id');
+});
+
+export const countDashboardAlertCategories = (items = []) =>
+  items.filter((item) => getNumericValue(item?.count) > 0).length;
 
 export const getTransactionDate = (record = {}) => {
   const candidates = [
@@ -125,10 +178,165 @@ export const isPayrollPending = (record = {}) => {
   return paymentStatus === 'unpaid' || status === 'draft' || status === 'confirmed';
 };
 
-export const isPayrollPaid = (record = {}) => {
-  const paymentStatus = normalizeStatus(record.paymentStatus);
-  const status = normalizeStatus(record.status);
-  return paymentStatus === 'paid' || status === 'paid';
+const startOfLocalDay = (value = new Date()) => {
+  const date = value instanceof Date ? new Date(value) : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+const getLocalDayKey = (value) => {
+  const date = startOfLocalDay(value);
+  if (!date) return '';
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+};
+
+const buildDailyBuckets = (days, referenceDate) => {
+  const safeDays = Math.max(Math.floor(getNumericValue(days)), 1);
+  const endDate = startOfLocalDay(referenceDate) || startOfLocalDay(new Date());
+  const buckets = [];
+
+  for (let offset = safeDays - 1; offset >= 0; offset -= 1) {
+    const date = new Date(endDate);
+    date.setDate(endDate.getDate() - offset);
+    buckets.push({
+      key: getLocalDayKey(date),
+      date,
+      label: date.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }),
+      amount: 0,
+      count: 0,
+    });
+  }
+
+  return buckets;
+};
+
+export const buildSalesTrendSeries = (
+  sales = [],
+  { days = 30, referenceDate = new Date() } = {},
+) => {
+  const buckets = buildDailyBuckets(days, referenceDate);
+  const bucketMap = new Map(buckets.map((bucket) => [bucket.key, bucket]));
+
+  sales
+    .filter((sale) => !isCancelledStatus(sale?.status))
+    .forEach((sale) => {
+      const saleDate = getTransactionDate(sale);
+      const bucket = bucketMap.get(getLocalDayKey(saleDate));
+      if (!bucket) return;
+
+      bucket.amount += getFinancialAmount(sale);
+      bucket.count += 1;
+    });
+
+  return buckets;
+};
+
+export const buildCashTrendSeries = (
+  incomes = [],
+  expenses = [],
+  { days = 7, referenceDate = new Date() } = {},
+) => {
+  const buckets = buildDailyBuckets(days, referenceDate);
+  const bucketMap = new Map(buckets.map((bucket) => [bucket.key, bucket]));
+
+  incomes.forEach((income) => {
+    const bucket = bucketMap.get(getLocalDayKey(getTransactionDate(income)));
+    if (!bucket) return;
+    bucket.amount += getFinancialAmount(income);
+    bucket.count += 1;
+  });
+
+  expenses.forEach((expense) => {
+    const bucket = bucketMap.get(getLocalDayKey(getTransactionDate(expense)));
+    if (!bucket) return;
+    bucket.amount -= getFinancialAmount(expense);
+    bucket.count += 1;
+  });
+
+  return buckets;
+};
+
+export const buildTopSellingProducts = (
+  sales = [],
+  { limit = 5, referenceDate = new Date() } = {},
+) => {
+  const grouped = new Map();
+
+  sales
+    .filter((sale) => !isCancelledStatus(sale?.status))
+    .filter((sale) => isSameMonth(getTransactionDate(sale), referenceDate))
+    .forEach((sale) => {
+      const items = Array.isArray(sale?.items) ? sale.items : [];
+
+      items.forEach((item) => {
+        const quantity = getNumericValue(item?.quantity ?? item?.qty);
+        if (quantity <= 0) return;
+
+        const name = String(
+          item?.itemName
+          || item?.productName
+          || item?.materialName
+          || item?.name
+          || 'Item penjualan',
+        ).trim();
+        const variantLabel = String(item?.variantLabel || item?.variantName || '').trim();
+        const displayName = variantLabel && !name.toLowerCase().includes(variantLabel.toLowerCase())
+          ? `${name} · ${variantLabel}`
+          : name;
+        const unit = String(item?.unit || 'pcs').trim() || 'pcs';
+        const sourceKey = item?.sourceId || item?.itemId || item?.id || name;
+        const variantKey = item?.variantKey || item?.variantId || item?.variantName || 'master';
+        const key = `${sourceKey}::${variantKey}::${unit}`;
+        const itemRevenue = getNumericValue(
+          item?.subtotal
+          ?? item?.total
+          ?? item?.totalAmount
+          ?? quantity * getNumericValue(item?.pricePerUnit ?? item?.price),
+        );
+        const current = grouped.get(key) || {
+          key,
+          name: displayName,
+          variantLabel,
+          unit,
+          quantity: 0,
+          revenue: 0,
+        };
+
+        current.quantity += quantity;
+        current.revenue += itemRevenue;
+        grouped.set(key, current);
+      });
+    });
+
+  const ranked = [...grouped.values()]
+    .sort((left, right) => {
+      const quantityDifference = right.quantity - left.quantity;
+      if (quantityDifference !== 0) return quantityDifference;
+
+      const revenueDifference = right.revenue - left.revenue;
+      if (revenueDifference !== 0) return revenueDifference;
+
+      return left.name.localeCompare(right.name, 'id');
+    })
+    .slice(0, Math.max(Math.floor(getNumericValue(limit)), 1));
+
+  const maxQuantity = ranked.reduce(
+    (maximum, item) => Math.max(maximum, getNumericValue(item.quantity)),
+    0,
+  );
+
+  return ranked.map((item, index) => ({
+    ...item,
+    rank: index + 1,
+    sharePercent: maxQuantity > 0
+      ? Math.max(Math.round((item.quantity / maxQuantity) * 100), 2)
+      : 0,
+  }));
 };
 
 export const buildRestockRoute = (basePath, params = {}) => {
@@ -169,11 +377,11 @@ export const formatActivityType = (type) => {
 
   if (normalized.includes('purchase')) return { label: 'Pembelian', color: 'green' };
   if (normalized.includes('sale')) return { label: 'Penjualan', color: 'blue' };
-  if (normalized.includes('return')) return { label: 'Retur', color: 'orange' };
+  if (normalized.includes('return')) return { label: 'Retur', color: 'gold' };
   if (normalized.includes('adjust')) return { label: 'Penyesuaian', color: 'gold' };
-  if (normalized.includes('production')) return { label: 'Produksi', color: 'purple' };
-  if (normalized.includes('payroll')) return { label: 'Payroll', color: 'cyan' };
-  if (normalized.includes('stock')) return { label: 'Stok', color: 'geekblue' };
+  if (normalized.includes('production')) return { label: 'Produksi', color: 'blue' };
+  if (normalized.includes('payroll')) return { label: 'Payroll', color: 'gold' };
+  if (normalized.includes('stock')) return { label: 'Stok', color: 'blue' };
   if (normalized.includes('expense')) return { label: 'Kas Keluar', color: 'red' };
   if (normalized.includes('income')) return { label: 'Kas Masuk', color: 'green' };
   if (normalized.includes('in')) return { label: type || 'Masuk', color: 'green' };

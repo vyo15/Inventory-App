@@ -48,13 +48,6 @@
   height: 100%;
 }
 
-.reset-maintenance-status-card {
-  height: 100%;
-}
-
-.reset-maintenance-status-card .ant-card-body {
-  height: 100%;
-}
 
 @media (max-width: 768px) {
   .reset-maintenance-toolbar {
@@ -82,7 +75,6 @@
   }
 }
 
-.reset-danger-flat-panel,
 .reset-export-flat-panel {
   background: var(--ims-bg-card-soft);
   border: 1px solid var(--ims-border-color-soft);
@@ -93,7 +85,6 @@
   padding: 12px;
 }
 
-.reset-danger-heading,
 .reset-export-heading {
   align-items: flex-start;
   display: flex;
@@ -107,22 +98,6 @@
   flex-direction: column;
   gap: 4px;
   min-width: 0;
-}
-
-.reset-danger-status-grid {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-}
-
-.reset-danger-status-item {
-  background: var(--ims-bg-card);
-  border: 1px solid var(--ims-border-color-soft);
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
 }
 
 .reset-export-metrics {
@@ -139,13 +114,11 @@
 }
 
 @media (max-width: 768px) {
-  .reset-danger-heading,
   .reset-export-heading {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .reset-danger-heading .ant-btn,
   .reset-export-heading .ant-btn {
     width: 100%;
   }

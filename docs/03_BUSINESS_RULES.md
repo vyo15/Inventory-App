@@ -276,15 +276,14 @@ Implikasi:
 Payroll produksi dibangun dari work log completed.
 
 ## 14. Rule Maintenance Data
-Reset destructive/testing lama sudah tidak tersedia di UI operasional. Jalur maintenance aktif adalah:
+Reset destructive/testing lama tidak tersedia di UI operasional. Jalur maintenance aktif adalah:
 - Backup & Restore resmi.
-- Export Master/Checklist read-only.
-- Checklist manual sebelum maintenance besar.
+- Audit & Health read-only.
+- Repair Data Turunan khusus `stock_read_models`.
+- Export Data Master read-only.
+- Checklist dan Riwayat resmi.
 
-Audit Data read-only aktif terbatas untuk integrity SQLite, invariant stok, stock read model, registry backup, dan pasangan kas-ledger. Repair Aman hanya aktif untuk rebuild/cleanup `stock_read_models` sebagai data turunan dengan backup `pre-repair`, transaction, audit log, dan keyword cleanup. Repair stok utama, inventory log, transaksi, finance, production, payroll, dan HPP tetap dinonaktifkan; service no-op tidak boleh ditampilkan sebagai sukses.
-- Export Master/Checklist untuk review dan backup manual.
-
-Tab Reset Testing hanya menampilkan status nonaktif. Jangan mengaktifkan ulang reset testing tanpa desain guard baru, backup otomatis, preview dampak, keyword, dan audit log.
+Audit & Health memeriksa integrity SQLite, foreign key, invariant stok, stock read model, registry backup, dan pasangan kas-ledger. Repair hanya aktif untuk rebuild missing/stale projection serta cleanup orphan dengan backup `pre-repair`, transaction, audit log, dan keyword. Repair stok utama, inventory log, transaksi, finance, production, payroll, HPP, dan reset data tidak tersedia dari Maintenance Center.
 
 
 ## Tambahan Rule Terkini (Batch Prioritas)
@@ -779,7 +778,7 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Apply Pricing Rule SQLite wajib memakai endpoint batch atomic. Seluruh item membawa `expectedVersion`; satu conflict atau item invalid menyebabkan seluruh batch rollback.
 - Frontend tidak boleh melakukan loop direct `PUT` Product/Raw Material untuk apply massal karena dapat menghasilkan partial apply.
 
-## 17. Rule Maintenance & Backup Data Aman
+## 17. Rule Maintenance Center dan Backup Data Aman
 
 - Supplier adalah protected master data dan collection `supplierPurchases` tidak boleh ikut aksi maintenance default.
 - Maintenance hanya untuk admin, bukan flow harian user operasional.
@@ -789,8 +788,8 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Cleanup orphan stock read model wajib keyword `BERSIHKAN DATA STOK`, backup `pre-repair`, transaction, dan audit log.
 - Import backup wajib atomic antara file package, `backup_logs`, dan audit log; kegagalan setelah file ditulis harus membersihkan file dan rollback registry.
 - Repair otomatis hanya boleh diaktifkan setelah backend SQLite menyediakan audit/preview nyata, guard, transaction, dan audit log resmi. Service no-op tidak boleh ditampilkan sebagai sukses.
-- Export Master/Checklist bersifat backup/review manual, bukan import atau restore otomatis.
-- Tab Reset Testing hanya menampilkan status nonaktif agar developer tidak mengira reset testing masih aktif.
+- Export Data Master bersifat arsip/review manual, bukan import atau restore otomatis.
+- UI tidak menampilkan tab reset, reset/baseline HPP, atau service repair stub. Fitur sandbox testing harus memakai database terpisah dan approval khusus.
 - Reset destructive baru hanya boleh dibuat setelah desain guard baru disetujui: backup otomatis, preview dampak, protected master, keyword, audit log awal/akhir, dan batas operasi aman.
 
 ## 19. Rule Purchases Supplier Restock Prefill
@@ -1102,16 +1101,12 @@ Guard wajib:
 ## Reset & Maintenance Development Rules
 - **Audit otomatis:** subset read-only nyata sudah aktif di backend untuk integrity SQLite, invariant stok, projection stok, registry backup, dan kas-ledger. Stub/no-op area lain tidak boleh menghasilkan status sukses atau evidence resmi.
 - **Repair otomatis:** hanya stock read model missing/stale dan orphan projection yang aktif. Aksi wajib berdasarkan audit terbaru, membuat backup `pre-repair`, memakai transaction, audit log, dan keyword untuk cleanup. Repair area bisnis lain tidak boleh dibuat hanya di frontend.
-- **Reset:** reset testing lama nonaktif. Jika reset baru dibutuhkan, wajib desain guard baru dan approval khusus.
-- **Export data pokok:** direkomendasikan sebelum maintenance besar. Export bersifat backup/checklist, bukan import atau restore otomatis.
-- **Protected master:** tidak ikut reset default dan tidak boleh dilepas dari guard tanpa approval khusus.
+- **Reset/destructive testing:** tidak tersedia di Maintenance Center. Jika dibutuhkan, wajib database sandbox terpisah, guard baru, dan approval khusus.
+- **Export data master:** direkomendasikan sebelum maintenance besar. Export bersifat arsip/review, bukan import atau restore otomatis.
+- **Protected master:** tidak boleh dilepas dari guard tanpa approval khusus.
 - **Data real:** jangan lakukan maintenance besar pada data real/semi real tanpa backup/export dan audit dampak.
-- **Import normalized:** belum masuk patch ini; export dipakai untuk review/manual input/normalization task berikutnya.
-- **Normalisasi kode master:** tersedia di Reset & Maintenance Data untuk Product, Raw Material, Semi Finished, BOM, Production Step, dan Supplier. Aksi ini hanya update field `code` dan alias kode aktif; tidak rename document ID, tidak menghapus data, dan tidak menyentuh transaksi/history.
-- **Supplier data historis repair:** tidak lagi dijalankan dari halaman Supplier. Semua repair kode lama harus lewat Reset & Maintenance Data agar audit/preview terpusat.
-- **Reset Modal/HPP:** menu Reset & Maintenance menyediakan mode `Reset Semua Modal & HPP` untuk menolkan field cost/HPP master aktif dalam satu aksi guarded setelah preview dan keyword khusus. Aksi ini tidak menghapus transaksi, stok, PO, Work Log, Payroll, Sales, Purchases, Returns, atau Cash.
-- **Reset Testing lama:** tombol gabungan reset transaksi/testing tidak tersedia di UI operasional.
-- **Allowlist Reset Modal/HPP:** Raw Material: `averageActualUnitCost`, `restockReferencePrice`; Product: `hppPerUnit`, `averageCostPerUnit`, `costPerUnit`; Semi Finished: `averageCostPerUnit`, `lastProductionCostPerUnit`, `referenceCostPerUnit`, `costPerUnit` termasuk variant fields jika ada.
+- **Repair aktif:** hanya projection `stock_read_models` missing/stale dan orphan yang sudah didukung backend. Stub/no-op frontend dilarang ditampilkan sebagai fitur.
+- **Riwayat resmi:** backup, restore, import, repair, cleanup, retention, dan promosi monthly dibaca dari database audit log, bukan session browser.
 
 
 ---
@@ -1240,7 +1235,7 @@ Guard tetap berlaku:
 - Tidak ada `sync queue arsip` storage browser arsip runtime.
 - Tidak ada backup/restore JSON storage browser arsip runtime.
 - Tidak ada auto-sync runtime arsip ke SQLite untuk transaksi.
-- Stock, purchase, sales, returns, finance, reports, production, payroll, HPP, reset testing, route/menu/role guard, dan rules database arsip/index tidak berubah.
+- Stock, purchase, sales, returns, finance, reports, production, payroll, HPP, maintenance destructive flow, route/menu/role guard, dan rules database arsip/index tidak berubah.
 - Restore SQLite destructive tetap wajib admin lokal, preview/plan, file backup eksplisit, keyword guard, dan backup otomatis.
 
 Kontrak resmi: `docs/10_OFFLINE_DATABASE_CONTRACT.md`.

@@ -268,17 +268,17 @@ Status cleanup bertahap yang dikunci di docs:
 - **Observability aktif:** coordinator mempublikasikan queue depth, active operation, slow wait/operation, failure terakhir, dan database generation melalui status maintenance. Slow wait/operation dicatat ke structured JSON logger tanpa payload bisnis.
 - **Runtime guard aktif:** Node.js didukung pada `>=22.12.0 <23`; versi rekomendasi `22.16.0` dikunci melalui `.nvmrc`, `.node-version`, package `engines`, CI, dan `npm run check:runtime`. Runner `dev`, test/check backend, test/build/lint frontend, serta `git:check` melakukan fail-fast agar Node di luar rentang dukungan tidak hanya menghasilkan warning lalu tetap menjalankan IMS.
 
-## Maintenance & Backup Center — 2026-06-07
-- **Aktif:** Reset & Maintenance Data menjadi Maintenance & Backup Center, bukan daftar tombol reset teknis.
-- **Flow standar:** Backup & Restore → Audit Data → Repair Aman → Export Master/Checklist → Audit ulang.
-- **Reset testing lama:** route/tab hanya menampilkan status nonaktif. Handler reset testing lama tidak tersedia di UI operasional.
-- **Auto detect:** audit data historis/stok/log/produksi/payroll/variant transaksi bersifat read-only terhadap data bisnis dan hanya boleh membuat maintenance log metadata.
-- **Export data pokok:** tersedia sebagai export master SQLite read-only/checklist manual, bukan restore otomatis dan bukan merge transaksi.
+## Maintenance Center — 2026-06-24
+- **Aktif:** halaman `/utilities/reset-maintenance-data` tetap dipertahankan untuk compatibility route, tetapi label dan UI final memakai Maintenance Center.
+- **Flow standar:** Backup & Restore → Audit & Health → Repair Data Turunan → Audit ulang → Riwayat.
+- **Cleanup selesai:** tab Reset Testing, reset/baseline HPP, service repair stub/no-op, session-only maintenance log, export checklist JSON, dan checklist duplikat di Database Center sudah dihapus.
+- **Audit & Health:** audit read-only nyata memeriksa integrity SQLite, foreign key, invariant stok master, stock read model, registry backup, dan pasangan kas-ledger.
+- **Export data master:** tersedia sebagai export master SQLite read-only untuk arsip/review; bukan paket restore dan bukan merge transaksi.
 - Backup resmi SQLite memakai satu file `.imsbackup` self-contained berisi database, manifest, checksum, dan README internal; file `.manifest.json` terpisah tidak dibuat lagi. Snapshot, lifecycle daily/monthly/retention, dan restore file swap memegang database coordinator eksklusif agar tidak berjalan bersamaan dengan request operasional. Struktur folder aktif hanya `daily/`, `monthly/`, dan `manual/`. Daily dibuat otomatis maksimal satu per hari dan disimpan 60 hari. Monthly dibuat otomatis dari daily verified terakhir setiap bulan dan disimpan maksimal 12 bulan. Backup manual, import, pre-update, pre-reset, pre-repair, dan pre-restore disimpan pada folder `manual/` serta tidak dihapus otomatis. Restore tetap full replace guarded, bukan merge; backup legacy `.imsbak.zip` dan sidecar manifest lama tetap dibaca sebagai kompatibilitas. Backup `pre-restore` dan backup sumber restore dipastikan tercatat ulang setelah restore agar rollback dan traceability tetap terlihat di daftar backup.
 - **Guarded:** log/transaksi lama tidak direkomendasikan dibawa ulang sebagai default jika logic berubah; transaksi baru sebaiknya dibuat ulang lewat flow terbaru agar log baru mengikuti logic terbaru.
 - **Opening stock:** setelah restore/reset manual di luar aplikasi, stok awal sebaiknya dibuat ulang lewat purchase/opening adjustment resmi, bukan menempel stok mentah tanpa audit.
-- **Audit Data aktif terbatas:** backend menyediakan audit read-only untuk integrity SQLite, invariant stok master, stock read model, registry backup, dan pasangan kas-ledger. Audit tidak menulis data bisnis.
-- **Repair Aman aktif terbatas:** hanya missing/stale `stock_read_models` yang boleh direbuild dari master dan orphan projection yang boleh dibersihkan dengan keyword. Kedua aksi membuat backup `pre-repair`, memakai transaction, dan membuat audit log. Repair stok utama, transaksi, finance, production, payroll, serta HPP tetap dinonaktifkan.
+- **Audit & Health aktif:** backend menyediakan audit read-only untuk integrity SQLite, foreign key, invariant stok master, stock read model, registry backup, dan pasangan kas-ledger. Audit tidak menulis data bisnis.
+- **Repair Data Turunan aktif terbatas:** hanya missing/stale `stock_read_models` yang boleh direbuild dari master dan orphan projection yang boleh dibersihkan dengan keyword. Kedua aksi membuat backup `pre-repair`, memakai transaction, dan membuat audit log. Repair stok utama, transaksi, finance, production, payroll, serta HPP tetap tidak tersedia.
 - **Import backup atomic:** file, `backup_logs`, dan audit import diproses dalam exclusive coordinator; kegagalan audit me-rollback row dan membersihkan file import agar tidak ada registry yatim.
 
 
@@ -379,7 +379,7 @@ Keputusan aktif tambahan:
 - `DataTableView + mobileCardConfig` menjadi pola wajib untuk daftar operasional lintas modul.
 - `ResponsiveDataView` adalah alias standar untuk `DataTableView`; tidak boleh membuat komponen table/card baru yang menduplikasi behavior.
 - Foundation mobile aktif: `MobileActionMenu`, `MobileFilterDrawer`, `MobileDetailDrawer`, `ResponsiveFormSection`, dan `MobileStateBlock`.
-- Patch mobile harus UI-only kecuali ada persetujuan khusus. Jangan mengubah stock mutation, sales/purchase/return commit, finance ledger, production material usage, payroll final, HPP, backup/restore, reset testing, auth, schema, atau role guard.
+- Patch mobile harus UI-only kecuali ada persetujuan khusus. Jangan mengubah stock mutation, sales/purchase/return commit, finance ledger, production material usage, payroll final, HPP, backup/restore, maintenance destructive flow, auth, schema, atau role guard.
 - Dokumentasi wajib ikut diperbarui setiap patch mobile agar standar tidak kembali ke tampilan desktop table di HP.
 
 ## Update 2026-06-05 - UI Runtime Database Tidak Ditampilkan di Halaman Operasional

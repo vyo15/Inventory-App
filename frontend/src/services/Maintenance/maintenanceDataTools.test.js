@@ -6,10 +6,7 @@ import {
   getStockReadModelMaintenanceAudit,
   rebuildStockReadModelMaintenance,
 } from "./stockReadModelMaintenanceService";
-import {
-  MAINTENANCE_DATA_TOOLS_AVAILABLE,
-  MAINTENANCE_DATA_TOOLS_MODE,
-} from "./resetMaintenanceDataService";
+import { MAINTENANCE_DATA_TOOL_CAPABILITIES } from "./resetMaintenanceDataService";
 
 vi.mock("../../data/adapters/sqlite/sqliteApiClient", () => ({
   requestSqliteApi: vi.fn(),
@@ -20,9 +17,14 @@ describe("maintenance data tools SQLite", () => {
     requestSqliteApi.mockReset();
   });
 
-  it("mengaktifkan hanya safe subset maintenance", () => {
-    expect(MAINTENANCE_DATA_TOOLS_AVAILABLE).toBe(true);
-    expect(MAINTENANCE_DATA_TOOLS_MODE).toBe("safe_subset");
+  it("mengaktifkan hanya capability maintenance yang memiliki endpoint aktif", () => {
+    expect(MAINTENANCE_DATA_TOOL_CAPABILITIES).toEqual({
+      dataQualityAudit: true,
+      stockReadModelAudit: true,
+      stockReadModelRebuild: true,
+      stockReadModelOrphanCleanup: true,
+      masterDataExport: true,
+    });
   });
 
   it("memuat audit kualitas dan stock read model dari endpoint admin", async () => {

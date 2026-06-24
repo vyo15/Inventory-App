@@ -59,19 +59,18 @@ README_RESTORE.txt
 Backup lama `.imsbak.zip` tetap didukung sebagai legacy restore agar backup yang sudah pernah dibuat tetap bisa dipakai.
 
 
-## Maintenance & Backup Center
+## Maintenance Center
 
-Menu `Maintenance & Backup` adalah pusat perawatan data lokal. Urutan pakainya:
+Menu `Maintenance Center` adalah pusat perawatan data lokal. Urutan pakainya:
 
-1. Buka `Ringkasan` untuk melihat status aman/tidak.
+1. Buka `Ringkasan` untuk melihat database, schema, backup verified, issue audit, dan aktivitas terakhir.
 2. Gunakan `Backup & Restore` untuk backup resmi dan restore guarded.
-3. Tab `Audit Data` menyediakan audit read-only untuk integrity database, invariant stok, data turunan stok, registry backup, dan pasangan kas-ledger.
-4. Tab `Repair Aman` hanya mengaktifkan rebuild/cleanup data turunan stok. Sistem membuat backup `pre-repair`; cleanup orphan membutuhkan keyword `BERSIHKAN DATA STOK`.
-5. Repair stok utama, transaksi, finance, production, payroll, dan HPP otomatis tetap tidak tersedia. Gunakan checklist manual dan review audit untuk area tersebut.
-6. Gunakan `Data Tools` untuk export master dan checklist data pokok.
+3. Tab `Audit & Health` menyediakan audit read-only untuk integrity database, foreign key, invariant stok, data turunan stok, registry backup, dan pasangan kas-ledger.
+4. Tab `Repair Data Turunan` hanya mengaktifkan rebuild missing/stale `stock_read_models` dan cleanup orphan. Sistem membuat backup `pre-repair`; cleanup membutuhkan keyword `BERSIHKAN DATA STOK`.
+5. Repair stok utama, transaksi, finance, production, payroll, HPP, dan reset data tidak tersedia dari menu ini.
+6. Gunakan `Export Data Master` untuk arsip/review JSON; file tersebut bukan paket restore.
 7. Gunakan `Checklist` sebelum update, restore, atau maintenance besar.
-8. Buka `Riwayat` untuk melihat backup/restore resmi.
-9. `Reset Testing` hanya catatan arsip nonaktif pada mode database lokal; pemulihan data utama harus lewat Backup & Restore.
+8. Buka `Riwayat` untuk melihat backup, restore, import, repair, cleanup, dan lifecycle backup resmi.
 
 ## Backup otomatis dan retensi
 
@@ -95,7 +94,7 @@ Aturan:
 Buka:
 
 ```text
-Utilities -> Maintenance & Backup Center -> Backup & Restore -> Backup
+Utilities -> Maintenance Center -> Backup & Restore -> Backup
 ```
 
 Lalu klik:
@@ -148,7 +147,7 @@ Tombol ini hanya checklist pengingat user. Proses copy tetap dilakukan manual da
 Restore berada di:
 
 ```text
-Utilities -> Maintenance & Backup Center -> Backup & Restore -> Restore
+Utilities -> Maintenance Center -> Backup & Restore -> Restore
 ```
 
 Alur restore:
@@ -185,7 +184,7 @@ Import backup belum mengubah data. Data baru berubah setelah `Restore Database` 
 
 ## Checklist auto/manual Maintenance Center
 
-Maintenance & Backup Center memiliki tab `Checklist` untuk membantu user melihat kesiapan backup dan restore tanpa membaca folder manual.
+Maintenance Center memiliki tab `Checklist` untuk membantu user melihat kesiapan backup dan restore tanpa membaca folder manual.
 
 Checklist otomatis terisi jika sistem bisa membuktikan kondisinya, misalnya:
 

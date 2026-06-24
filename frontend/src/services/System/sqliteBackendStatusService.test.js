@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createSqliteRestorePlan, executeSqliteRestore } from "./sqliteBackendStatusService";
+import { createSqliteRestorePlan, executeSqliteRestore, getSqliteAuditLogs } from "./sqliteBackendStatusService";
 
 const jsonResponse = (data) => new Response(JSON.stringify({ ok: true, data }), {
   status: 200,
@@ -20,6 +20,19 @@ describe("sqliteBackendStatusService guarded restore", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/api/maintenance/restore-plan"),
       expect.objectContaining({ credentials: "include", method: "POST" }),
+    );
+  });
+
+
+  it("riwayat maintenance membaca audit log resmi dengan filter module dan limit", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getSqliteAuditLogs({ module: "maintenance", limit: 25 });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/audit-logs?module=maintenance&limit=25"),
+      expect.objectContaining({ credentials: "include" }),
     );
   });
 

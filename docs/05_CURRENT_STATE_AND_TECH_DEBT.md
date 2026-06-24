@@ -85,7 +85,7 @@ Konsekuensi:
 - Runner command Windows menjalankan `npm.cmd`/`npx.cmd` melalui `cmd.exe`, sehingga shortcut quality gate tidak gagal dengan `spawnSync ... EINVAL` pada Node.js Windows.
 - Production P4 memusatkan create PO dari Planning, Start Production, Complete Work Log, auto payroll, Payroll Paid, finance posting, dan HPP reconcile pada transaction backend SQLite.
 - Generic production CRUD tidak lagi dapat dipakai untuk melewati lifecycle sensitif Planning, Production Order, Work Log, atau Payroll.
-- Test discovery source saat ini mencakup 140 deklarasi test backend pada 33 file, 103 test frontend pada 33 file, dan 11 test tooling. Coverage baru melindungi facade/split arsitektur Production dan Maintenance, kalkulasi produksi, snapshot audit, User Management guard, BOM, Work Log, Cash In/Out, shared input Rupiah, filter Produksi, serta aksi Master Data. Test backend yang memakai SQLite native tetap wajib dijalankan pada runtime lokal dengan binding `sqlite3` aktif.
+- Test discovery source saat ini mencakup 140 deklarasi test backend pada 33 file, 115 test frontend pada 33 file, dan 11 test tooling. Coverage baru melindungi facade/split arsitektur Production dan Maintenance, kalkulasi produksi, snapshot audit, User Management guard, BOM, Work Log, Cash In/Out, shared input Rupiah, filter Produksi, aksi Master Data, serta kontrak Maintenance Center dan audit log resmi. Test backend yang memakai SQLite native tetap wajib dijalankan pada runtime lokal dengan binding `sqlite3` aktif.
 
 ## Tech debt aktif yang masih perlu dijaga
 
@@ -149,7 +149,7 @@ Jangan membuat perhitungan stok baru di UI.
 - File runtime `.sqlite`, `.sqlite-wal`, dan `.sqlite-shm` adalah satu database logis. Sidecar boleh muncul saat backend aktif dan wajib dilepas melalui graceful shutdown; user tidak boleh menghapusnya manual.
 - Restore wajib import/daftar backup resmi, preview, validasi, pre-restore backup, keyword `RESTORE DATABASE`, dan audit log. Backup `pre-restore` dan backup sumber restore harus dipastikan tercatat ulang ke database hasil restore agar rollback serta traceability tetap terlihat di daftar backup.
 - Export Master aktif membaca data master SQLite secara read-only dari backend untuk arsip/review; export ini bukan paket restore dan tidak boleh menggantikan `.imsbackup`.
-- Reset testing lama tetap nonaktif/redirect lama.
+- Route legacy `/utilities/reset-test-data` tetap redirect untuk bookmark lama, tetapi tab/reset UI lama sudah dihapus dari Maintenance Center.
 - Destructive action wajib punya scope jelas, confirm guard, dan audit log.
 
 ### 8. UI/UX

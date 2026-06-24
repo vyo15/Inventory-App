@@ -13,7 +13,6 @@ import {
   ArrowRightOutlined,
   BarChartOutlined,
   BuildOutlined,
-  CheckCircleOutlined,
   ClockCircleOutlined,
   DollarCircleOutlined,
   HistoryOutlined,
@@ -38,24 +37,30 @@ import {
   readDashboardData,
 } from "../../services/Dashboard/dashboardService";
 import {
+  DASHBOARD_PRIORITY,
   EMPTY_PLANNING_SUMMARY,
   MAX_DASHBOARD_ALERT_ITEMS,
   MAX_DASHBOARD_LIST_ITEMS,
+  buildCashTrendSeries,
+  buildSalesTrendSeries,
+  buildTopSellingProducts,
+  countDashboardAlertCategories,
   formatActivityType,
   formatCurrency,
   formatDashboardDate,
+  formatDashboardLoadWarning,
   getFinancialAmount,
   getNumericValue,
   getTransactionDate,
   hasWorkLogCostIssue,
   isCancelledStatus,
   isCompletedStatus,
-  isPayrollPaid,
   isPayrollPending,
   isSameDay,
   isSameMonth,
   isSameWeek,
   normalizeStatus,
+  sortDashboardAlertItems,
 } from "./helpers/dashboardPageHelpers";
 import "./Dashboard.css";
 
@@ -64,27 +69,41 @@ const { Text, Title } = Typography;
 const DASHBOARD_TAG_COLORS = Object.freeze({
   danger: "red",
   warning: "gold",
-  attention: "orange",
   info: "blue",
-  production: "purple",
-  payroll: "cyan",
   success: "green",
 });
+
+const DASHBOARD_CHART_SIZE = Object.freeze({
+  width: 760,
+  height: 200,
+  left: 28,
+  right: 20,
+  top: 24,
+  bottom: 30,
+});
+
+const formatCompactCurrency = (value) =>
+  new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(Math.round(getNumericValue(value)));
 
 const buildDashboardQuickActions = (role) => [
   {
     key: "sales",
     routeKey: ROUTE_ACCESS_KEYS.SALES,
     label: "Tambah Penjualan",
-    description: "Buka halaman Sales untuk input transaksi manual.",
+    description: "Catat transaksi penjualan baru.",
     to: "/sales",
     icon: <PlusCircleOutlined />,
   },
   {
     key: "purchases",
     routeKey: ROUTE_ACCESS_KEYS.PURCHASES,
-    label: "Pembelian",
-    description: "Buka Purchases untuk restock bahan/barang.",
+    label: "Tambah Pembelian",
+    description: "Catat pembelian dan penambahan stok.",
     to: "/purchases",
     icon: <ShoppingCartOutlined />,
   },
@@ -92,7 +111,7 @@ const buildDashboardQuickActions = (role) => [
     key: "stock",
     routeKey: ROUTE_ACCESS_KEYS.STOCK_MANAGEMENT,
     label: "Cek Stok",
-    description: "Buka Stock Management dan audit stok.",
+    description: "Periksa stok tersedia dan stok yang telah dipesan.",
     to: APP_ROUTES.INVENTORY.STOCK_MANAGEMENT,
     icon: <AppstoreOutlined />,
   },
@@ -100,15 +119,15 @@ const buildDashboardQuickActions = (role) => [
     key: "stock-report",
     routeKey: ROUTE_ACCESS_KEYS.STOCK_REPORT,
     label: "Laporan Stok",
-    description: "Buka laporan stok final.",
+    description: "Lihat laporan stok untuk pemeriksaan lanjutan.",
     to: "/report-stock",
     icon: <BarChartOutlined />,
   },
   {
     key: "planning",
     routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_PLANNING,
-    label: "Production Planning",
-    description: "Pantau target mingguan/bulanan produksi.",
+    label: "Perencanaan Produksi",
+    description: "Pantau target mingguan dan bulanan produksi.",
     to: APP_ROUTES.PRODUCTION.PLANNING,
     icon: <ClockCircleOutlined />,
   },
@@ -116,7 +135,7 @@ const buildDashboardQuickActions = (role) => [
     key: "worklog",
     routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_WORK_LOGS,
     label: "Work Log Produksi",
-    description: "Cek pekerjaan produksi berjalan.",
+    description: "Pantau pekerjaan produksi yang sedang berjalan.",
     to: APP_ROUTES.PRODUCTION.WORK_LOGS,
     icon: <BuildOutlined />,
   },
@@ -124,7 +143,7 @@ const buildDashboardQuickActions = (role) => [
     key: "payroll",
     routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_PAYROLLS,
     label: "Payroll Produksi",
-    description: "Review payroll draft/unpaid.",
+    description: "Tinjau payroll yang belum dibayar.",
     to: APP_ROUTES.PRODUCTION.PAYROLLS,
     icon: <DollarCircleOutlined />,
   },
@@ -132,7 +151,7 @@ const buildDashboardQuickActions = (role) => [
     key: "cash-in",
     routeKey: ROUTE_ACCESS_KEYS.CASH_IN,
     label: "Kas Masuk",
-    description: "Buka pencatatan kas masuk operasional.",
+    description: "Catat dan tinjau pemasukan operasional.",
     to: "/cash-in",
     icon: <WalletOutlined />,
   },
@@ -140,44 +159,220 @@ const buildDashboardQuickActions = (role) => [
     key: "cash-out",
     routeKey: ROUTE_ACCESS_KEYS.CASH_OUT,
     label: "Kas Keluar",
-    description: "Buka pencatatan kas keluar/biaya.",
+    description: "Catat dan tinjau biaya operasional.",
     to: "/cash-out",
     icon: <WalletOutlined />,
   },
 ].filter(({ routeKey }) => canAccessRoute(routeKey, role));
 
-// IMS NOTE [AKTIF] - Helper Dashboard activity/planning/cost sudah dipusatkan di helpers/dashboardPageHelpers.js
-// agar label/status tidak dobel antara page dan helper.
-const STOCK_READ_MODEL_WARNING_KEYS = new Set([
-  "stock_item_read_models_empty_fallback",
-  "stock_item_read_models_issue_query_fallback",
-  "stock_item_read_models_fallback",
-  "stock_issues",
-  "stock_read_models",
-]);
-
-const formatDashboardLoadWarning = (failedReads = []) => {
-  if (!Array.isArray(failedReads) || failedReads.length === 0) return "";
-
-  const uniqueFailedReads = [...new Set(failedReads.filter(Boolean))];
-  const hasStockReadModelFallback = uniqueFailedReads.some((key) =>
-    STOCK_READ_MODEL_WARNING_KEYS.has(key),
+const buildChartGeometry = (series = []) => {
+  const {
+    width,
+    height,
+    left,
+    right,
+    top,
+    bottom,
+  } = DASHBOARD_CHART_SIZE;
+  const chartWidth = width - left - right;
+  const chartHeight = height - top - bottom;
+  const amounts = series.map((item) => Math.max(getNumericValue(item.amount), 0));
+  const maxAmount = Math.max(...amounts, 0);
+  const step = series.length > 1 ? chartWidth / (series.length - 1) : chartWidth;
+  const points = series.map((item, index) => {
+    const x = left + (step * index);
+    const ratio = maxAmount > 0 ? Math.max(getNumericValue(item.amount), 0) / maxAmount : 0;
+    const y = top + chartHeight - (ratio * chartHeight);
+    return {
+      ...item,
+      x,
+      y,
+    };
+  });
+  const pointString = points.map((item) => `${item.x},${item.y}`).join(" ");
+  const areaPointString = points.length > 0
+    ? `${left},${height - bottom} ${pointString} ${width - right},${height - bottom}`
+    : "";
+  const peak = points.reduce(
+    (currentPeak, item) =>
+      getNumericValue(item.amount) > getNumericValue(currentPeak?.amount) ? item : currentPeak,
+    null,
   );
 
-  if (hasStockReadModelFallback) {
-    return [
-      "Data stok lokal belum siap atau layanan lokal belum mengembalikan data stok lengkap.",
-      "Dashboard tetap memakai data aman agar monitoring tidak kosong.",
-      "Jika warning berulang, buka Database Center lalu jalankan audit/perbaikan stok.",
-    ].join(" ");
-  }
-
-  return [
-    "Sebagian data Dashboard belum siap.",
-    "Data lain tetap ditampilkan untuk monitoring; cek layanan lokal, koneksi jaringan,",
-    "atau status modul aplikasi bila warning berulang.",
-  ].join(" ");
+  return {
+    areaPointString,
+    maxAmount,
+    peak,
+    pointString,
+    points,
+  };
 };
+
+const DashboardMiniTrend = ({ series = [], label }) => {
+  const maxAbsoluteAmount = Math.max(
+    ...series.map((item) => Math.abs(getNumericValue(item.amount))),
+    1,
+  );
+
+  return (
+    <div className="dashboard-hero-trend" aria-label={label}>
+      <div className="dashboard-hero-trend-bars" aria-hidden="true">
+        {series.map((item) => {
+          const amount = getNumericValue(item.amount);
+          const isZero = amount === 0;
+          const barHeight = isZero
+            ? 8
+            : Math.max(Math.round((Math.abs(amount) / maxAbsoluteAmount) * 100), 8);
+
+          return (
+            <span
+              key={item.key}
+              className={isZero ? "is-zero" : amount < 0 ? "is-negative" : "is-positive"}
+              style={{ height: `${barHeight}%` }}
+              title={`${item.label}: ${formatCurrency(amount)}`}
+            />
+          );
+        })}
+      </div>
+      <Text>{label}</Text>
+    </div>
+  );
+};
+
+const DashboardSalesChart = ({ series = [] }) => {
+  const geometry = useMemo(() => buildChartGeometry(series), [series]);
+  const totalAmount = series.reduce(
+    (total, item) => total + getNumericValue(item.amount),
+    0,
+  );
+  const hasData = geometry.maxAmount > 0;
+
+  return (
+    <div className="dashboard-insight-card dashboard-sales-chart-card">
+      <div className="dashboard-insight-heading">
+        <div>
+          <Title level={4}>Tren Penjualan 30 Hari</Title>
+          <Text>Nilai penjualan harian dari transaksi yang sudah tercatat.</Text>
+        </div>
+        <div className="dashboard-insight-total">
+          <strong>{formatCurrency(totalAmount)}</strong>
+          <small>total 30 hari</small>
+        </div>
+      </div>
+
+      {hasData ? (
+        <>
+          <div className="dashboard-sales-chart-wrap">
+            <svg
+              viewBox={`0 0 ${DASHBOARD_CHART_SIZE.width} ${DASHBOARD_CHART_SIZE.height}`}
+              role="img"
+              aria-label="Grafik nilai penjualan harian selama 30 hari terakhir"
+              preserveAspectRatio="none"
+            >
+              <line
+                className="dashboard-sales-chart-grid"
+                x1={DASHBOARD_CHART_SIZE.left}
+                x2={DASHBOARD_CHART_SIZE.width - DASHBOARD_CHART_SIZE.right}
+                y1={DASHBOARD_CHART_SIZE.height - DASHBOARD_CHART_SIZE.bottom}
+                y2={DASHBOARD_CHART_SIZE.height - DASHBOARD_CHART_SIZE.bottom}
+              />
+              <line
+                className="dashboard-sales-chart-grid is-secondary"
+                x1={DASHBOARD_CHART_SIZE.left}
+                x2={DASHBOARD_CHART_SIZE.width - DASHBOARD_CHART_SIZE.right}
+                y1={DASHBOARD_CHART_SIZE.top + ((DASHBOARD_CHART_SIZE.height - DASHBOARD_CHART_SIZE.top - DASHBOARD_CHART_SIZE.bottom) / 2)}
+                y2={DASHBOARD_CHART_SIZE.top + ((DASHBOARD_CHART_SIZE.height - DASHBOARD_CHART_SIZE.top - DASHBOARD_CHART_SIZE.bottom) / 2)}
+              />
+              <polygon
+                className="dashboard-sales-chart-area"
+                points={geometry.areaPointString}
+              />
+              <polyline
+                className="dashboard-sales-chart-line"
+                points={geometry.pointString}
+              />
+              {geometry.peak ? (
+                <circle
+                  className="dashboard-sales-chart-peak"
+                  cx={geometry.peak.x}
+                  cy={geometry.peak.y}
+                  r="5"
+                >
+                  <title>
+                    Puncak {geometry.peak.label}: {formatCurrency(geometry.peak.amount)}
+                  </title>
+                </circle>
+              ) : null}
+              {geometry.points.length > 0 ? (
+                <circle
+                  className="dashboard-sales-chart-latest"
+                  cx={geometry.points[geometry.points.length - 1].x}
+                  cy={geometry.points[geometry.points.length - 1].y}
+                  r="4"
+                >
+                  <title>
+                    Hari terakhir {geometry.points[geometry.points.length - 1].label}:{" "}
+                    {formatCurrency(geometry.points[geometry.points.length - 1].amount)}
+                  </title>
+                </circle>
+              ) : null}
+            </svg>
+          </div>
+          <div className="dashboard-chart-legend">
+            <span>
+              <i className="is-primary" />
+              Penjualan harian
+            </span>
+            <span>
+              <i className="is-gold" />
+              Puncak {geometry.peak?.label || "-"} · {formatCompactCurrency(geometry.peak?.amount || 0)}
+            </span>
+          </div>
+        </>
+      ) : (
+        <div className="dashboard-empty-wrap dashboard-empty-chart">
+          <Empty description="Belum ada penjualan dalam 30 hari terakhir." />
+        </div>
+      )}
+    </div>
+  );
+};
+
+const DashboardTopProducts = ({ products = [] }) => (
+  <div className="dashboard-insight-card dashboard-top-products-card">
+    <div className="dashboard-insight-heading">
+      <div>
+        <Title level={4}>Produk Terlaris</Title>
+        <Text>Bulan berjalan berdasarkan jumlah item penjualan.</Text>
+      </div>
+    </div>
+
+    {products.length > 0 ? (
+      <div className="dashboard-top-products-list">
+        {products.map((item) => (
+          <div key={item.key} className="dashboard-top-product-row">
+            <span className={`dashboard-top-product-rank${item.rank === 1 ? " is-first" : ""}`}>
+              {item.rank}
+            </span>
+            <div>
+              <div className="dashboard-top-product-copy">
+                <strong>{item.name}</strong>
+                <span>{formatNumberId(item.quantity)} {item.unit}</span>
+              </div>
+              <div className="dashboard-top-product-track" aria-hidden="true">
+                <span style={{ width: `${item.sharePercent}%` }} />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    ) : (
+      <div className="dashboard-empty-wrap dashboard-empty-chart">
+        <Empty description="Belum ada item penjualan bulan ini." />
+      </div>
+    )}
+  </div>
+);
 
 const Dashboard = () => {
   const { profile } = useAuth();
@@ -187,6 +382,7 @@ const Dashboard = () => {
   const [loadWarning, setLoadWarning] = useState("");
   const dashboardReadInFlightRef = useRef(false);
   const [dashboardData, setDashboardData] = useState(() => createEmptyDashboardData());
+
   const loadDashboardData = useCallback(async () => {
     if (dashboardReadInFlightRef.current) {
       return;
@@ -211,14 +407,16 @@ const Dashboard = () => {
 
       if (safeFailedReads.length > 0) {
         console.warn("Sebagian data Dashboard gagal dimuat:", safeFailedReads);
-        setLoadWarning(formatDashboardLoadWarning(safeFailedReads));
+        setLoadWarning(formatDashboardLoadWarning(safeFailedReads, activeRole));
       }
 
       setLastUpdated(new Date());
     } catch (error) {
       console.error("Gagal memuat dashboard:", error);
       setDashboardData((currentDashboardData) => normalizeDashboardData(currentDashboardData));
-      setLoadWarning("Sebagian data Dashboard gagal dimuat. Cek layanan lokal atau koneksi jaringan, lalu refresh.");
+      setLoadWarning(
+        "Sebagian data Dashboard gagal dimuat. Periksa layanan lokal atau koneksi jaringan, lalu gunakan Muat Ulang.",
+      );
     } finally {
       dashboardReadInFlightRef.current = false;
       setLoading(false);
@@ -239,7 +437,6 @@ const Dashboard = () => {
     payrolls,
     expenses,
     incomes,
-    revenues,
     sales,
     stockAuditRows,
     stockIssueMeta = {},
@@ -248,14 +445,28 @@ const Dashboard = () => {
 
   const lowStockTotal = lowStockRows.length;
   const stockIssueHasMore = Boolean(stockIssueMeta?.hasMore || stockIssueMeta?.isLimited);
-  const lowStockTotalLabel = stockIssueHasMore ? `${formatNumberId(lowStockTotal)}+` : formatNumberId(lowStockTotal);
+  const lowStockTotalLabel = stockIssueHasMore
+    ? `${formatNumberId(lowStockTotal)}+`
+    : formatNumberId(lowStockTotal);
   const quickActions = useMemo(() => buildDashboardQuickActions(activeRole), [activeRole]);
-
+  const canViewFinance = canAccessRoute(ROUTE_ACCESS_KEYS.MONEY_MOVEMENT_LEDGER, activeRole);
+  const canViewSales = canAccessRoute(ROUTE_ACCESS_KEYS.SALES, activeRole);
+  const canViewStock = canAccessRoute(ROUTE_ACCESS_KEYS.STOCK_MANAGEMENT, activeRole);
+  const canViewPlanning = canAccessRoute(ROUTE_ACCESS_KEYS.PRODUCTION_PLANNING, activeRole);
+  const canViewProductionSummary = canViewPlanning
+    || canAccessRoute(ROUTE_ACCESS_KEYS.PRODUCTION_ORDERS, activeRole)
+    || canAccessRoute(ROUTE_ACCESS_KEYS.PRODUCTION_WORK_LOGS, activeRole);
 
   const productionSummary = useMemo(() => {
-    const shortageOrders = productionOrders.filter((item) => normalizeStatus(item.status) === "shortage").length;
-    const readyOrders = productionOrders.filter((item) => normalizeStatus(item.status) === "ready").length;
-    const runningWorkLogs = workLogs.filter((item) => normalizeStatus(item.status) === "in_progress").length;
+    const shortageOrders = productionOrders.filter(
+      (item) => normalizeStatus(item.status) === "shortage",
+    ).length;
+    const readyOrders = productionOrders.filter(
+      (item) => normalizeStatus(item.status) === "ready",
+    ).length;
+    const runningWorkLogs = workLogs.filter(
+      (item) => normalizeStatus(item.status) === "in_progress",
+    ).length;
     const completedWorkLogs = workLogs.filter(
       (item) => isCompletedStatus(item.status) && isSameWeek(getTransactionDate(item)),
     ).length;
@@ -272,21 +483,15 @@ const Dashboard = () => {
 
   const payrollSummary = useMemo(() => {
     const pendingPayrolls = payrolls.filter((item) => isPayrollPending(item));
-    const paidPayrolls = payrolls.filter((item) => isPayrollPaid(item));
-    const payrollExpenses = expenses.filter(
-      (item) => normalizeStatus(item.sourceModule) === "production_payroll",
-    );
 
     return {
       pendingCount: pendingPayrolls.length,
-      pendingAmount: pendingPayrolls.reduce((total, item) => total + getFinancialAmount(item), 0),
-      paidCount: paidPayrolls.length,
-      payrollExpenseCount: payrollExpenses.length,
-      payrollExpenseThisMonth: payrollExpenses
-        .filter((item) => isSameMonth(getTransactionDate(item)))
-        .reduce((total, item) => total + getFinancialAmount(item), 0),
+      pendingAmount: pendingPayrolls.reduce(
+        (total, item) => total + getFinancialAmount(item),
+        0,
+      ),
     };
-  }, [expenses, payrolls]);
+  }, [payrolls]);
 
   const salesSummary = useMemo(() => {
     const validSales = sales.filter((item) => !isCancelledStatus(item.status));
@@ -302,7 +507,7 @@ const Dashboard = () => {
   }, [sales]);
 
   const financeSummary = useMemo(() => {
-    const recognizedIncome = [...incomes, ...revenues]
+    const recognizedIncome = incomes
       .filter((item) => isSameMonth(getTransactionDate(item)))
       .reduce((total, item) => total + getFinancialAmount(item), 0);
 
@@ -315,7 +520,29 @@ const Dashboard = () => {
       expenseThisMonth,
       netOperational: recognizedIncome - expenseThisMonth,
     };
-  }, [expenses, incomes, revenues]);
+  }, [expenses, incomes]);
+
+  const salesTrendSeries = useMemo(
+    () => buildSalesTrendSeries(sales, { days: 30 }),
+    [sales],
+  );
+  const salesMiniTrendSeries = useMemo(
+    () => buildSalesTrendSeries(sales, { days: 7 }),
+    [sales],
+  );
+  const cashMiniTrendSeries = useMemo(
+    () => buildCashTrendSeries(incomes, expenses, { days: 7 }),
+    [expenses, incomes],
+  );
+  const topSellingProducts = useMemo(
+    () => buildTopSellingProducts(sales, { limit: 5 }),
+    [sales],
+  );
+
+  const productionAttentionCount =
+    productionSummary.shortageOrders
+    + planningSummary.overdueCount
+    + planningSummary.behindTargetCount;
 
   const businessAlertItems = useMemo(() => {
     const negativeStockRows = stockAuditRows.filter((item) => item.isNegativeStock);
@@ -328,9 +555,9 @@ const Dashboard = () => {
         routeKey: ROUTE_ACCESS_KEYS.STOCK_MANAGEMENT,
         label: "Stok minus",
         count: negativeStockRows.length,
-        description: `${negativeStockRows[0].name} perlu dicek di Stock Management.`,
-        color: DASHBOARD_TAG_COLORS.danger,
-        type: "Stock",
+        description: `${negativeStockRows[0].name} memiliki stok minus dan perlu diaudit.`,
+        priority: DASHBOARD_PRIORITY.CRITICAL,
+        icon: <WarningOutlined />,
         to: negativeStockRows[0].to,
       });
     }
@@ -339,13 +566,13 @@ const Dashboard = () => {
       items.push({
         key: "reserved-overrun",
         routeKey: ROUTE_ACCESS_KEYS.STOCK_MANAGEMENT,
-        label: "Reserved tidak wajar",
+        label: "Stok dipesan melebihi stok",
         count: reservedOverrunRows.length,
-        description: `${reservedOverrunRows[0].name}: reserved ${formatNumberId(
+        description: `${reservedOverrunRows[0].name}: dipesan ${formatNumberId(
           reservedOverrunRows[0].reservedStock,
         )} ${reservedOverrunRows[0].unit}.`,
-        color: DASHBOARD_TAG_COLORS.attention,
-        type: "Stock",
+        priority: DASHBOARD_PRIORITY.CRITICAL,
+        icon: <AppstoreOutlined />,
         to: reservedOverrunRows[0].to,
       });
     }
@@ -354,11 +581,11 @@ const Dashboard = () => {
       items.push({
         key: "low-stock",
         routeKey: ROUTE_ACCESS_KEYS.STOCK_MANAGEMENT,
-        label: "Stok kritis",
+        label: "Stok kosong atau menipis",
         count: lowStockTotal,
-        description: "Ada item kosong/menipis berdasarkan threshold master.",
-        color: DASHBOARD_TAG_COLORS.warning,
-        type: "Stock",
+        description: "Periksa stok tersedia terhadap batas minimum setiap item.",
+        priority: DASHBOARD_PRIORITY.HIGH,
+        icon: <AppstoreOutlined />,
         to: APP_ROUTES.INVENTORY.STOCK_MANAGEMENT,
       });
     }
@@ -367,24 +594,29 @@ const Dashboard = () => {
       items.push({
         key: "po-shortage-alert",
         routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_ORDERS,
-        label: "PO shortage",
+        label: "Order produksi kekurangan bahan",
         count: productionSummary.shortageOrders,
-        description: "Material/BOM perlu dicek sebelum produksi berjalan.",
-        color: DASHBOARD_TAG_COLORS.danger,
-        type: "Production",
+        description: "Periksa kebutuhan material dan BOM sebelum produksi dimulai.",
+        priority: DASHBOARD_PRIORITY.CRITICAL,
+        icon: <ToolOutlined />,
         to: APP_ROUTES.PRODUCTION.ORDERS,
       });
     }
 
     if (planningSummary.overdueCount > 0 || planningSummary.behindTargetCount > 0) {
+      const priority = planningSummary.overdueCount > 0
+        ? DASHBOARD_PRIORITY.HIGH
+        : DASHBOARD_PRIORITY.NORMAL;
       items.push({
         key: "planning-alert",
         routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_PLANNING,
-        label: "Planning perlu dicek",
+        label: planningSummary.overdueCount > 0
+          ? "Perencanaan produksi terlambat"
+          : "Target produksi tertinggal",
         count: planningSummary.overdueCount + planningSummary.behindTargetCount,
-        description: "Ada planning overdue atau tertinggal target.",
-        color: planningSummary.overdueCount > 0 ? DASHBOARD_TAG_COLORS.danger : DASHBOARD_TAG_COLORS.warning,
-        type: "Production",
+        description: "Tinjau target dan hasil Work Log yang sudah diselesaikan.",
+        priority,
+        icon: <ClockCircleOutlined />,
         to: APP_ROUTES.PRODUCTION.PLANNING,
       });
     }
@@ -393,11 +625,11 @@ const Dashboard = () => {
       items.push({
         key: "hpp-cost-alert",
         routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_HPP_ANALYSIS,
-        label: "Cost/HPP kosong",
+        label: "Biaya aktual belum lengkap",
         count: productionSummary.costIssueCount,
-        description: "Work Log completed punya cost actual 0.",
-        color: DASHBOARD_TAG_COLORS.production,
-        type: "HPP",
+        description: "Work Log selesai masih memiliki biaya aktual atau HPP bernilai nol.",
+        priority: DASHBOARD_PRIORITY.HIGH,
+        icon: <BarChartOutlined />,
         to: APP_ROUTES.PRODUCTION.HPP_ANALYSIS,
       });
     }
@@ -406,18 +638,18 @@ const Dashboard = () => {
       items.push({
         key: "payroll-pending-alert",
         routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_PAYROLLS,
-        label: "Payroll pending",
+        label: "Payroll belum dibayar",
         count: payrollSummary.pendingCount,
-        description: `${formatCurrency(payrollSummary.pendingAmount)} masih perlu review/pembayaran.`,
-        color: DASHBOARD_TAG_COLORS.payroll,
-        type: "Payroll",
+        description: `${formatCurrency(payrollSummary.pendingAmount)} masih perlu ditinjau atau dibayar.`,
+        priority: DASHBOARD_PRIORITY.NORMAL,
+        icon: <DollarCircleOutlined />,
         to: APP_ROUTES.PRODUCTION.PAYROLLS,
       });
     }
 
-    return items
-      .filter(({ routeKey }) => canAccessRoute(routeKey, activeRole))
-      .slice(0, MAX_DASHBOARD_ALERT_ITEMS);
+    return sortDashboardAlertItems(
+      items.filter(({ routeKey }) => canAccessRoute(routeKey, activeRole)),
+    ).slice(0, MAX_DASHBOARD_ALERT_ITEMS);
   }, [
     activeRole,
     lowStockTotal,
@@ -430,188 +662,126 @@ const Dashboard = () => {
     stockAuditRows,
   ]);
 
-  const businessAlertTotal = businessAlertItems.reduce((total, item) => total + getNumericValue(item.count), 0);
+  const businessAlertCategoryCount = countDashboardAlertCategories(businessAlertItems);
 
   const kpiItems = useMemo(() => [
     {
       key: "sales-month",
       routeKey: ROUTE_ACCESS_KEYS.SALES,
-      label: "Sales Bulan Ini",
+      label: "Penjualan Bulan Ini",
       value: formatCurrency(salesSummary.monthAmount),
-      detail: `${formatNumberId(salesSummary.monthCount)} bulan ini · ${formatCurrency(salesSummary.todayAmount)} hari ini`,
+      detail: `${formatNumberId(salesSummary.monthCount)} transaksi · ${formatCurrency(salesSummary.todayAmount)} hari ini`,
       tone: "primary",
-    },
-    {
-      key: "cash-in",
-      routeKey: ROUTE_ACCESS_KEYS.CASH_IN,
-      label: "Kas Masuk",
-      value: formatCurrency(financeSummary.recognizedIncome),
-      detail: "revenues + incomes bulan ini",
-      tone: "success",
-    },
-    {
-      key: "cash-out",
-      routeKey: ROUTE_ACCESS_KEYS.CASH_OUT,
-      label: "Kas Keluar",
-      value: formatCurrency(financeSummary.expenseThisMonth),
-      detail: "expenses bulan ini",
-      tone: "danger",
-    },
-    {
-      key: "net-cash",
-      routeKey: ROUTE_ACCESS_KEYS.MONEY_MOVEMENT_LEDGER,
-      label: "Net Kas Operasional",
-      value: formatCurrency(financeSummary.netOperational),
-      detail: "monitoring, bukan laba final",
-      tone: financeSummary.netOperational < 0 ? "danger" : "success",
-      statusLabel: financeSummary.netOperational < 0 ? "Perlu Dicek" : null,
-      statusTone: "warning",
+      icon: <ShoppingCartOutlined />,
     },
     {
       key: "stock-critical",
       routeKey: ROUTE_ACCESS_KEYS.STOCK_MANAGEMENT,
-      label: "Stok Kritis",
+      label: "Stok Perlu Dicek",
       value: lowStockTotalLabel,
-      detail: stockIssueHasMore ? "minimal item issue termuat" : "produk, bahan, semi finished",
+      detail: stockIssueHasMore
+        ? "minimal item bermasalah yang berhasil dimuat"
+        : "produk, bahan baku, dan produk setengah jadi",
       tone: lowStockTotal > 0 ? "warning" : "success",
-      statusLabel: lowStockTotal > 0 ? "Kritis" : null,
-      statusTone: "warning",
+      statusLabel: lowStockTotal > 0 ? "Perlu dicek" : null,
+      icon: <AppstoreOutlined />,
     },
     {
       key: "production-watch",
       routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_ORDERS,
-      label: "Produksi Dicek",
-      value: formatNumberId(productionSummary.shortageOrders + planningSummary.overdueCount + planningSummary.behindTargetCount),
-      detail: "shortage/overdue/behind target",
-      tone: productionSummary.shortageOrders + planningSummary.overdueCount > 0 ? "danger" : "primary",
-      statusLabel: productionSummary.shortageOrders + planningSummary.overdueCount > 0 ? "Perlu Dicek" : null,
-      statusTone: "warning",
+      label: "Produksi Perlu Dicek",
+      value: formatNumberId(productionAttentionCount),
+      detail: "kekurangan bahan, terlambat, atau di bawah target",
+      tone:
+        productionSummary.shortageOrders + planningSummary.overdueCount > 0
+          ? "danger"
+          : productionAttentionCount > 0
+            ? "warning"
+            : "primary",
+      statusLabel: productionAttentionCount > 0 ? "Perlu dicek" : null,
+      icon: <ToolOutlined />,
     },
     {
       key: "payroll-pending",
       routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_PAYROLLS,
-      label: "Payroll Pending",
+      label: "Payroll Belum Dibayar",
       value: formatNumberId(payrollSummary.pendingCount),
       detail: formatCurrency(payrollSummary.pendingAmount),
       tone: payrollSummary.pendingCount > 0 ? "warning" : "success",
-      statusLabel: payrollSummary.pendingCount > 0 ? "Pending" : null,
-      statusTone: "warning",
+      statusLabel: payrollSummary.pendingCount > 0 ? "Belum dibayar" : null,
+      icon: <WalletOutlined />,
     },
     {
       key: "data-watch",
       routeKey: ROUTE_ACCESS_KEYS.DASHBOARD,
-      label: "Data Perlu Dicek",
-      value: formatNumberId(businessAlertTotal),
-      detail: "exception lintas modul",
-      tone: businessAlertTotal > 0 ? "warning" : "success",
-      statusLabel: businessAlertTotal > 0 ? "Perlu Dicek" : null,
-      statusTone: "warning",
+      label: "Kategori Perlu Dicek",
+      value: formatNumberId(businessAlertCategoryCount),
+      detail: "kategori aktif lintas modul",
+      tone: businessAlertCategoryCount > 0 ? "warning" : "success",
+      statusLabel: businessAlertCategoryCount > 0 ? "Perlu dicek" : null,
+      icon: <WarningOutlined />,
     },
   ].filter(({ routeKey }) => canAccessRoute(routeKey, activeRole)), [
     activeRole,
-    businessAlertTotal,
-    financeSummary.expenseThisMonth,
-    financeSummary.netOperational,
-    financeSummary.recognizedIncome,
+    businessAlertCategoryCount,
     lowStockTotal,
     lowStockTotalLabel,
     payrollSummary.pendingAmount,
     payrollSummary.pendingCount,
-    planningSummary.behindTargetCount,
     planningSummary.overdueCount,
+    productionAttentionCount,
     productionSummary.shortageOrders,
     salesSummary.monthAmount,
-    stockIssueHasMore,
     salesSummary.monthCount,
     salesSummary.todayAmount,
+    stockIssueHasMore,
   ]);
-  const priorityItems = useMemo(() => {
-    const items = [
-      {
-        key: "stock-critical",
-        routeKey: ROUTE_ACCESS_KEYS.STOCK_MANAGEMENT,
-        label: "Stok kritis perlu dicek",
-        count: lowStockTotal,
-        description: "Gunakan available stock agar stok reserved tidak terlihat aman palsu.",
-        color: DASHBOARD_TAG_COLORS.warning,
-        icon: <WarningOutlined />,
-        to: APP_ROUTES.INVENTORY.STOCK_MANAGEMENT,
-      },
-      {
-        key: "po-shortage",
-        routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_ORDERS,
-        label: "PO shortage",
-        count: productionSummary.shortageOrders,
-        description: "Cek kebutuhan material/BOM sebelum produksi dimulai.",
-        color: DASHBOARD_TAG_COLORS.danger,
-        icon: <ToolOutlined />,
-        to: APP_ROUTES.PRODUCTION.ORDERS,
-      },
-      {
-        key: "planning-risk",
-        routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_PLANNING,
-        label: "Planning perlu dikejar",
-        count: planningSummary.overdueCount || planningSummary.behindTargetCount,
-        description: "Overdue atau target belum tercapai berdasarkan Work Log completed.",
-        color: planningSummary.overdueCount > 0 ? DASHBOARD_TAG_COLORS.danger : DASHBOARD_TAG_COLORS.warning,
-        icon: <ClockCircleOutlined />,
-        to: APP_ROUTES.PRODUCTION.PLANNING,
-      },
-      {
-        key: "po-ready",
-        routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_ORDERS,
-        label: "PO siap produksi",
-        count: productionSummary.readyOrders,
-        description: "Antrian ini sudah siap diproses ke Work Log.",
-        color: DASHBOARD_TAG_COLORS.info,
-        icon: <CheckCircleOutlined />,
-        to: APP_ROUTES.PRODUCTION.ORDERS,
-      },
-      {
-        key: "worklog-running",
-        routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_WORK_LOGS,
-        label: "Work Log berjalan",
-        count: productionSummary.runningWorkLogs,
-        description: "Review pekerjaan yang belum ditutup agar biaya dan output final jelas.",
-        color: DASHBOARD_TAG_COLORS.production,
-        icon: <BuildOutlined />,
-        to: APP_ROUTES.PRODUCTION.WORK_LOGS,
-      },
-      {
-        key: "payroll-pending",
-        routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_PAYROLLS,
-        label: "Payroll pending",
-        count: payrollSummary.pendingCount,
-        description: "Cek payroll draft/confirmed/unpaid sebelum pembayaran final.",
-        color: DASHBOARD_TAG_COLORS.payroll,
-        icon: <DollarCircleOutlined />,
-        to: APP_ROUTES.PRODUCTION.PAYROLLS,
-      },
-    ];
 
-    return items
-      .filter((item) => item.count > 0 && canAccessRoute(item.routeKey, activeRole))
-      .slice(0, MAX_DASHBOARD_LIST_ITEMS);
-  }, [
-    activeRole,
-    lowStockTotal,
-    payrollSummary.pendingCount,
-    planningSummary.behindTargetCount,
-    planningSummary.overdueCount,
-    productionSummary.readyOrders,
-    productionSummary.runningWorkLogs,
-    productionSummary.shortageOrders,
-  ]);
+  const priorityItems = businessAlertItems.slice(0, MAX_DASHBOARD_LIST_ITEMS);
 
   const productionStatusItems = [
-    { key: "shortage", routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_ORDERS, label: "PO Shortage", value: productionSummary.shortageOrders, color: DASHBOARD_TAG_COLORS.danger },
-    { key: "ready", routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_ORDERS, label: "PO Siap", value: productionSummary.readyOrders, color: DASHBOARD_TAG_COLORS.info },
-    { key: "running", routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_WORK_LOGS, label: "Work Log Jalan", value: productionSummary.runningWorkLogs, color: DASHBOARD_TAG_COLORS.production },
-    { key: "completed", routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_WORK_LOGS, label: "Completed Minggu Ini", value: productionSummary.completedWorkLogs, color: DASHBOARD_TAG_COLORS.success },
-    { key: "payroll", routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_PAYROLLS, label: "Payroll Pending", value: payrollSummary.pendingCount, color: DASHBOARD_TAG_COLORS.payroll },
+    {
+      key: "shortage",
+      routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_ORDERS,
+      label: "Order kekurangan bahan",
+      value: productionSummary.shortageOrders,
+      color: DASHBOARD_TAG_COLORS.danger,
+    },
+    {
+      key: "ready",
+      routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_ORDERS,
+      label: "Order siap",
+      value: productionSummary.readyOrders,
+      color: DASHBOARD_TAG_COLORS.info,
+    },
+    {
+      key: "running",
+      routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_WORK_LOGS,
+      label: "Work Log berjalan",
+      value: productionSummary.runningWorkLogs,
+      color: DASHBOARD_TAG_COLORS.info,
+    },
+    {
+      key: "completed",
+      routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_WORK_LOGS,
+      label: "Selesai minggu ini",
+      value: productionSummary.completedWorkLogs,
+      color: DASHBOARD_TAG_COLORS.success,
+    },
+    {
+      key: "payroll",
+      routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_PAYROLLS,
+      label: "Payroll belum dibayar",
+      value: payrollSummary.pendingCount,
+      color: DASHBOARD_TAG_COLORS.warning,
+    },
   ].filter(({ routeKey }) => canAccessRoute(routeKey, activeRole));
 
-  const heroKpiKeys = new Set(["sales-month", "stock-critical", "production-watch", "payroll-pending"]);
+  const heroKpiKeys = new Set(
+    canViewFinance
+      ? ["sales-month", "stock-critical", "production-watch", "payroll-pending"]
+      : ["sales-month", "stock-critical", "production-watch", "data-watch"],
+  );
   const heroKpiItems = kpiItems.filter((item) => heroKpiKeys.has(item.key));
   const denseQuickActionKeys = ["sales", "purchases", "stock", "worklog"];
   const denseQuickActions = denseQuickActionKeys
@@ -619,6 +789,7 @@ const Dashboard = () => {
     .filter(Boolean);
   const denseActivityRows = recentActivities.slice(0, MAX_DASHBOARD_LIST_ITEMS);
   const compactExceptionItems = businessAlertItems.slice(0, 3);
+  const showSecondarySummary = canViewProductionSummary || canViewStock;
 
   const lastUpdatedText = loading
     ? "Memuat..."
@@ -633,12 +804,11 @@ const Dashboard = () => {
       : "Belum dimuat";
   const isInitialDashboardLoading = loading && !lastUpdated;
 
-
   return (
-    <div className="dashboard-page dashboard-bento-page">
+    <div className="dashboard-page">
       <PageHeader
         title="Dashboard"
-        subtitle="Ringkasan operasional harian."
+        subtitle="Ringkasan operasional, tren, dan prioritas hari ini."
         extra={
           <Space size={10} wrap>
             <Text className="dashboard-section-extra">Terakhir diperbarui: {lastUpdatedText}</Text>
@@ -669,84 +839,136 @@ const Dashboard = () => {
         </PageSection>
       ) : (
         <>
-          <section className="dashboard-bento-overview" aria-label="Ringkasan utama dashboard">
-            <div className="dashboard-bento-cash-card">
-              <div className="dashboard-bento-card-topline">
-                <Text className="dashboard-bento-eyebrow">NET KAS OPERASIONAL</Text>
-                <Tag className="dashboard-bento-period-tag">
-                  {new Date().toLocaleDateString("id-ID", { month: "long", year: "numeric" })}
-                </Tag>
+          <section className="dashboard-overview-grid" aria-label="Ringkasan utama Dashboard">
+            {canViewFinance ? (
+              <div className="dashboard-card dashboard-hero-card">
+                <div className="dashboard-hero-topline">
+                  <Text className="dashboard-hero-eyebrow">NET KAS OPERASIONAL</Text>
+                  <Tag className="dashboard-hero-period">
+                    {new Date().toLocaleDateString("id-ID", { month: "long", year: "numeric" })}
+                  </Tag>
+                </div>
+                <Title level={2} className="dashboard-hero-value">
+                  {formatCurrency(financeSummary.netOperational)}
+                </Title>
+                <Text className="dashboard-hero-note">
+                  Monitoring bulan berjalan, bukan laba final.
+                </Text>
+                <DashboardMiniTrend
+                  series={cashMiniTrendSeries}
+                  label="Net kas harian · 7 hari terakhir"
+                />
+                <div className="dashboard-hero-mini-stats">
+                  <div>
+                    <Text>Kas masuk</Text>
+                    <strong>{formatCurrency(financeSummary.recognizedIncome)}</strong>
+                  </div>
+                  <div>
+                    <Text>Kas keluar</Text>
+                    <strong>{formatCurrency(financeSummary.expenseThisMonth)}</strong>
+                  </div>
+                  <div>
+                    <Text>Penjualan hari ini</Text>
+                    <strong>{formatCurrency(salesSummary.todayAmount)}</strong>
+                  </div>
+                </div>
               </div>
-              <Title level={2} className="dashboard-bento-cash-value">
-                {formatCurrency(financeSummary.netOperational)}
-              </Title>
-              <Text className="dashboard-bento-cash-note">Monitoring bulan berjalan, bukan laba final.</Text>
-              <div className="dashboard-bento-mini-stats">
-                <div>
-                  <Text>Kas masuk</Text>
-                  <strong>{formatCurrency(financeSummary.recognizedIncome)}</strong>
+            ) : (
+              <div className="dashboard-card dashboard-hero-card dashboard-hero-operational">
+                <div className="dashboard-hero-topline">
+                  <Text className="dashboard-hero-eyebrow">NILAI PENJUALAN HARI INI</Text>
+                  <Tag className="dashboard-hero-period">
+                    {new Date().toLocaleDateString("id-ID", { day: "2-digit", month: "long" })}
+                  </Tag>
                 </div>
-                <div>
-                  <Text>Kas keluar</Text>
-                  <strong>{formatCurrency(financeSummary.expenseThisMonth)}</strong>
-                </div>
-                <div>
-                  <Text>Sales hari ini</Text>
-                  <strong>{formatCurrency(salesSummary.todayAmount)}</strong>
+                <Title level={2} className="dashboard-hero-value">
+                  {formatCurrency(salesSummary.todayAmount)}
+                </Title>
+                <Text className="dashboard-hero-note">
+                  {formatNumberId(salesSummary.todayCount)} transaksi tercatat hari ini.
+                </Text>
+                <DashboardMiniTrend
+                  series={salesMiniTrendSeries}
+                  label="Penjualan harian · 7 hari terakhir"
+                />
+                <div className="dashboard-hero-mini-stats">
+                  <div>
+                    <Text>Penjualan bulan ini</Text>
+                    <strong>{formatCurrency(salesSummary.monthAmount)}</strong>
+                  </div>
+                  <div>
+                    <Text>Stok perlu dicek</Text>
+                    <strong>{lowStockTotalLabel} item</strong>
+                  </div>
+                  <div>
+                    <Text>Temuan produksi</Text>
+                    <strong>{formatNumberId(productionAttentionCount)}</strong>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
-            <div className="dashboard-bento-kpi-grid">
+            <div className="dashboard-kpi-grid">
               {heroKpiItems.map((item) => (
-                <div key={item.key} className={`dashboard-bento-kpi dashboard-bento-kpi-${item.tone}`}>
-                  <div className="dashboard-bento-kpi-heading">
-                    <Text>{item.label}</Text>
+                <div
+                  key={item.key}
+                  className={`dashboard-card dashboard-kpi dashboard-kpi-${item.tone}`}
+                >
+                  <div className="dashboard-kpi-topline">
+                    <span className="dashboard-kpi-icon">{item.icon}</span>
                     {item.statusLabel ? <Tag>{item.statusLabel}</Tag> : null}
                   </div>
+                  <Text className="dashboard-kpi-label">{item.label}</Text>
                   <Title level={3}>{item.value}</Title>
-                  <Text>{item.detail}</Text>
+                  <Text className="dashboard-kpi-detail">{item.detail}</Text>
                 </div>
               ))}
             </div>
 
-            <div className="dashboard-bento-priority-card">
-              <div className="dashboard-bento-section-heading">
+            <div className="dashboard-card dashboard-priority-card">
+              <div className="dashboard-section-heading">
                 <div>
                   <Title level={4}>Prioritas Hari Ini</Title>
-                  <Text>Exception paling penting.</Text>
+                  <Text>Diurutkan berdasarkan tingkat dampak.</Text>
                 </div>
-                <Tag color={businessAlertTotal > 0 ? "orange" : "green"}>
-                  {formatNumberId(priorityItems.length)} aktif
+                <Tag color={priorityItems.length > 0 ? "gold" : "green"}>
+                  {formatNumberId(priorityItems.length)} kategori
                 </Tag>
               </div>
 
-              <div className="dashboard-bento-priority-list">
-                {priorityItems.slice(0, 3).map((item, index) => (
-                  <Link key={item.key} to={item.to} className="dashboard-bento-priority-row">
-                    <span className="dashboard-bento-priority-icon">{item.icon}</span>
-                    <span className="dashboard-bento-priority-copy">
+              <div className="dashboard-priority-list">
+                {priorityItems.slice(0, 3).map((item) => (
+                  <Link key={item.key} to={item.to} className="dashboard-priority-row">
+                    <span className="dashboard-priority-icon">{item.icon}</span>
+                    <span className="dashboard-priority-copy">
                       <strong>{item.label}</strong>
                       <small>{item.description}</small>
                     </span>
-                    <Tag color={item.color}>{index === 0 ? "P0" : "P1"}</Tag>
+                    <Tag color={item.priority.color}>{item.priority.label}</Tag>
                   </Link>
                 ))}
                 {priorityItems.length === 0 ? (
                   <div className="dashboard-empty-wrap dashboard-empty-compact">
-                    <Empty description="Tidak ada prioritas kritis hari ini." />
+                    <Empty description="Tidak ada temuan yang perlu diprioritaskan hari ini." />
                   </div>
                 ) : null}
               </div>
             </div>
           </section>
 
-          <section className="dashboard-bento-main-grid" aria-label="Aktivitas dan aksi cepat">
-            <div className="dashboard-bento-activity-card">
-              <div className="dashboard-bento-section-heading">
+          {canViewSales ? (
+            <section className="dashboard-insight-grid" aria-label="Insight penjualan">
+              <DashboardSalesChart series={salesTrendSeries} />
+              <DashboardTopProducts products={topSellingProducts} />
+            </section>
+          ) : null}
+
+          <section className="dashboard-main-grid" aria-label="Aktivitas dan aksi cepat">
+            <div className="dashboard-card dashboard-activity-card">
+              <div className="dashboard-section-heading">
                 <div>
-                  <Title level={4}>Transaksi dan Aktivitas Terbaru</Title>
-                  <Text>Informasi utama dibuat lebih dominan untuk scanning cepat.</Text>
+                  <Title level={4}>Aktivitas Stok Terbaru</Title>
+                  <Text>Perubahan stok terbaru dari transaksi dan penyesuaian.</Text>
                 </div>
                 <Tag color="blue">{formatNumberId(denseActivityRows.length)} aktivitas</Tag>
               </div>
@@ -755,10 +977,9 @@ const Dashboard = () => {
                 <div className="dashboard-dense-table-wrap">
                   <div className="dashboard-dense-table dashboard-dense-table-head" role="row">
                     <span>Aktivitas</span>
-                    <span>Modul</span>
+                    <span>Sumber</span>
                     <span>Perubahan</span>
                     <span>Nilai</span>
-                    <span>Status</span>
                     <span>Waktu</span>
                   </div>
                   {denseActivityRows.map((item) => {
@@ -766,21 +987,39 @@ const Dashboard = () => {
                     const activityDate = getTransactionDate(item);
                     const quantityChange = getNumericValue(item.quantityChange ?? item.quantity ?? 0);
                     const absoluteQuantity = Math.abs(quantityChange);
-                    const activityName = item.itemName || item.name || item.productName || item.materialName || "Aktivitas stok";
-                    const activityModule = activity.label || "Stok";
+                    const activityName =
+                      item.itemName
+                      || item.name
+                      || item.productName
+                      || item.materialName
+                      || "Aktivitas stok";
                     const changePrefix = quantityChange > 0 ? "+" : quantityChange < 0 ? "-" : "";
                     const activityValue = getFinancialAmount(item);
+
                     return (
-                      <div key={item.id || `${activityName}-${activityDate || "unknown"}`} className="dashboard-dense-table" role="row">
+                      <div
+                        key={item.id || `${activityName}-${activityDate || "unknown"}`}
+                        className="dashboard-dense-table dashboard-dense-table-row"
+                        role="row"
+                      >
                         <span className="dashboard-dense-activity-name">
                           <span className="dashboard-dense-activity-icon"><HistoryOutlined /></span>
                           <strong>{activityName}</strong>
                         </span>
-                        <span>{activityModule}</span>
-                        <span>{absoluteQuantity > 0 ? `${changePrefix}${formatNumberId(absoluteQuantity)} ${item.unit || "unit"}` : "-"}</span>
-                        <span>{activityValue > 0 ? formatCurrency(activityValue) : "-"}</span>
-                        <span><Tag color={activity.color}>{activity.label}</Tag></span>
-                        <span>{activityDate ? formatDashboardDate(activityDate) : "-"}</span>
+                        <span className="dashboard-dense-field" data-label="Sumber">
+                          <Tag color={activity.color}>{activity.label}</Tag>
+                        </span>
+                        <span className="dashboard-dense-field" data-label="Perubahan">
+                          {absoluteQuantity > 0
+                            ? `${changePrefix}${formatNumberId(absoluteQuantity)} ${item.unit || "unit"}`
+                            : "-"}
+                        </span>
+                        <span className="dashboard-dense-field" data-label="Nilai">
+                          {activityValue > 0 ? formatCurrency(activityValue) : "-"}
+                        </span>
+                        <span className="dashboard-dense-field" data-label="Waktu">
+                          {activityDate ? formatDashboardDate(activityDate) : "-"}
+                        </span>
                       </div>
                     );
                   })}
@@ -792,25 +1031,26 @@ const Dashboard = () => {
               )}
             </div>
 
-            <aside className="dashboard-bento-side-stack">
-              <div className="dashboard-bento-side-card">
-                <div className="dashboard-bento-section-heading">
+            <aside className="dashboard-side-stack">
+              <div className="dashboard-card dashboard-side-card">
+                <div className="dashboard-section-heading">
                   <div>
                     <Title level={4}>Aksi Cepat</Title>
-                    <Text>Shortcut sesuai role.</Text>
+                    <Text>Tautan sesuai akses pengguna.</Text>
                   </div>
                 </div>
-                <div className="dashboard-bento-action-list">
+                <div className="dashboard-action-list">
                   {denseQuickActions.map((action) => {
                     const shortDescriptions = {
-                      sales: "Input transaksi",
-                      purchases: "Restock barang",
-                      stock: "Audit stok",
-                      worklog: "Produksi berjalan",
+                      sales: "Catat transaksi",
+                      purchases: "Tambah stok",
+                      stock: "Periksa stok",
+                      worklog: "Pantau produksi",
                     };
+
                     return (
-                      <Link key={action.key} to={action.to} className="dashboard-bento-action-row">
-                        <span className="dashboard-bento-action-icon">{action.icon}</span>
+                      <Link key={action.key} to={action.to} className="dashboard-action-row">
+                        <span className="dashboard-action-icon">{action.icon}</span>
                         <span>
                           <strong>{action.key === "worklog" ? "Work Log" : action.label}</strong>
                           <small>{shortDescriptions[action.key]}</small>
@@ -821,92 +1061,123 @@ const Dashboard = () => {
                   })}
                   {denseQuickActions.length === 0 ? (
                     <div className="dashboard-empty-wrap dashboard-empty-compact">
-                      <Empty description="Tidak ada shortcut untuk role ini." />
+                      <Empty description="Tidak ada aksi cepat yang tersedia." />
                     </div>
                   ) : null}
                 </div>
               </div>
 
-              <div className="dashboard-bento-side-card">
-                <div className="dashboard-bento-section-heading">
+              <div className="dashboard-card dashboard-side-card">
+                <div className="dashboard-section-heading">
                   <div>
-                    <Title level={4}>Exception Aktif</Title>
-                    <Text>Ringkasan cepat.</Text>
+                    <Title level={4}>Temuan Aktif</Title>
+                    <Text>Kategori yang perlu ditindaklanjuti.</Text>
                   </div>
-                  <Tag color={businessAlertTotal > 0 ? "red" : "green"}>{formatNumberId(businessAlertTotal)}</Tag>
+                  <Tag color={businessAlertCategoryCount > 0 ? "gold" : "green"}>
+                    {formatNumberId(businessAlertCategoryCount)}
+                  </Tag>
                 </div>
-                <div className="dashboard-bento-exception-list">
-                  {compactExceptionItems.map((item, index) => (
+                <div className="dashboard-exception-list">
+                  {compactExceptionItems.map((item) => (
                     <Link key={item.key} to={item.to}>
                       <strong>{item.label}</strong>
                       <span>{formatNumberId(item.count)} item</span>
-                      <Tag color={item.color}>{index === 0 ? "P0" : "P1"}</Tag>
+                      <Tag color={item.priority.color}>{item.priority.label}</Tag>
                     </Link>
                   ))}
                   {compactExceptionItems.length === 0 ? (
-                    <Text className="dashboard-muted-text">Tidak ada exception aktif.</Text>
+                    <Text className="dashboard-muted-text">Tidak ada temuan aktif.</Text>
                   ) : null}
                 </div>
               </div>
             </aside>
           </section>
 
-          <section className="dashboard-bento-secondary-grid" aria-label="Ringkasan lanjutan">
-            <div className="dashboard-bento-secondary-card">
-              <div className="dashboard-bento-section-heading">
-                <div>
-                  <Title level={4}>Fokus Produksi</Title>
-                  <Text>Target dan risiko produksi.</Text>
-                </div>
-                <Link to={APP_ROUTES.PRODUCTION.PLANNING}>Buka Planning <ArrowRightOutlined /></Link>
-              </div>
-              <div className="dashboard-bento-production-grid">
-                {[
-                  { key: "weekly", label: "Target Minggu Ini", data: planningSummary.weekly },
-                  { key: "monthly", label: "Target Bulan Ini", data: planningSummary.monthly },
-                ].map((item) => (
-                  <div key={item.key} className="dashboard-bento-production-item">
-                    <Text>{item.label}</Text>
-                    <strong>{formatNumberId(item.data.actualCompletedQty)} / {formatNumberId(item.data.targetQty)} pcs</strong>
-                    <Progress percent={Math.min(Math.round(item.data.progressPercent || 0), 100)} size="small" />
+          {showSecondarySummary ? (
+            <section className="dashboard-secondary-grid" aria-label="Ringkasan lanjutan">
+              {canViewProductionSummary ? (
+                <div className="dashboard-card dashboard-secondary-card">
+                  <div className="dashboard-section-heading">
+                    <div>
+                      <Title level={4}>Fokus Produksi</Title>
+                      <Text>Target dan risiko produksi.</Text>
+                    </div>
+                    {canViewPlanning ? (
+                      <Link to={APP_ROUTES.PRODUCTION.PLANNING}>
+                        Buka perencanaan <ArrowRightOutlined />
+                      </Link>
+                    ) : null}
                   </div>
-                ))}
-                <div className="dashboard-bento-production-item">
-                  <Text>Status Produksi</Text>
-                  <div className="dashboard-chip-list">
-                    {productionStatusItems.slice(0, 4).map((item) => (
-                      <Tag key={item.key} color={item.color}>{item.label}: {formatNumberId(item.value)}</Tag>
+                  <div className="dashboard-production-grid">
+                    {[
+                      { key: "weekly", label: "Target Minggu Ini", data: planningSummary.weekly },
+                      { key: "monthly", label: "Target Bulan Ini", data: planningSummary.monthly },
+                    ].map((item) => (
+                      <div key={item.key} className="dashboard-production-item">
+                        <Text>{item.label}</Text>
+                        <strong>
+                          {formatNumberId(item.data.actualCompletedQty)} /{" "}
+                          {formatNumberId(item.data.targetQty)} pcs
+                        </strong>
+                        <Progress
+                          percent={Math.min(Math.round(item.data.progressPercent || 0), 100)}
+                          size="small"
+                        />
+                      </div>
                     ))}
+                    <div className="dashboard-production-item">
+                      <Text>Status Produksi</Text>
+                      <div className="dashboard-chip-list">
+                        {productionStatusItems.slice(0, 4).map((item) => (
+                          <Tag key={item.key} color={item.color}>
+                            {item.label}: {formatNumberId(item.value)}
+                          </Tag>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
+              ) : null}
 
-            <div className="dashboard-bento-secondary-card">
-              <div className="dashboard-bento-section-heading">
-                <div>
-                  <Title level={4}>Stok Kritis</Title>
-                  <Text>Item paling urgent.</Text>
+              {canViewStock ? (
+                <div className="dashboard-card dashboard-secondary-card">
+                  <div className="dashboard-section-heading">
+                    <div>
+                      <Title level={4}>Stok Kritis</Title>
+                      <Text>Diurutkan dari kondisi paling kritis.</Text>
+                    </div>
+                    <Tag color={lowStockTotal > 0 ? "red" : "green"}>
+                      {lowStockTotalLabel} total
+                    </Tag>
+                  </div>
+                  <div className="dashboard-stock-list">
+                    {criticalStockPreview.slice(0, 4).map((item) => (
+                      <Link
+                        key={item.key}
+                        to={item.to}
+                        className={`dashboard-stock-row${
+                          getNumericValue(item?.severity?.rank) <= 2 ? " is-critical" : ""
+                        }`}
+                      >
+                        <span className="dashboard-action-icon"><AppstoreOutlined /></span>
+                        <span>
+                          <strong>{item.name}</strong>
+                          <small>
+                            Tersedia {formatNumberId(item.stock)} {item.unit} · batas minimum{" "}
+                            {formatNumberId(item.minStock)} {item.unit}
+                          </small>
+                        </span>
+                        <Tag color={item.severity.color}>{item.severity.label}</Tag>
+                      </Link>
+                    ))}
+                    {criticalStockPreview.length === 0 ? (
+                      <Text className="dashboard-muted-text">Belum ada stok kritis.</Text>
+                    ) : null}
+                  </div>
                 </div>
-                <Tag color={lowStockTotal > 0 ? "red" : "green"}>{lowStockTotalLabel} total</Tag>
-              </div>
-              <div className="dashboard-bento-stock-list">
-                {criticalStockPreview.slice(0, 4).map((item) => (
-                  <Link key={item.key} to={item.to} className="dashboard-bento-stock-row">
-                    <span className="dashboard-bento-action-icon"><AppstoreOutlined /></span>
-                    <span>
-                      <strong>{item.name}</strong>
-                      <small>Available {formatNumberId(item.stock)} {item.unit} · minimum {formatNumberId(item.minStock)} {item.unit}</small>
-                    </span>
-                    <Tag color={item.severity.color}>{item.severity.label}</Tag>
-                  </Link>
-                ))}
-                {criticalStockPreview.length === 0 ? (
-                  <Text className="dashboard-muted-text">Belum ada stok kritis.</Text>
-                ) : null}
-              </div>
-            </div>
-          </section>
+              ) : null}
+            </section>
+          ) : null}
         </>
       )}
     </div>

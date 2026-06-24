@@ -104,7 +104,6 @@ Alur source cost aktif:
 - Complete Work Log output in wajib menulis master stock, `inventory_logs`, dan `stock_item_read_models` dalam transaction yang sama.
 - Complete Work Log fallback data historis material out wajib menulis `inventory_logs` saat stok material benar-benar dipotong dan sync `stock_item_read_models`, supaya histori audit dan Dashboard/Stock Report tidak stale.
 - Jika ada beberapa line material/output yang mengarah ke item/varian yang sama, mutasi wajib diakumulasi dari state stok progresif sebelum write final agar tidak ada overwrite antar-line.
-- Reset Modal/HPP wajib merefresh BOM estimate dari master cost pasca-reset, menjaga `laborCostEstimate` dari step dan `overheadCostEstimate` existing.
 
 Presisi dan pembulatan HPP:
 - Qty resep produksi tetap bulat sesuai rule bisnis, misalnya 1 bunga memakai 10 kelopak, 1 daun, dan 1 tangkai.
@@ -417,13 +416,13 @@ Boundary data historis:
 - Work Log lama yang tidak pernah tersentuh payroll sync tetap memerlukan audit produksi/HPP read-only lalu repair atau backfill guarded terpisah; tidak ada backfill massal otomatis.
 - Jika data sudah pernah dijual/dipakai sebelum reconcile, patch ini menjaga master cost ke depan tetapi tidak merekonstruksi COGS histori lama.
 
-## Guard Modal/HPP Stok Awal dan Reset Cost — 2026-05-18
+## Guard Modal/HPP Stok Awal — 2026-06-24
 
 Rule aktif:
 - Stock Adjustment `Tambah` untuk item yang cost/HPP master-nya masih 0 wajib mengisi `Modal per Unit` agar stok awal/data historis tidak masuk sebagai modal 0.
 - Jika item sudah punya cost/HPP master valid, Stock Adjustment tetap hanya koreksi stok dan tidak meng-average ulang cost lama. Pembelian resmi tetap menjadi flow utama untuk incoming cost baru.
 - Raw Material purchase dan output produksi memakai weighted average dengan zero-cost baseline protection. Contoh: stok lama 100 pcs dengan average cost 0, lalu beli/produksi 10 pcs dengan cost 1.000, average cost menjadi 1.000, bukan 90,9.
-- Reset Modal/HPP hanya boleh dipakai untuk data test. Jika stok asli masih ada, simpan baseline/isi ulang modal via Stock Adjustment guard sebelum transaksi baru.
+- Maintenance Center tidak menyediakan reset modal/HPP. Jika master cost 0 pada data lama, gunakan Purchase, Production, atau Stock Adjustment guarded sesuai sumber biaya; jangan menolkan cost massal pada database aktif.
 
 ---
 

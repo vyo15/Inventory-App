@@ -26,6 +26,16 @@ import {
   UnorderedListOutlined,
   DollarCircleOutlined,
   CalculatorOutlined,
+  GiftOutlined,
+  InboxOutlined,
+  UserOutlined,
+  ShopOutlined,
+  SwapOutlined,
+  PlusCircleOutlined,
+  MinusCircleOutlined,
+  BookOutlined,
+  HddOutlined,
+  BarChartOutlined,
 } from "@ant-design/icons";
 import { APP_ROUTES } from "./appRoutes";
 import { ROLE_GROUPS } from "../utils/auth/roleAccess";
@@ -76,35 +86,55 @@ export const sidebarMenuItems = [
     icon: DatabaseOutlined,
     label: "Master Data",
     hubPath: "/master-data",
+    hubIcon: DatabaseOutlined,
+    hubEyebrow: "Workspace Master Data",
+    hubDescription:
+      "Kelola data referensi utama yang digunakan pada transaksi, stok, harga, dan produksi.",
     allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
     children: [
       {
         key: "products",
         label: "Produk Jadi",
+        hubIcon: GiftOutlined,
+        hubDescription:
+          "Kelola produk jadi, varian, harga jual, minimum stok, dan status penggunaan.",
         path: "/products",
         allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
       {
         key: "raw-materials",
         label: "Raw Materials",
+        hubLabel: "Bahan Baku",
+        hubIcon: InboxOutlined,
+        hubDescription:
+          "Kelola bahan baku, satuan, harga beli, minimum stok, dan status penggunaan.",
         path: "/raw-materials",
         allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
       {
         key: "categories",
         label: "Kategori",
+        hubIcon: TagsOutlined,
+        hubDescription:
+          "Kelola kategori untuk pengelompokan produk dan bahan baku.",
         path: "/categories",
         allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
       {
         key: "suppliers",
         label: "Supplier",
+        hubIcon: ShopOutlined,
+        hubDescription:
+          "Kelola identitas supplier, kontak, serta katalog kebutuhan restock.",
         path: "/suppliers",
         allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
       {
         key: "customers",
         label: "Customer",
+        hubIcon: UserOutlined,
+        hubDescription:
+          "Kelola data customer untuk penjualan dan penelusuran riwayat transaksi.",
         path: "/customers",
         allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
@@ -112,6 +142,10 @@ export const sidebarMenuItems = [
         key: "pricing-rules",
         icon: TagsOutlined,
         label: "Pricing Rules",
+        hubLabel: "Aturan Harga",
+        hubIcon: CalculatorOutlined,
+        hubDescription:
+          "Kelola aturan harga otomatis dan lakukan preview sebelum diterapkan.",
         path: "/pricing-rules",
         allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
@@ -130,11 +164,20 @@ export const sidebarMenuItems = [
     icon: AppstoreOutlined,
     label: "Stock Control",
     hubPath: APP_ROUTES.INVENTORY.HUB,
+    hubIcon: InboxOutlined,
+    hubEyebrow: "Workspace Stok",
+    hubTitle: "Kontrol Stok",
+    hubDescription:
+      "Pantau persediaan dan audit pergerakan stok, lalu lakukan penyesuaian manual melalui flow resmi.",
     allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
     children: [
       {
         key: "stock-management",
         label: "Stock Management",
+        hubLabel: "Manajemen Stok",
+        hubIcon: InboxOutlined,
+        hubDescription:
+          "Tinjau stok tersedia, stok dipesan, batas minimum, riwayat pergerakan, dan adjustment ber-audit.",
         path: APP_ROUTES.INVENTORY.STOCK_MANAGEMENT,
         allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
       },
@@ -154,6 +197,7 @@ export const sidebarMenuItems = [
     icon: BuildOutlined,
     label: "Produksi",
     hubPath: APP_ROUTES.PRODUCTION.HUB,
+    hubIcon: BuildOutlined,
     hubEyebrow: "Workspace Produksi",
     hubDescription:
       "Kelola pekerjaan produksi dari perencanaan, pelaksanaan, pencatatan hasil, hingga evaluasi biaya.",
@@ -313,23 +357,36 @@ export const sidebarMenuItems = [
     icon: ShoppingCartOutlined,
     label: "Transaksi",
     hubPath: "/transactions",
+    hubIcon: SwapOutlined,
+    hubEyebrow: "Workspace Transaksi",
+    hubDescription:
+      "Kelola pembelian, penjualan, dan retur operasional melalui flow transaksi resmi.",
     allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
     children: [
       {
         key: "purchases",
         label: "Pembelian",
+        hubIcon: ShoppingCartOutlined,
+        hubDescription:
+          "Catat pembelian dan penerimaan bahan untuk memperbarui stok serta histori transaksi.",
         path: "/purchases",
         allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
       },
       {
         key: "sales",
         label: "Penjualan",
+        hubIcon: DollarCircleOutlined,
+        hubDescription:
+          "Kelola penjualan dari pembuatan transaksi hingga penyelesaian dan pencatatan pendapatan.",
         path: "/sales",
         allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
       },
       {
         key: "returns",
         label: "Retur",
+        hubIcon: SwapOutlined,
+        hubDescription:
+          "Proses retur dari penjualan terkait dengan batas jumlah yang masih dapat dikembalikan.",
         path: "/returns",
         allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
       },
@@ -348,23 +405,36 @@ export const sidebarMenuItems = [
     icon: WalletOutlined,
     label: "Kas & Biaya",
     hubPath: "/finance",
+    hubIcon: WalletOutlined,
+    hubEyebrow: "Workspace Kas & Biaya",
+    hubDescription:
+      "Kelola pemasukan dan pengeluaran resmi serta audit pergerakan kas dalam satu workspace.",
     allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
     children: [
       {
         key: "cash-in",
         label: "Pemasukan",
+        hubIcon: PlusCircleOutlined,
+        hubDescription:
+          "Catat pemasukan resmi dan telusuri sumber transaksi kas masuk.",
         path: "/cash-in",
         allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
       {
         key: "cash-out",
         label: "Pengeluaran",
+        hubIcon: MinusCircleOutlined,
+        hubDescription:
+          "Catat pengeluaran operasional dan telusuri penggunaan kas keluar.",
         path: "/cash-out",
         allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
       {
         key: "money-movement-ledger",
         label: "Buku Besar Kas",
+        hubIcon: BookOutlined,
+        hubDescription:
+          "Audit pergerakan uang dari pemasukan dan pengeluaran tanpa mengubah transaksi sumber.",
         path: "/finance/money-movement-ledger",
         allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
@@ -377,7 +447,7 @@ export const sidebarMenuItems = [
   // - menampung Manajemen User dan maintenance/reset yang sensitif.
   // Akses:
   // - Manajemen User hanya boleh tampil untuk Administrator sesuai guard;
-  // - Maintenance & Backup ikut akses penuh Administrator sesuai penyederhanaan 2 role aktif.
+  // - Maintenance Center ikut akses penuh Administrator sesuai penyederhanaan 2 role aktif.
   // Status:
   // - GUARDED: user biasa tidak boleh melihat parent Sistem; child sensitif tetap punya allowedRoles sendiri.
   // =========================
@@ -386,18 +456,28 @@ export const sidebarMenuItems = [
     icon: ToolOutlined,
     label: "Sistem",
     hubPath: "/system",
+    hubIcon: SettingOutlined,
+    hubEyebrow: "Workspace Sistem",
+    hubDescription:
+      "Kelola pengguna serta jalankan backup, audit, dan maintenance data dengan guard keamanan.",
     allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
     children: [
       {
         key: "user-management",
         icon: UserSwitchOutlined,
         label: "Manajemen User",
+        hubIcon: UserSwitchOutlined,
+        hubDescription:
+          "Kelola akun lokal, role, status akses, dan kredensial pengguna IMS.",
         path: "/system/user-management",
         allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
       {
         key: "reset-maintenance-data",
-        label: "Maintenance & Backup",
+        label: "Maintenance Center",
+        hubIcon: HddOutlined,
+        hubDescription:
+          "Kelola backup dan restore, audit data, repair aman, serta reset testing terbatas.",
         path: "/utilities/reset-maintenance-data",
         allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
@@ -416,35 +496,54 @@ export const sidebarMenuItems = [
     icon: PrinterOutlined,
     label: "Laporan",
     hubPath: "/reports",
+    hubIcon: BarChartOutlined,
+    hubEyebrow: "Workspace Laporan",
+    hubDescription:
+      "Tinjau rekap stok, transaksi, payroll, dan hasil keuangan untuk audit serta analisis.",
     allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
     children: [
       {
         key: "report-stock",
         label: "Laporan Stok",
+        hubIcon: BarChartOutlined,
+        hubDescription:
+          "Tinjau posisi dan pergerakan stok untuk kebutuhan audit persediaan.",
         path: "/report-stock",
         allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
       {
         key: "purchases-report",
         label: "Laporan Pembelian",
+        hubIcon: ShoppingCartOutlined,
+        hubDescription:
+          "Tinjau rekap pembelian dan nilai transaksi berdasarkan periode laporan.",
         path: "/purchases-report",
         allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
       {
         key: "sales-report",
         label: "Laporan Penjualan",
+        hubIcon: LineChartOutlined,
+        hubDescription:
+          "Tinjau rekap penjualan, nilai transaksi, dan performa berdasarkan periode.",
         path: "/sales-report",
         allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
       {
         key: "payroll-report",
         label: "Laporan Payroll",
+        hubIcon: DollarCircleOutlined,
+        hubDescription:
+          "Tinjau rekap payroll produksi final untuk kebutuhan pengecekan dan pelaporan.",
         path: "/payroll-report",
         allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
       {
         key: "profit-loss",
         label: "Laba Rugi",
+        hubIcon: CalculatorOutlined,
+        hubDescription:
+          "Analisis pendapatan, biaya, dan laba rugi berdasarkan data transaksi resmi.",
         path: "/profit-loss",
         allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },

@@ -338,13 +338,13 @@ Alert tidak boleh membuat aksi berisiko terdengar aman tanpa konsekuensi. Khusus
 - Referensi transaksi, payroll, atau purchase harus jelas bila ada.
 - Copy tidak boleh mendorong user membuat data manual ganda untuk sumber otomatis.
 
-### Maintenance & Backup Center
-- Gunakan workspace berbasis tab untuk halaman maintenance yang kompleks: Ringkasan, Backup & Restore, Audit Data, Repair Aman, Data Tools, Checklist, Riwayat, Reset Testing.
+### Maintenance Center
+- Gunakan workspace berbasis tab: Ringkasan, Backup & Restore, Audit & Health, Repair Data Turunan, Export Data Master, Checklist, dan Riwayat.
 - Backup & Restore harus tampil sebagai area utama pada mode database lokal, bukan tersembunyi di tab teknis.
-- Data Tools menampung export master/checklist agar tidak bercampur dengan area repair/restore.
+- Export Data Master tidak boleh bercampur dengan area repair/restore dan tidak boleh disebut paket restore.
 - Checklist memakai status auto/manual: auto untuk kondisi yang bisa dibuktikan sistem, manual untuk konfirmasi user seperti copy backup eksternal dan user lain berhenti input.
-- Riwayat menampilkan backup dan restore resmi dari layanan lokal.
-- Reset Testing diposisikan paling akhir dan hanya menampilkan status nonaktif sampai ada desain reset resmi yang aman.
+- Riwayat menampilkan backup, restore, import, repair, cleanup, retention, dan promosi monthly dari audit log layanan lokal.
+- Jangan menampilkan tab reset nonaktif, baseline HPP palsu, tombol service stub, atau catatan session browser seolah-olah audit resmi.
 - Jangan menampilkan semua panel maintenance panjang sekaligus jika bisa dipisah per area.
 - Tab boleh membuat tampilan lebih ringkas, tetapi warning aksi berisiko wajib tegas.
 - Preview wajib untuk restore/repair berisiko sesuai konteks.

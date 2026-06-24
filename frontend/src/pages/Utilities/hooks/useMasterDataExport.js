@@ -27,14 +27,6 @@ const getTimestampForFilename = () => {
 
 const buildMasterExportFilename = () => `${MASTER_EXPORT_FILENAME_PREFIX}-${getTimestampForFilename()}.json`;
 
-// -----------------------------------------------------------------------------
-// IMS NOTE [AKTIF/BATCH 19B] — hook orchestration export data pokok.
-// Fungsi blok: memindahkan state + handler Preview Export, Export Master, dan
-// Export Checklist dari halaman ResetMaintenanceData agar page tidak menumpuk
-// orchestration UI.
-// Guard: read-only/export only; hook ini tidak menjalankan reset, delete, repair,
-// mutasi stok/kas/transaksi, payroll, HPP, atau destructive maintenance flow.
-// -----------------------------------------------------------------------------
 const useMasterDataExport = () => {
   const [loadingMasterExportPreview, setLoadingMasterExportPreview] = useState(false);
   const [loadingMasterExport, setLoadingMasterExport] = useState(false);
@@ -46,10 +38,10 @@ const useMasterDataExport = () => {
       setLoadingMasterExportPreview(true);
       const result = await getMasterDataExportPreview();
       setMasterExportPreview(result?.payload || result);
-      showActionSuccess("Preview export data pokok berhasil dimuat.");
+      showActionSuccess("Preview export data master berhasil dimuat.");
     } catch (error) {
       console.error(error);
-      showActionError(error?.message || "Gagal memuat preview export data pokok.");
+      showActionError(error?.message || "Gagal memuat preview export data master.");
     } finally {
       setLoadingMasterExportPreview(false);
     }
@@ -74,54 +66,13 @@ const useMasterDataExport = () => {
         warnings: payload.warnings,
       });
       if (payload.warnings?.length) {
-        showActionInfo("Export berhasil, tetapi ada collection yang gagal dibaca. Cek warning di section Export.");
+        showActionInfo("Export berhasil, tetapi ada data master yang gagal dibaca. Cek jumlah warning pada panel Export.");
       } else {
-        showActionSuccess("Export data pokok JSON berhasil diunduh.");
+        showActionSuccess("Export data master JSON berhasil diunduh.");
       }
     } catch (error) {
       console.error(error);
-      showActionError(error?.message || "Gagal export data pokok JSON.");
-    } finally {
-      setLoadingMasterExport(false);
-    }
-  }, []);
-
-  const handleDownloadMasterExportChecklist = useCallback(async () => {
-    try {
-      setLoadingMasterExport(true);
-      const previewPayload = await getMasterDataExportPreview();
-      const payload = previewPayload?.payload || previewPayload;
-      const checklistPayload = {
-        exportMeta: {
-          project: "IMS Bunga Flanel",
-          exportType: "master-data-checklist-summary",
-          exportedAt: new Date().toISOString(),
-          source: "ResetMaintenanceData",
-          notes: "Ringkasan checklist export data pokok; tidak berisi transaksi/log dan tidak bisa direstore otomatis.",
-        },
-        summary: payload.summary,
-        warnings: payload.warnings || [],
-        nextSteps: [
-          "Review master product/raw material/semi finished/supplier/customer/BOM/step.",
-          "Jangan import transaksi/log lama sebagai default jika logic baru berubah.",
-          "Buat opening stock ulang lewat purchase/opening adjustment setelah reset.",
-          "Jalankan audit ulang setelah reset/input ulang.",
-        ],
-      };
-      downloadJsonPayload(checklistPayload, buildMasterExportFilename());
-      setMasterExportPreview(payload);
-      setLastMasterExport({
-        exportedAt: checklistPayload.exportMeta.exportedAt,
-        totalCollections: payload.summary?.totalCollections || 0,
-        totalRecords: payload.summary?.totalRecords || 0,
-        openingStockRows: 0,
-        warnings: payload.warnings || [],
-        includeOpeningStock: false,
-      });
-      showActionSuccess("Export Ringkasan Checklist JSON berhasil diunduh.");
-    } catch (error) {
-      console.error(error);
-      showActionError(error?.message || "Gagal export ringkasan checklist JSON.");
+      showActionError(error?.message || "Gagal export data master JSON.");
     } finally {
       setLoadingMasterExport(false);
     }
@@ -134,7 +85,6 @@ const useMasterDataExport = () => {
     lastMasterExport,
     handleLoadMasterExportPreview,
     handleDownloadMasterExport,
-    handleDownloadMasterExportChecklist,
   };
 };
 

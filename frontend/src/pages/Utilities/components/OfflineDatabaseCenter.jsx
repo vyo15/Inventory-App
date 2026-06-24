@@ -792,31 +792,6 @@ const OfflineDatabaseCenter = () => {
     </Space>
   );
 
-  const qaTab = (
-    <Space direction="vertical" size={16} style={{ width: "100%" }}>
-      <ImsNotice
-        variant="guidance"
-        compact
-        title="Checklist wajib setelah update database"
-        description="Jalankan checklist ini sebelum dipakai produksi. Pastikan layanan lokal, build frontend, backup manual, restore preview, dan copy eksternal sudah diuji."
-      />
-      <Card size="small" title="Manual QA" className="offline-db-action-card">
-        <Timeline
-          items={[
-            { color: "green", children: "Layanan lokal: jalankan aplikasi dari komputer utama, lalu cek status aplikasi." },
-            { color: "green", children: "Laptop/PC utama: buka halaman Kategori dan Customer." },
-            { color: "green", children: "HP: buka aplikasi dari alamat lokal komputer utama dan tambah/edit customer test." },
-            { color: "green", children: "Pastikan auto backup daily tidak dobel dan tetap dibuat meskipun layanan menyala melewati pergantian hari." },
-            { color: "blue", children: "Pastikan daily lebih dari 60 hari hanya dibersihkan setelah monthly bulan terkait tersedia dan verified." },
-            { color: "blue", children: "Pastikan satu monthly per bulan dipertahankan maksimal 12 bulan dan backup manual tidak dihapus otomatis." },
-            { color: "blue", children: "Buat backup manual; pastikan hanya satu file .imsbackup tanpa manifest sidecar terpisah." },
-            { color: "orange", children: "Jalankan Preview Restore pada backup terbaru; pastikan status valid sebelum tombol restore aktif." },
-            { color: "orange", children: "Copy backup verified ke flashdisk/harddisk eksternal dan tandai checklist eksternal." },
-          ]}
-        />
-      </Card>
-    </Space>
-  );
 
   const tabs = [
     { key: "status", label: "Status", children: statusTab },
@@ -824,7 +799,6 @@ const OfflineDatabaseCenter = () => {
     { key: "backup", label: "Backup", children: backupTab },
     { key: "restore", label: "Restore", children: restoreTab },
     { key: "runtime", label: "Modul Aplikasi", children: runtimeTab },
-    { key: "qa", label: "Checklist", children: qaTab },
   ];
 
   return (

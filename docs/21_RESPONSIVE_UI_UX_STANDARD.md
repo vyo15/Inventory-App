@@ -107,7 +107,7 @@ Docs tidak boleh mengalahkan source aktual. Jika dokumen ini berbeda dengan file
 - Detail panjang masuk `MobileDetailDrawer`; jangan memenuhi card utama.
 - Form panjang memakai `ResponsiveFormSection` dan turun menjadi 1 kolom.
 - Filter utama/search boleh tetap terlihat; filter lanjutan masuk `MobileFilterDrawer`.
-- Module Hub memakai 2 kolom pada telepon umum dan 1 kolom pada `<= 374px`.
+- Module Hub memakai 1 kolom pada telepon karena setiap card membawa deskripsi fungsi. Pola 2 kolom hanya dipakai mulai tablet/desktop compact ketika ruang baca mencukupi.
 - Jangan tampilkan technical ID, Firestore/SQLite internal ID, atau audit ref ganda pada card utama.
 
 ## 6. Spacing, touch target, dan safe area

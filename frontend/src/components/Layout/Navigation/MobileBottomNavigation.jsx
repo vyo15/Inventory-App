@@ -27,16 +27,6 @@ const PRIMARY_MOBILE_MENU_KEYS = [
   "productions",
 ];
 
-const MODULE_DESCRIPTIONS = {
-  "master-data": "Produk, bahan, kategori, supplier, customer, dan pricing.",
-  inventory: "Pantau stok tersedia, tertahan, minimum, dan histori.",
-  productions: "Planning, order, work log, setup, payroll, dan HPP.",
-  transactions: "Pembelian, penjualan, dan retur operasional.",
-  finance: "Pemasukan, pengeluaran, dan buku besar kas.",
-  reports: "Laporan stok, transaksi, payroll, dan laba rugi.",
-  utilities: "Manajemen user, maintenance, backup, dan restore.",
-};
-
 // =========================
 // SECTION: Mobile Bottom Navigation — AKTIF / GUARDED
 // Fungsi:
@@ -191,7 +181,11 @@ const MobileBottomNavigation = ({ darkTheme, toggleTheme }) => {
                     <IconComponent />
                   </span>
                   <strong>{menuItem.label}</strong>
-                  <span>{MODULE_DESCRIPTIONS[menuItem.key] || "Buka modul IMS."}</span>
+                  <span>
+                    {menuItem.hubDescription ||
+                      menuItem.description ||
+                      "Buka modul IMS."}
+                  </span>
                 </button>
               );
             })}
