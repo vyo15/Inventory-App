@@ -6,6 +6,7 @@ const {
   executeRestore,
   getDataQualityAudit,
   getBackupDownload,
+  getInitialSetupReadiness,
   getMaintenanceStatus,
   getStockReadModelMaintenanceAudit,
   importBackupFile,
@@ -21,6 +22,15 @@ const getMaintenanceStatusController = async (_req, res, next) => {
   try {
     const status = await getMaintenanceStatus();
     return success(res, "Status layanan database lokal berhasil dimuat", status);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const getInitialSetupReadinessController = async (_req, res, next) => {
+  try {
+    const readiness = await getInitialSetupReadiness();
+    return success(res, "Status setup awal IMS berhasil dimuat", readiness);
   } catch (error) {
     return next(error);
   }
@@ -182,6 +192,7 @@ module.exports = {
   deleteOrphanStockReadModelsController,
   exportMasterDataController,
   getDataQualityAuditController,
+  getInitialSetupReadinessController,
   getMaintenanceStatusController,
   getStockReadModelAuditController,
   importBackupController,

@@ -1,4 +1,4 @@
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 9;
 
 const TABLES = {
   SCHEMA_META: "schema_meta",
@@ -14,6 +14,8 @@ const TABLES = {
   CUSTOMERS: "customers",
   CATEGORIES: "categories",
   SUPPLIERS: "suppliers",
+  SUPPLIER_CATALOG_OFFERS: "supplier_catalog_offers",
+  SUPPLIER_CATALOG_HISTORY: "supplier_catalog_history",
   PRICING_RULES: "pricing_rules",
 
   PRODUCTS: "products",

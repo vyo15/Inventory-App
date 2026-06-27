@@ -50,6 +50,7 @@ const StockDisplayBlock = ({
   metaClassName = "ims-cell-meta",
   showNonVariantLabel = true,
   minStockThreshold = 0,
+  getVariantMinStockThreshold,
 }) => {
   const stockUnit = unit || resolveStockUnit(record);
   const variants = Array.isArray(record.variants) ? record.variants : [];
@@ -68,7 +69,10 @@ const StockDisplayBlock = ({
         <div className="stock-variant-pill-wrap">
           {variants.map((variant, index) => {
             const variantLabel = resolveVariantLabel(variant, index, getVariantLabel);
-            const variantStatusMeta = getVariantStockStatusMeta(variant, minStockThreshold);
+            const variantThreshold = typeof getVariantMinStockThreshold === "function"
+              ? getVariantMinStockThreshold(variant, index)
+              : minStockThreshold;
+            const variantStatusMeta = getVariantStockStatusMeta(variant, variantThreshold);
             const pillClassName = ["stock-variant-pill", variantStatusMeta.pillClassName].filter(Boolean).join(" ");
 
             return (

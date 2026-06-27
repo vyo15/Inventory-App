@@ -119,7 +119,7 @@ Aturan penting:
 - Untuk receipt/modal transaksi, gunakan `--ims-font-weight-display` atau `--ims-font-weight-strong`, bukan angka weight 900 hardcoded.
 - Jangan memakai ukuran unik berulang tanpa token. Jika angka dipakai lintas shared component, jadikan token.
 - Header dan sidebar tidak boleh memakai display weight berlebihan; keduanya harus terasa calm, readable, dan corporate.
-- Jangan mengubah route bisnis/menu/role guard hanya untuk memperbaiki visual sidebar. Module Hub boleh menjadi landing navigasi role-aware, tetapi route bisnis existing dan compatibility path wajib dipertahankan.
+- Jangan mengubah route bisnis atau role guard hanya untuk memperbaiki visual sidebar. Module Hub boleh menjadi landing navigasi role-aware untuk modul multi-halaman, sedangkan modul satu halaman boleh langsung menuju child route existing; compatibility path wajib dipertahankan.
 - Jika font `Inter` belum dimuat sebagai asset/dependency, runtime `system-ui/Segoe UI` tetap harus terlihat rapi.
 
 ## Area guarded
@@ -132,7 +132,7 @@ Aturan penting:
 - `SidebarMenu.jsx` role-aware logic, nested accordion, `selectedKeys`, `openMenuKeys`, dan `onOpenChange`.
 - `DesktopModuleDock.jsx` dan `MobileBottomNavigation.jsx` wajib membaca `sidebarMenuItems` yang sudah difilter role; jangan membuat access matrix kedua.
 - `ModuleHub.jsx` hanya menavigasikan child route yang sudah lolos `filterSidebarMenuItemsByRole`; komponen ini tidak boleh berisi query atau mutation bisnis.
-- Canonical Module Hub adalah `/inventory` dan `/production`; seluruh child route mengikuti namespace `/inventory/...` atau `/production/...`. Exact hub `/stock` serta `/produksi` sudah dipensiunkan, sedangkan compatibility child route lama diisolasi dalam route registry dan tetap role-guarded.
+- Production Workspace tetap berada di `/production`. Karena Kontrol Stok hanya memiliki satu halaman, `/inventory` menjadi redirect role-guarded ke `/inventory/stock-management`. Exact hub `/stock` serta `/produksi` sudah dipensiunkan, sedangkan compatibility child route lama diisolasi dalam route registry dan tetap role-guarded.
 - `Login.jsx` auth flow, profile status, blocked user, dan logout blocked user.
 - `Dashboard.jsx` query, calculation, source data, dan read-only flow.
 
@@ -182,10 +182,10 @@ Prioritas cleanup halaman bila masih terasa ramai:
 
 **Source of truth detail:** `docs/21_RESPONSIVE_UI_UX_STANDARD.md`. Dokumen ini merangkum aturan theme dan shell; matrix viewport, orientation fallback, visual density, safe area, overlay, rundown implementasi, dan QA lintas perangkat dikunci pada dokumen 21.
 
-- Desktop `>= 1200px` memakai floating module dock top-level. Dock hanya membuka Dashboard atau Module Hub; child route tetap dibuka dari card di content area.
+- Desktop `>= 1200px` memakai floating module dock top-level. Dock membuka Dashboard, halaman direct untuk modul satu halaman, atau Module Hub untuk modul multi-halaman; child route workspace tetap dibuka dari card di content area.
 - Desktop compact `993-1199px` dan viewport dengan tinggi pendek memakai ukuran dock/icon yang lebih kecil agar seluruh icon tetap berada di dalam asset rail tanpa overlap.
 - Tablet `768-992px` memakai Drawer kiri dari tombol menu header. Drawer tetap memakai `SidebarLogo` dan `SidebarMenu` existing agar nested accordion serta role-aware menu tetap konsisten.
-- Telepon `<= 767px` memakai bottom navigation lima slot: Dashboard, Stock, tombol tengah Menu IMS, Transaksi, dan Produksi.
+- Telepon `<= 767px` memakai bottom navigation lima slot: Dashboard, Stok, tombol tengah Menu IMS, Transaksi, dan Produksi.
 - Tombol tengah hanya membuka bottom sheet navigasi. Tombol ini tidak boleh menjadi shortcut create, stock adjustment, production completion, cash posting, reset, restore, atau destructive flow.
 - Bottom sheet wajib membaca `sidebarMenuItems` melalui `filterSidebarMenuItemsByRole`; jangan membuat daftar akses mobile kedua yang hardcoded.
 - Bottom sheet dan Drawer tablet harus tertutup otomatis setelah route berubah.
@@ -200,7 +200,7 @@ Prioritas cleanup halaman bila masih terasa ramai:
 - Filter dan PageHeader action boleh wrap atau turun ke bawah, tetapi jangan memaksa semua tombol menjadi full-width bila membuat header terlalu tinggi. Tombol utama tetap harus jelas, tidak overlap, dan callback/action tidak berubah.
 - Summary/KPI mobile boleh memakai 2 kolom compact untuk metric pendek agar dashboard/report tidak terlalu panjang; nilai Rupiah panjang tetap harus readable dengan wrap aman.
 - Semua control navigasi wajib punya `aria-label`, active state, dan focus outline yang jelas.
-- Canonical hub `/inventory`, `/production`, dan landing modul lain hanya menjadi entry point UI. Canonical child route memakai namespace modul yang sama; compatibility child route lama hanya redirect terisolasi. Schema, service, stock, purchase, sales, production, payroll, HPP, finance, report, reset, dan audit log tidak boleh berubah karena visual shell.
+- Landing modul multi-halaman hanya menjadi entry point UI. `/inventory` tetap tersedia sebagai redirect role-guarded ke halaman stok tunggal, sedangkan canonical child route lain tetap memakai path existing dan compatibility child route lama hanya redirect terisolasi. Schema, service, stock, purchase, sales, production, payroll, HPP, finance, report, reset, dan audit log tidak boleh berubah karena visual shell.
 
 ### Lock konsistensi device
 

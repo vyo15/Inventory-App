@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Button,
+  Drawer,
   Empty,
   Progress,
   Space,
@@ -13,7 +14,9 @@ import {
   ArrowRightOutlined,
   BarChartOutlined,
   BuildOutlined,
+  CheckCircleOutlined,
   ClockCircleOutlined,
+  DatabaseOutlined,
   DollarCircleOutlined,
   HistoryOutlined,
   PlusCircleOutlined,
@@ -72,6 +75,46 @@ const DASHBOARD_TAG_COLORS = Object.freeze({
   info: "blue",
   success: "green",
 });
+
+const INITIAL_SETUP_DISMISSED_STORAGE_KEY = "ims.dashboard.initialSetup.dismissed";
+
+const INITIAL_SETUP_PHASES = Object.freeze([
+  {
+    key: "foundation",
+    label: "Fase 1 · Fondasi",
+    description: "Siapkan struktur dasar sebelum membuat master dan transaksi.",
+  },
+  {
+    key: "operational-master",
+    label: "Fase 2 · Master Operasional",
+    description: "Lengkapi item, sumber restock, dan resep produksi.",
+  },
+  {
+    key: "go-live",
+    label: "Fase 3 · Go-Live",
+    description: "Pastikan stok awal tercatat dan buat backup baseline.",
+  },
+]);
+
+const readInitialSetupDismissed = () => {
+  try {
+    return window.localStorage.getItem(INITIAL_SETUP_DISMISSED_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
+
+const writeInitialSetupDismissed = (dismissed) => {
+  try {
+    if (dismissed) {
+      window.localStorage.setItem(INITIAL_SETUP_DISMISSED_STORAGE_KEY, "1");
+    } else {
+      window.localStorage.removeItem(INITIAL_SETUP_DISMISSED_STORAGE_KEY);
+    }
+  } catch {
+    // Preferensi UI tidak boleh mengganggu Dashboard jika storage browser tidak tersedia.
+  }
+};
 
 const DASHBOARD_CHART_SIZE = Object.freeze({
   width: 760,
@@ -164,6 +207,89 @@ const buildDashboardQuickActions = (role) => [
     icon: <WalletOutlined />,
   },
 ].filter(({ routeKey }) => canAccessRoute(routeKey, role));
+
+const buildInitialSetupSteps = (readiness = {}) => {
+  const flags = readiness?.flags || {};
+  const counts = readiness?.counts || {};
+  const diagnostics = readiness?.diagnostics || {};
+  const categoryTotal = Object.values(counts.categoriesByType || {})
+    .reduce((total, value) => total + getNumericValue(value), 0);
+
+  return [
+    {
+      key: "categoriesReady",
+      phase: "foundation",
+      label: "Kategori & Kelompok",
+      description: `${formatNumberId(categoryTotal)} kategori aktif untuk bentuk produk, jenis bunga, dan bahan.`,
+      to: "/categories",
+    },
+    {
+      key: "productionStepsReady",
+      phase: "foundation",
+      label: "Tahapan Produksi",
+      description: `${formatNumberId(counts.productionSteps)} tahapan aktif untuk BOM dan Work Log.`,
+      to: APP_ROUTES.PRODUCTION.STEPS,
+    },
+    {
+      key: "productionEmployeesReady",
+      phase: "foundation",
+      label: "Karyawan Produksi",
+      description: `${formatNumberId(counts.productionEmployees)} operator aktif untuk Work Log dan payroll.`,
+      to: APP_ROUTES.PRODUCTION.EMPLOYEES,
+    },
+    {
+      key: "masterItemsReady",
+      phase: "operational-master",
+      label: "Master Produk dan Bahan",
+      description: `${formatNumberId(counts.products)} produk · ${formatNumberId(counts.rawMaterials)} bahan · ${formatNumberId(counts.semiFinished)} komponen.`,
+      to: "/master-data",
+    },
+    {
+      key: "supplierCatalogReady",
+      phase: "operational-master",
+      label: "Supplier & Katalog Restock",
+      description: `${formatNumberId(counts.suppliers)} supplier · ${formatNumberId(counts.supplierOffers)} penawaran aktif.`,
+      to: "/suppliers",
+    },
+    {
+      key: "productionBomsReady",
+      phase: "operational-master",
+      label: "BOM / Resep Produksi",
+      description: `${formatNumberId(counts.productionBoms)} BOM aktif sebagai dasar kebutuhan material.`,
+      to: APP_ROUTES.PRODUCTION.BOMS,
+    },
+    {
+      key: "openingStockReady",
+      phase: "go-live",
+      label: "Stok Awal Tercatat",
+      description: diagnostics.positiveStockWithoutHistory
+        ? `${formatNumberId(diagnostics.positiveStockWithoutHistoryItems)} item memiliki stok positif tanpa histori transaksi atau penyesuaian resmi.`
+        : getNumericValue(counts.positiveStockItems) > 0
+          ? `${formatNumberId(counts.positiveStockItems)} item memiliki stok dengan histori resmi.`
+          : "Semua master masih dimulai dari stok 0; tidak ada opening stock yang perlu dicatat.",
+      to: APP_ROUTES.INVENTORY.STOCK_MANAGEMENT,
+      warning: Boolean(diagnostics.positiveStockWithoutHistory),
+    },
+    {
+      key: "baselineBackupReady",
+      phase: "go-live",
+      label: "Backup Baseline Setup",
+      description: diagnostics.latestVerifiedBackupAt
+        ? `Backup verified terakhir: ${formatDashboardDate(diagnostics.latestVerifiedBackupAt)}.`
+        : "Buat backup verified setelah seluruh master dan stok awal selesai diperiksa.",
+      to: "/utilities/reset-maintenance-data",
+    },
+  ].map((step, index) => ({
+    ...step,
+    order: index + 1,
+    complete: Boolean(flags[step.key]),
+  }));
+};
+
+const buildInitialSetupPhaseGroups = (steps = []) => INITIAL_SETUP_PHASES.map((phase) => ({
+  ...phase,
+  steps: steps.filter((step) => step.phase === phase.key),
+}));
 
 const buildChartGeometry = (series = []) => {
   const {
@@ -380,7 +506,9 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [loadWarning, setLoadWarning] = useState("");
+  const [isInitialSetupOpen, setIsInitialSetupOpen] = useState(false);
   const dashboardReadInFlightRef = useRef(false);
+  const initialSetupAutoOpenEvaluatedRef = useRef(false);
   const [dashboardData, setDashboardData] = useState(() => createEmptyDashboardData());
 
   const loadDashboardData = useCallback(async () => {
@@ -441,6 +569,7 @@ const Dashboard = () => {
     stockAuditRows,
     stockIssueMeta = {},
     planningSummary = EMPTY_PLANNING_SUMMARY,
+    setupReadiness,
   } = safeDashboardData;
 
   const lowStockTotal = lowStockRows.length;
@@ -456,6 +585,55 @@ const Dashboard = () => {
   const canViewProductionSummary = canViewPlanning
     || canAccessRoute(ROUTE_ACCESS_KEYS.PRODUCTION_ORDERS, activeRole)
     || canAccessRoute(ROUTE_ACCESS_KEYS.PRODUCTION_WORK_LOGS, activeRole);
+  const canViewInitialSetup = canAccessRoute(ROUTE_ACCESS_KEYS.RESET_MAINTENANCE, activeRole);
+  const initialSetupSteps = useMemo(
+    () => buildInitialSetupSteps(setupReadiness || {}),
+    [setupReadiness],
+  );
+  const showInitialSetup = canViewInitialSetup
+    && setupReadiness
+    && setupReadiness.isComplete !== true;
+  const initialSetupPhaseGroups = useMemo(
+    () => buildInitialSetupPhaseGroups(initialSetupSteps),
+    [initialSetupSteps],
+  );
+  const nextInitialSetupStep = initialSetupSteps.find((step) => !step.complete) || null;
+  const completedInitialSetupSteps = getNumericValue(
+    setupReadiness?.progress?.completedRequiredSteps,
+  );
+  const requiredInitialSetupSteps = getNumericValue(
+    setupReadiness?.progress?.requiredStepCount,
+  );
+
+  useEffect(() => {
+    if (!showInitialSetup) {
+      setIsInitialSetupOpen(false);
+      initialSetupAutoOpenEvaluatedRef.current = false;
+
+      if (setupReadiness?.isComplete === true) {
+        writeInitialSetupDismissed(false);
+      }
+      return;
+    }
+
+    if (initialSetupAutoOpenEvaluatedRef.current) {
+      return;
+    }
+
+    initialSetupAutoOpenEvaluatedRef.current = true;
+    if (!readInitialSetupDismissed()) {
+      setIsInitialSetupOpen(true);
+    }
+  }, [showInitialSetup, setupReadiness?.isComplete]);
+
+  const openInitialSetup = () => {
+    setIsInitialSetupOpen(true);
+  };
+
+  const closeInitialSetup = () => {
+    writeInitialSetupDismissed(true);
+    setIsInitialSetupOpen(false);
+  };
 
   const productionSummary = useMemo(() => {
     const shortageOrders = productionOrders.filter(
@@ -811,6 +989,20 @@ const Dashboard = () => {
         subtitle="Ringkasan operasional, tren, dan prioritas hari ini."
         extra={
           <Space size={10} wrap>
+            {showInitialSetup ? (
+              <Button
+                size="small"
+                icon={<DatabaseOutlined />}
+                className="dashboard-setup-trigger"
+                onClick={openInitialSetup}
+                aria-label={`Setup Database Awal, ${completedInitialSetupSteps} dari ${requiredInitialSetupSteps} selesai`}
+              >
+                <span>Setup Awal</span>
+                <span className="dashboard-setup-trigger-progress">
+                  {formatNumberId(completedInitialSetupSteps)}/{formatNumberId(requiredInitialSetupSteps)}
+                </span>
+              </Button>
+            ) : null}
             <Text className="dashboard-section-extra">Terakhir diperbarui: {lastUpdatedText}</Text>
             <Button
               size="small"
@@ -826,6 +1018,98 @@ const Dashboard = () => {
       />
 
       {loadWarning ? <ImsNotice variant="data-quality" compact title={loadWarning} /> : null}
+
+      <Drawer
+        title={
+          <div className="dashboard-setup-drawer-title">
+            <span className="dashboard-setup-drawer-title-icon"><DatabaseOutlined /></span>
+            <span>
+              <strong>Setup Database Awal</strong>
+              <small>Urutan aman sebelum transaksi harian dimulai.</small>
+            </span>
+          </div>
+        }
+        open={Boolean(showInitialSetup && isInitialSetupOpen)}
+        onClose={closeInitialSetup}
+        placement="right"
+        width={500}
+        rootClassName="dashboard-setup-drawer-root"
+        className="dashboard-setup-drawer"
+        destroyOnHidden
+        extra={
+          <Tag color="blue" className="dashboard-setup-drawer-progress-tag">
+            {formatNumberId(completedInitialSetupSteps)}/{formatNumberId(requiredInitialSetupSteps)} selesai
+          </Tag>
+        }
+        footer={
+          <div className="dashboard-setup-drawer-footer">
+            <Text>Checklist hanya membaca data dan tidak membuat transaksi otomatis.</Text>
+            <Button onClick={closeInitialSetup}>Sembunyikan sementara</Button>
+          </div>
+        }
+      >
+        {showInitialSetup ? (
+          <div className="dashboard-setup-drawer-content">
+            <section className="dashboard-setup-summary">
+              <div className="dashboard-setup-summary-topline">
+                <span>Progress setup</span>
+                <strong>{formatNumberId(completedInitialSetupSteps)} dari {formatNumberId(requiredInitialSetupSteps)} selesai</strong>
+              </div>
+              <Progress
+                percent={getNumericValue(setupReadiness?.progress?.percent)}
+                showInfo={false}
+                size="small"
+              />
+              {nextInitialSetupStep ? (
+                <div className="dashboard-setup-next-step">
+                  <span>Langkah berikutnya</span>
+                  <strong>{nextInitialSetupStep.order}. {nextInitialSetupStep.label}</strong>
+                  <Text>{nextInitialSetupStep.description}</Text>
+                  <Link
+                    to={nextInitialSetupStep.to}
+                    className="dashboard-setup-next-action"
+                    onClick={closeInitialSetup}
+                  >
+                    Isi sekarang <ArrowRightOutlined />
+                  </Link>
+                </div>
+              ) : null}
+            </section>
+
+            <div className="dashboard-setup-phase-list">
+              {initialSetupPhaseGroups.map((phase) => (
+                <section key={phase.key} className="dashboard-setup-phase">
+                  <div className="dashboard-setup-phase-heading">
+                    <strong>{phase.label}</strong>
+                    <small>{phase.description}</small>
+                  </div>
+                  <div className="dashboard-setup-step-list">
+                    {phase.steps.map((step) => (
+                      <Link
+                        key={step.key}
+                        to={step.to}
+                        onClick={closeInitialSetup}
+                        className={`dashboard-setup-step ${step.complete ? "is-complete" : step.warning ? "is-warning" : "is-pending"}`}
+                      >
+                        <span className="dashboard-setup-step-number">{step.order}</span>
+                        <span className="dashboard-setup-step-copy">
+                          <strong>{step.label}</strong>
+                          <small>{step.description}</small>
+                        </span>
+                        <span className="dashboard-setup-step-status">
+                          {step.complete ? <CheckCircleOutlined /> : step.warning ? <WarningOutlined /> : <ClockCircleOutlined />}
+                          <span>{step.complete ? "Siap" : step.warning ? "Perlu audit" : "Belum siap"}</span>
+                        </span>
+                        <ArrowRightOutlined className="dashboard-setup-step-arrow" />
+                      </Link>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </Drawer>
 
       {isInitialDashboardLoading ? (
         <PageSection title="Menyiapkan Dashboard" subtitle="Memuat ringkasan operasional terbaru.">

@@ -20,6 +20,8 @@ export const normalizeRawMaterialRecord = (record = {}) => {
     code: record.code || record.materialCode || "",
     materialCode: record.materialCode || record.code || "",
     name: record.name || "",
+    category: record.category || record.categoryName || "Belum Dikategorikan",
+    categoryName: record.categoryName || record.category || "Belum Dikategorikan",
     hasVariants,
     hasVariantOptions: hasVariants,
     variants,

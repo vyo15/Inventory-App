@@ -565,6 +565,14 @@ export const applyPricingRuleToItems = async ({
 
     return {
       previewData,
+      updatedItems: (Array.isArray(batchResult?.updatedItems) ? batchResult.updatedItems : []).map((item) => ({
+        id: item.id,
+        [targetType === "products" ? "price" : "sellingPrice"]: item.newPrice,
+        pricingMode: "rule",
+        pricingRuleId: normalizedRule.id,
+        versionToken: item.versionToken || null,
+        updatedAt: item.versionToken || null,
+      })),
       summary: {
         totalItems: previewData.length,
         updatedCount: Number(batchResult?.updatedCount || 0),

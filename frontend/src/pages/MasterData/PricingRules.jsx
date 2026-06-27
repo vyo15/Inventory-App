@@ -51,6 +51,12 @@ import {
 } from "../../services/Pricing/pricingService";
 import { listenRawMaterials } from "../../services/MasterData/rawMaterialsService";
 import { listenProducts } from "../../services/MasterData/productsService";
+import {
+  compareRecordsByNameAsc,
+  mergeRecordsById,
+  removeRecordById,
+  upsertRecordById,
+} from "../../utils/state/recordCollectionState";
 
 // SECTION: alias komponen select
 
@@ -294,11 +300,14 @@ const PricingRules = () => {
         updatedAt: new Date().toISOString(),
       };
 
-      await savePricingRuleInRepository({
+      const savedRule = await savePricingRuleInRepository({
         ruleId: editingRuleId,
         payload,
         isEditing: isEditing && Boolean(editingRuleId),
       });
+      setRules((current) => upsertRecordById(current, savedRule, {
+        comparator: compareRecordsByNameAsc,
+      }));
       message.success(isEditing ? "Pricing rule berhasil diupdate." : "Pricing rule berhasil ditambahkan.");
 
       closeFormModal();
@@ -314,6 +323,7 @@ const PricingRules = () => {
   const handleDeleteRule = async (ruleId) => {
     try {
       await removePricingRuleFromRepository(ruleId);
+      setRules((current) => removeRecordById(current, ruleId));
       message.success("Pricing rule berhasil dihapus.");
     } catch (error) {
       console.error("Gagal menghapus pricing rule:", error);
@@ -379,6 +389,17 @@ const PricingRules = () => {
       });
 
       setPreviewData(result?.previewData || []);
+
+      const updatedItems = result?.updatedItems || [];
+      if (previewRule.targetType === "products") {
+        setProducts((current) => mergeRecordsById(current, updatedItems, {
+          comparator: compareRecordsByNameAsc,
+        }));
+      } else {
+        setRawMaterials((current) => mergeRecordsById(current, updatedItems, {
+          comparator: compareRecordsByNameAsc,
+        }));
+      }
 
       const summary = result?.summary || {};
 

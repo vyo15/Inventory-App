@@ -17,6 +17,61 @@ Default akses:
 
 Untuk HP/laptop lain satu jaringan, buka frontend lewat IP laptop server.
 
+## Setup database awal
+
+Saat database masih kosong, login sebagai Administrator lalu klik tombol compact **Setup Awal** pada header Dashboard. Tombol menampilkan progress, misalnya `3/8`, dan membuka panel mengambang yang dapat disembunyikan sementara tanpa menghapus progress. Launcher dan panel otomatis hilang setelah seluruh langkah wajib selesai.
+
+Urutan pada panel dibagi menjadi tiga fase:
+
+```text
+Fase 1 · Fondasi
+Kategori & Kelompok
+→ Tahapan Produksi
+→ Karyawan Produksi
+
+Fase 2 · Master Operasional
+Master Produk dan Bahan
+→ Supplier & Katalog Restock
+→ BOM / Resep Produksi
+
+Fase 3 · Go-Live
+Stok Awal Tercatat
+→ Backup Baseline Setup
+```
+
+Panel menandai langkah berikutnya yang belum selesai dan menyediakan tautan langsung ke menu terkait. Progress tetap dihitung otomatis dari data aktif; panel tidak membuat master, stok, transaksi, atau backup secara otomatis.
+
+SOP lengkap berada di `docs/22_INITIAL_DATABASE_SETUP_SOP.md`.
+
+## Supplier, Katalog Restock, dan Histori Toko
+
+1. Buka menu **Supplier** untuk melihat daftar toko. Kode dan ID internal dibuat otomatis oleh backend dan tidak ditampilkan.
+2. Klik **Detail** pada satu toko. Drawer yang sama dipakai ulang untuk setiap supplier dan hanya memuat data toko yang dipilih.
+3. Tab **Ringkasan** menampilkan informasi toko; tab **Katalog** menampilkan barang/link dan harga terbaru; tab **Histori Toko** menyimpan harga lama, waktu pengecekan/perubahan, perubahan link/status, dan pelaku aktivitas khusus toko tersebut.
+4. Gunakan **Kelola Katalog** untuk menambahkan banyak Produk/Bahan Baku. Satu barang boleh mempunyai beberapa link/paket di toko yang sama dan boleh tersedia pada supplier lain.
+5. Gunakan **Cek Harga** setelah membuka link toko. Pilih hasil: harga tersedia, barang habis, atau link tidak tersedia. Harga lama dan detail waktu tidak ditampilkan pada tabel utama; semuanya masuk Histori Toko.
+6. Penawaran lama sebaiknya dinonaktifkan atau ditandai tidak tersedia, bukan dihapus, agar histori transaksi tetap utuh.
+
+## Bahan Baku
+
+1. Buka menu **Bahan Baku** untuk membuat atau mengubah identitas bahan, kelompok, satuan stok, varian, minimum stok, dan harga.
+2. Supplier tidak dipilih sebagai satu field pada master Bahan Baku. Setelah bahan tersimpan, gunakan **Atur Sumber Restock** atau buka menu Supplier dengan filter bahan untuk menambahkan banyak toko/link.
+3. Jika membuat bahan dengan stok awal lebih dari 0, isi **Modal Stok Awal / Satuan**. Tanpa modal awal, data tidak dapat disimpan karena nilai persediaan/HPP akan menjadi nol palsu.
+4. Untuk bahan tanpa varian, minimum stok diisi pada master. Untuk bahan bervarian, isi minimum stok pada setiap varian sesuai kebutuhan warna/ukuran.
+5. Setelah bahan mempunyai transaksi Pembelian, **Modal Aktual Rata-rata / Satuan** ditampilkan read-only dan diperbarui otomatis dari weighted average Pembelian.
+6. Bahan tidak dapat dinonaktifkan selama masih mempunyai stok/reserved, masih dipakai BOM aktif, atau masih menjadi bagian proses produksi aktif.
+7. Daftar utama hanya menampilkan ringkasan sumber restock seperti jumlah toko dan link. Harga lama serta histori pengecekan tetap berada di Histori Toko masing-masing Supplier.
+
+## SOP Pembelian dan Verifikasi Harga
+
+1. Pilih Produk/Bahan Baku dan variannya bila ada.
+2. Pilih supplier yang menyediakan barang tersebut, lalu pilih satu **Link / Paket Toko**.
+3. Klik **Buka Toko**, cek harga, isi paket/konversi, dan ketersediaan aktual.
+4. Isi Qty dan Subtotal Barang sesuai kondisi toko, lalu klik **Verifikasi Harga**.
+5. Jika harga sama, sistem mencatat pengecekan. Jika berubah, harga katalog diperbarui ketika Pembelian berhasil disimpan dan perubahan masuk Histori Toko.
+6. Tombol **Simpan** tetap terkunci sampai harga diverifikasi. Perubahan qty, subtotal, supplier, atau penawaran setelah verifikasi mewajibkan verifikasi ulang.
+7. Commit Pembelian menyimpan snapshot harga/link/konversi dan secara atomic menambah stok serta mencatat pengeluaran. Histori Pembelian lama tidak berubah ketika katalog diperbarui kemudian.
+
 ## Lokasi data
 
 - Database runtime: `data/ims-sqlite-sidecar.sqlite`

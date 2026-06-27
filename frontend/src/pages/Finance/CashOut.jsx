@@ -23,6 +23,7 @@ import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { createCashOutTransaction, deleteCashOutTransaction, listenCashOutRecords } from "../../services/Finance/financeService";
+import { compareRecordsByDateDesc, removeRecordById, upsertRecordById } from "../../utils/state/recordCollectionState";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import CashTransactionFormFields from "./components/CashTransactionFormFields";
 import {
@@ -265,7 +266,10 @@ const CashOut = () => {
 
   const handleAddTransaction = async (values) => {
     try {
-      await createCashOutTransaction(values);
+      const savedTransaction = await createCashOutTransaction(values);
+      setCashOuts((current) => upsertRecordById(current, savedTransaction, {
+        comparator: compareRecordsByDateDesc,
+      }));
       message.success("Transaksi pengeluaran berhasil ditambahkan!");
       closeCreateModal();
     } catch (error) {
@@ -277,6 +281,7 @@ const CashOut = () => {
   const handleDeleteTransaction = async (id) => {
     try {
       await deleteCashOutTransaction(id);
+      setCashOuts((current) => removeRecordById(current, id));
       message.success("Transaksi berhasil dihapus.");
     } catch (error) {
       console.error("Gagal menghapus transaksi:", error);

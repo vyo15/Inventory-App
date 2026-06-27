@@ -344,6 +344,17 @@ const upsertStockReadModel = async (db, itemPayload = {}, { sourceType, sourceCo
     ...variant,
     ...assertStockSnapshotValid(variant, `Stok varian ${getVariantDisplayName(variant)}`),
   }));
+  const hasVariantMinimumStock = resolvedSourceType === "raw_material"
+    && resolvedVariants.hasVariants
+    && normalizedVariants.some((variant) => (
+      Object.prototype.hasOwnProperty.call(variant, "minStockAlert")
+      || Object.prototype.hasOwnProperty.call(variant, "minStock")
+    ));
+  const variantMinimumStockTotal = hasVariantMinimumStock
+    ? normalizedVariants
+      .filter((variant) => variant.isActive !== false && variant.isArchived !== true)
+      .reduce((sum, variant) => sum + Math.max(0, toInteger(variant.minStockAlert ?? variant.minStock ?? 0)), 0)
+    : 0;
   const payload = {
     id,
     code: itemPayload.code || itemPayload.productCode || itemPayload.materialCode || id,
@@ -355,7 +366,10 @@ const upsertStockReadModel = async (db, itemPayload = {}, { sourceType, sourceCo
     stock: currentStock,
     reservedStock,
     availableStock: Math.max(currentStock - reservedStock, 0),
-    minStockAlert: toInteger(itemPayload.minStockAlert ?? itemPayload.minStock ?? 0),
+    minStockAlert: hasVariantMinimumStock
+      ? variantMinimumStockTotal
+      : toInteger(itemPayload.minStockAlert ?? itemPayload.minStock ?? 0),
+    minimumStockMode: hasVariantMinimumStock ? "variant" : "master",
     variants: normalizedVariants,
     hasVariants: resolvedVariants.hasVariants,
     status: itemPayload.status || "active",

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ROLES, ROUTE_ACCESS_KEYS } from "../../utils/auth/roleAccess";
@@ -39,6 +39,7 @@ const {
     sales: [],
     stockAuditRows: [],
     stockIssueMeta: {},
+    setupReadiness: null,
     planningSummary: {
       weekly: emptyPlanningPeriod(),
       monthly: emptyPlanningPeriod(),
@@ -112,6 +113,7 @@ const mockDashboardResult = (overrides = {}, failedReads = []) => {
 };
 
 beforeEach(() => {
+  window.localStorage.clear();
   mockReadDashboardData.mockReset();
   mockUseAuth.mockReset();
   vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -216,6 +218,132 @@ describe("Dashboard role-aware summary", () => {
     expect((await screen.findAllByText("Stok minus")).length).toBeGreaterThan(0);
     expect(screen.getAllByText("P0").length).toBeGreaterThan(0);
     expect(screen.getAllByText("P2").length).toBeGreaterThan(0);
+  });
+});
+
+describe("Dashboard initial setup readiness", () => {
+  const pendingReadiness = {
+    isComplete: false,
+    progress: {
+      completedRequiredSteps: 3,
+      requiredStepCount: 8,
+      percent: 38,
+    },
+    flags: {
+      categoriesReady: true,
+      masterItemsReady: true,
+      supplierCatalogReady: true,
+      productionStepsReady: false,
+      productionEmployeesReady: false,
+      productionBomsReady: false,
+      openingStockReady: false,
+      baselineBackupReady: false,
+    },
+    counts: {
+      categoriesByType: { product_form: 2, flower_type: 1, raw_material_group: 5 },
+      products: 2,
+      rawMaterials: 7,
+      semiFinished: 0,
+      suppliers: 1,
+      supplierOffers: 4,
+      productionSteps: 0,
+      productionEmployees: 0,
+      productionBoms: 0,
+      positiveStockItems: 0,
+      inventoryLogs: 0,
+    },
+    diagnostics: {
+      positiveStockWithoutHistory: false,
+      latestVerifiedBackupAt: null,
+    },
+  };
+
+  it("Administrator melihat launcher compact dan panel setup berurutan", async () => {
+    mockUseAuth.mockReturnValue({
+      profile: { role: ROLES.ADMINISTRATOR },
+    });
+    mockDashboardResult({ setupReadiness: pendingReadiness });
+
+    renderDashboard();
+
+    expect(await screen.findByRole("button", {
+      name: "Setup Database Awal, 3 dari 8 selesai",
+    })).toBeTruthy();
+    expect(await screen.findByText("Urutan aman sebelum transaksi harian dimulai.")).toBeTruthy();
+    expect(screen.getByText("Fase 1 · Fondasi")).toBeTruthy();
+    expect(screen.getByText("Fase 2 · Master Operasional")).toBeTruthy();
+    expect(screen.getByText("Fase 3 · Go-Live")).toBeTruthy();
+    expect(screen.getByText("2. Tahapan Produksi")).toBeTruthy();
+
+    const orderedLabels = Array.from(document.querySelectorAll(".dashboard-setup-step-copy strong"))
+      .map((element) => element.textContent);
+    expect(orderedLabels).toEqual([
+      "Kategori & Kelompok",
+      "Tahapan Produksi",
+      "Karyawan Produksi",
+      "Master Produk dan Bahan",
+      "Supplier & Katalog Restock",
+      "BOM / Resep Produksi",
+      "Stok Awal Tercatat",
+      "Backup Baseline Setup",
+    ]);
+  });
+
+  it("panel dapat disembunyikan sementara dan dibuka kembali dari Dashboard", async () => {
+    mockUseAuth.mockReturnValue({
+      profile: { role: ROLES.ADMINISTRATOR },
+    });
+    mockDashboardResult({ setupReadiness: pendingReadiness });
+
+    renderDashboard();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Sembunyikan sementara" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Urutan aman sebelum transaksi harian dimulai.")).toBeNull();
+    });
+    expect(window.localStorage.getItem("ims.dashboard.initialSetup.dismissed")).toBe("1");
+
+    fireEvent.click(screen.getByRole("button", {
+      name: "Setup Database Awal, 3 dari 8 selesai",
+    }));
+
+    expect(await screen.findByText("Urutan aman sebelum transaksi harian dimulai.")).toBeTruthy();
+  });
+
+  it("User operasional tidak melihat launcher atau panel setup Administrator", async () => {
+    mockDashboardResult({ setupReadiness: pendingReadiness });
+
+    renderDashboard();
+
+    expect(await screen.findByText("NILAI PENJUALAN HARI INI")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Setup Database Awal/i })).toBeNull();
+    expect(screen.queryByText("Urutan aman sebelum transaksi harian dimulai.")).toBeNull();
+  });
+
+  it("launcher dan panel otomatis hilang setelah seluruh setup selesai", async () => {
+    mockUseAuth.mockReturnValue({
+      profile: { role: ROLES.ADMINISTRATOR },
+    });
+    window.localStorage.setItem("ims.dashboard.initialSetup.dismissed", "1");
+    mockDashboardResult({
+      setupReadiness: {
+        ...pendingReadiness,
+        isComplete: true,
+        progress: {
+          completedRequiredSteps: 8,
+          requiredStepCount: 8,
+          percent: 100,
+        },
+      },
+    });
+
+    renderDashboard();
+
+    expect(await screen.findByText("NET KAS OPERASIONAL")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Setup Database Awal/i })).toBeNull();
+    expect(screen.queryByText("Urutan aman sebelum transaksi harian dimulai.")).toBeNull();
+    expect(window.localStorage.getItem("ims.dashboard.initialSetup.dismissed")).toBeNull();
   });
 });
 

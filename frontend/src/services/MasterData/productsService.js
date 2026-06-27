@@ -8,6 +8,7 @@ export const PRODUCT_DEFAULT_FORM = {
   name: "",
   code: "",
   categoryId: "",
+  flowerTypeId: "",
   currentStock: 0,
   minStockAlert: 0,
   isActive: true,
@@ -38,38 +39,47 @@ export const listenProducts = (callback, onError) => sqliteProductsAdapter.subsc
 
 export const generateProductCode = async () => sqliteProductsAdapter.generateProductCode();
 
-const normalizePayload = (values = {}, categories = []) => {
+const normalizePayload = (values = {}, categories = [], flowerTypes = []) => {
   const code = safeTrim(values.code || values.productCode).toUpperCase();
   const category = categories.find((item) => String(item.id) === String(values.categoryId)) || {};
+  const flowerType = flowerTypes.find((item) => String(item.id) === String(values.flowerTypeId)) || {};
+  const categoryName = safeTrim(category.name || values.category || values.categoryName) || "Belum Dikategorikan";
+  const flowerTypeName = safeTrim(flowerType.name || values.flowerType || values.flowerTypeName);
 
   return {
     ...values,
     code,
     productCode: code,
     name: safeTrim(values.name),
-    categoryName: values.categoryName || category.name || "",
+    categoryId: values.categoryId || "",
+    category: categoryName,
+    categoryName,
+    flowerTypeId: values.flowerTypeId || "",
+    flowerType: flowerTypeName,
+    flowerTypeName,
     isActive: values.isActive !== false,
   };
 };
 
-const buildGuardedUpdatePayload = (values = {}, categories = [], expectedVersion = "") => ({
-  ...stripGuardedInventoryUpdateFields(normalizePayload(values, categories), {
+const buildGuardedUpdatePayload = (values = {}, categories = [], flowerTypes = [], expectedVersion = "") => ({
+  ...stripGuardedInventoryUpdateFields(normalizePayload(values, categories, flowerTypes), {
     protectedFields: PRODUCT_PROTECTED_FIELDS,
   }),
   expectedVersion,
 });
 
-export const createProduct = async (values = {}, categories = []) => sqliteProductsAdapter
-  .createProduct(normalizePayload(values, categories));
+export const createProduct = async (values = {}, categories = [], flowerTypes = []) => sqliteProductsAdapter
+  .createProduct(normalizePayload(values, categories, flowerTypes));
 
 export const updateProduct = async (
   id,
   values = {},
   categories = [],
+  flowerTypes = [],
   { expectedVersion = "" } = {}
 ) => sqliteProductsAdapter.updateProduct(
   id,
-  buildGuardedUpdatePayload(values, categories, expectedVersion)
+  buildGuardedUpdatePayload(values, categories, flowerTypes, expectedVersion)
 );
 
 export const toggleProductActive = async (id, isActive) => {

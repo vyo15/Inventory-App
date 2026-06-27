@@ -100,19 +100,59 @@ Aturan:
 - Inventory log wajib memakai referensi bisnis manusiawi.
 - Technical database ID tidak boleh menjadi display audit utama.
 
+## Supplier, katalog toko, dan histori per toko
+
+```text
+Daftar Supplier
+→ GET /api/suppliers
+→ pilih satu toko
+→ reusable Supplier Detail Drawer
+   ├─ Ringkasan
+   ├─ Katalog barang/link aktif
+   └─ GET /api/suppliers/:id/history
+```
+
+- Katalog terstruktur disimpan di `supplier_catalog_offers` dan dapat menghubungkan satu supplier ke banyak Produk/Bahan Baku serta banyak link/paket untuk item yang sama.
+- Histori disimpan di `supplier_catalog_history` dan selalu difilter memakai `supplier_id`; drawer Toko A tidak boleh memuat histori toko lain.
+- Pengecekan manual memakai `POST /api/suppliers/:id/catalog/:offerId/verify` dan hanya tersedia untuk administrator.
+- Harga lama, waktu pengecekan, waktu perubahan, dan pelaku perubahan hanya ditampilkan pada tab Histori Toko. Tabel katalog utama hanya menampilkan kondisi terbaru.
+- Kode supplier, ID supplier, ID item, dan ID penawaran tetap backend-only; UI menggunakan nama toko, nama barang, listing, channel, dan status operasional.
+
+## Raw Material master dan sumber restock
+
+```text
+Raw Materials
+→ create/edit metadata dan struktur stok
+→ backend validasi kategori, unit, nama unik, stok/modal awal, dan guard nonaktif
+→ source restock dibaca dari supplier_catalog_offers
+→ detail bahan menampilkan ringkasan jumlah toko/link
+→ buka Supplier dengan filter item untuk mengelola atau membandingkan sumber restock
+```
+
+- Master Raw Material tidak menyimpan satu Supplier sebagai source utama. Field supplier snapshot lama hanya compatibility data dan tidak ditampilkan pada UI utama.
+- Bahan tanpa varian memakai minimum stok master. Bahan bervarian memakai `variants[].minStockAlert`; read model aggregate menyimpan total minimum varian aktif untuk ringkasan.
+- `averageActualUnitCost` bersifat transaction-derived dan read-only pada master. Pembelian menghitung weighted average di backend dalam transaction yang sama dengan stock-in dan finance.
+- Penonaktifan ditolak jika masih ada current/reserved stock, BOM aktif, atau proses produksi aktif yang bergantung pada bahan tersebut.
+
 ## Purchases
 
 ```text
 Purchase form
+→ pilih item + supplier + satu penawaran katalog
+→ buka link dan verifikasi harga aktual
 → POST /api/transactions/purchases/commit
-→ validasi supplier + item target
+→ backend cocokkan supplier/item/varian/penawaran
+→ update harga katalog + histori toko bila berubah
 → stock-in Product/Raw Material
-→ expense/finance side effect sesuai rule backend
-→ audit log
-→ purchase report
+→ expense/finance side effect
+→ purchase + inventory log + audit
 ```
 
-Purchase tidak boleh menulis stok atau finance lewat helper terpisah yang tidak idempotent.
+- Supplier, penawaran katalog, dan verifikasi harga wajib untuk setiap Pembelian baru.
+- Jika qty, subtotal, supplier, atau penawaran berubah setelah verifikasi, verifikasi dianggap stale dan harus diulang.
+- Update harga katalog, histori toko, purchase, stock-in, inventory log, dan finance berada dalam transaction SQLite yang sama agar tidak terjadi partial write.
+- Harga aktual tetap disimpan sebagai snapshot Pembelian; edit katalog berikutnya tidak mengubah histori transaksi lama.
+- Purchase tidak boleh menulis stok atau finance lewat helper terpisah yang tidak idempotent.
 
 ## Sales
 

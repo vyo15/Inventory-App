@@ -6,6 +6,7 @@ const { createCustomer, generateCustomerCode } = require("../src/modules/custome
 const { createUser, updateUser } = require("../src/modules/auth/auth.service");
 const { commitCashIn } = require("../src/modules/finance/finance.service");
 const { commitPurchase } = require("../src/modules/transactions/transactions.service");
+const { createSupplier } = require("../src/modules/suppliers/suppliers.service");
 const { upsertJsonRecord } = require("../src/utils/sqliteStockEngine");
 const {
   createPricingRule,
@@ -85,23 +86,43 @@ test("dua purchase tanpa kode memakai counter tanggal dan menjaga stok serta led
     isActive: true,
   });
 
+  const supplier = await createSupplier({
+    name: "Supplier Concurrent Purchase",
+    catalogOffers: [{
+      itemType: "product",
+      itemId: "product-concurrent-purchase",
+      listingName: "Produk satuan",
+      purchaseType: "offline",
+      purchaseUnit: "pcs",
+      conversionValue: 1,
+      stockUnit: "pcs",
+      supplierItemPrice: 10000,
+    }],
+  }, "tester");
+  const offer = supplier.catalogOffers[0];
+
+  const buildPayload = (totalAmount) => ({
+    transactionDate: "2026-06-21",
+    supplierId: supplier.id,
+    supplierName: supplier.name,
+    catalogOfferId: offer.id,
+    sourceType: "product",
+    sourceId: "product-concurrent-purchase",
+    itemId: "product-concurrent-purchase",
+    itemName: "Produk Concurrent Purchase",
+    quantity: 1,
+    qty: 1,
+    subtotalItems: totalAmount,
+    verifiedCatalogPrice: totalAmount,
+    priceVerified: true,
+    priceVerifiedAt: "2026-06-21T10:00:00.000Z",
+    totalAmount,
+    items: [{ sourceType: "product", sourceId: "product-concurrent-purchase", quantity: 1 }],
+  });
+
   const [first, second] = await Promise.all([
-    commitPurchase({
-      actor: "purchase-a",
-      payload: {
-        transactionDate: "2026-06-21",
-        totalAmount: 10000,
-        items: [{ sourceType: "product", sourceId: "product-concurrent-purchase", quantity: 1 }],
-      },
-    }),
-    commitPurchase({
-      actor: "purchase-b",
-      payload: {
-        transactionDate: "2026-06-21",
-        totalAmount: 11000,
-        items: [{ sourceType: "product", sourceId: "product-concurrent-purchase", quantity: 1 }],
-      },
-    }),
+    commitPurchase({ actor: "purchase-a", payload: buildPayload(10000) }),
+    commitPurchase({ actor: "purchase-b", payload: buildPayload(11000) }),
   ]);
 
   assert.notEqual(first.referenceNumber, second.referenceNumber);

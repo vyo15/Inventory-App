@@ -85,7 +85,7 @@ const MobileBottomNavigation = ({ darkTheme, toggleTheme }) => {
                 aria-current={isActive ? "page" : undefined}
               >
                 <IconComponent />
-                <span>{menuItem.key === "inventory" ? "Stock" : menuItem.label}</span>
+                <span>{menuItem.key === "inventory" ? "Stok" : menuItem.label}</span>
               </button>
             );
           })}

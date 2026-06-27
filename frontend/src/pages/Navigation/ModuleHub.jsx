@@ -8,31 +8,54 @@ import { filterSidebarMenuItemsByRole } from "../../utils/auth/roleAccess";
 import { findMenuItemByKey } from "../../utils/navigation/sidebarNavigation";
 import "./ModuleHub.css";
 
-const buildSections = (moduleItem) => {
+const buildModuleHubSections = (moduleItem) => {
   const directChildren = moduleItem?.children || [];
+
+  if (moduleItem?.hubSections?.length) {
+    return moduleItem.hubSections
+      .map((section) => ({
+        key: section.key,
+        label: section.label || "",
+        description: section.description || "",
+        icon: section.icon || null,
+        items: (section.itemKeys || [])
+          .map((itemKey) => findMenuItemByKey(directChildren, itemKey))
+          .filter((menuItem) => menuItem?.path),
+      }))
+      .filter((section) => section.items.length > 0);
+  }
+
   const hasGroupedChildren = directChildren.some(
     (childItem) => childItem.children?.length,
   );
 
   if (!hasGroupedChildren) {
-    return [
-      {
-        key: `${moduleItem?.key || "module"}-items`,
-        label: "",
-        description: "",
-        icon: null,
-        items: directChildren,
-      },
-    ];
+    const directItems = directChildren.filter((childItem) => childItem.path);
+
+    return directItems.length > 0
+      ? [
+          {
+            key: `${moduleItem?.key || "module"}-items`,
+            label: "",
+            description: "",
+            icon: null,
+            items: directItems,
+          },
+        ]
+      : [];
   }
 
-  return directChildren.map((childItem) => ({
-    key: childItem.key,
-    label: childItem.hubLabel || childItem.label,
-    description: childItem.hubDescription || childItem.description || "",
-    icon: childItem.hubIcon || childItem.icon,
-    items: childItem.children || [childItem],
-  }));
+  return directChildren
+    .map((childItem) => ({
+      key: childItem.key,
+      label: childItem.hubLabel || childItem.label,
+      description: childItem.hubDescription || childItem.description || "",
+      icon: childItem.hubIcon || childItem.icon,
+      items: (childItem.children || [childItem]).filter(
+        (menuItem) => menuItem.path,
+      ),
+    }))
+    .filter((section) => section.items.length > 0);
 };
 
 // =========================
@@ -60,7 +83,10 @@ const ModuleHub = ({ moduleKey, menuKey }) => {
     return findMenuItemByKey(roleAwareMenuItems, resolvedModuleKey);
   }, [resolvedModuleKey, roleAwareMenuItems]);
 
-  const sections = useMemo(() => buildSections(moduleItem), [moduleItem]);
+  const sections = useMemo(
+    () => buildModuleHubSections(moduleItem),
+    [moduleItem],
+  );
 
   if (!moduleItem) {
     return <Navigate to="/unauthorized" replace />;

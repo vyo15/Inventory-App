@@ -9,6 +9,7 @@ const {
   executeRestoreController,
   exportMasterDataController,
   getDataQualityAuditController,
+  getInitialSetupReadinessController,
   getMaintenanceStatusController,
   getStockReadModelAuditController,
   importBackupController,
@@ -25,6 +26,7 @@ const backupImportParser = express.raw({
 });
 
 router.get("/status", ...requireAdmin, getMaintenanceStatusController);
+router.get("/initial-setup-readiness", ...requireAdmin, getInitialSetupReadinessController);
 router.get("/data-audit", ...requireAdmin, getDataQualityAuditController);
 router.get("/stock-read-model-audit", ...requireAdmin, getStockReadModelAuditController);
 router.post("/stock-read-model-rebuild", ...requireAdmin, rebuildStockReadModelsController);

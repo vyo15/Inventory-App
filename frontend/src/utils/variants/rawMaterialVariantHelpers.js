@@ -12,6 +12,7 @@ export const DEFAULT_RAW_MATERIAL_VARIANT = {
   stock: 0,
   reservedStock: 0,
   availableStock: 0,
+  minStockAlert: 0,
   isActive: true,
 };
 

@@ -64,15 +64,19 @@ Tujuan:
 - bisa reusable/lintas beberapa produk jadi sehingga tidak boleh diduplikasi per produk jadi hanya untuk kebutuhan tampilan
 
 Organisasi UI aktif:
-- daftar Semi Finished boleh ditampilkan grouped/accordion berdasarkan `Product Family / Jenis Bunga` lalu `Kategori` agar tidak menjadi daftar campur panjang
-- saat group tertutup, UI boleh menampilkan ringkasan jumlah item, stok kosong, stok aman, dan item nonaktif
-- saat group terbuka, item tetap menampilkan informasi stok total, available, variant stock, status, dan action existing
-- fallback data historis yang tidak punya family/category harus tetap tampil, misalnya `Umum / Reusable` dan `Tanpa Kategori`
+- `flowerTypeId` menghubungkan Semi Finished ke master **Jenis Bunga**; `flowerGroup` tetap disimpan sebagai snapshot compatibility data lama.
+- `categoryId` pada Semi Finished menghubungkan item ke master **Kelompok Komponen** untuk pencarian dan laporan.
+- field `category` existing tetap menjadi **Jenis Komponen** produksi (`pola`, `kelopak`, `daun`, `kawat`, `lainnya`) dan tetap menjadi source logic resep/HPP yang sudah ada.
+- daftar Semi Finished boleh ditampilkan grouped/accordion berdasarkan Jenis Bunga lalu Jenis Komponen agar tidak menjadi daftar campur panjang.
+- saat group tertutup, UI boleh menampilkan ringkasan jumlah item, stok kosong, stok aman, dan item nonaktif.
+- saat group terbuka, item tetap menampilkan informasi stok total, available, variant stock, status, dan action existing.
+- fallback data historis yang belum mempunyai relasi master harus tetap tampil melalui snapshot lama, misalnya `Umum / Reusable`.
 
 Guard integrasi:
 - Stock Adjustment Semi Finished hanya mengoreksi stok dan audit inventory; tidak mengubah BOM, Production Order, Work Log, Payroll, atau HPP.
 - Semi Finished bervarian wajib memakai `variantKey` saat adjustment agar bucket stok produksi tetap konsisten.
-- Grouping UI tidak boleh mengubah collection `semi_finished_materials`, tidak boleh memecah stok per produk, dan tidak boleh menulis relasi baru tanpa approval.
+- Grouping UI tidak boleh memecah stok per produk dan tidak boleh menjadikan kategori master sebagai pengganti BOM atau Jenis Komponen produksi.
+- Rename Jenis Bunga/Kelompok Komponen harus dibaca melalui `categoryId`; snapshot nama lama hanya fallback compatibility.
 
 ## 5. BOM Produksi
 Tujuan:
@@ -84,6 +88,8 @@ Rule penting yang terverifikasi:
 - BOM menyimpan `materialLines` dan `stepLines`
 - step lines sudah disortir menurut sequence
 - estimasi material BOM mengambil live master cost terbaru: Raw Material memakai `averageActualUnitCost` dengan fallback `restockReferencePrice`; Semi Finished memakai `averageCostPerUnit` dengan fallback `lastProductionCostPerUnit`. Jika source master 0, estimate BOM wajib 0 dan tidak boleh fallback ke snapshot BOM lama.
+- `averageActualUnitCost` Raw Material diperbarui dari Pembelian memakai weighted average berdasarkan stok lama dan total biaya aktual per satuan stok masuk. Update cost, stok, expense, ledger, katalog supplier, dan audit harus atomic.
+- Raw Material yang masih dipakai BOM aktif atau proses produksi aktif tidak boleh dinonaktifkan melalui edit master.
 - `materialLines[].costPerUnitSnapshot` / `totalCostSnapshot` di BOM hanya derived cache/read-only history field; bukan source utama untuk estimasi aktif, PO baru, atau Work Log baru.
 - Untuk produksi bertingkat, input Semi Finished pada step berikutnya memakai HPP master Semi Finished dari step sebelumnya (`material + accrued labor saat Work Log completed + overhead jika ada`, lalu direvisi oleh payroll final jika ada selisih) setelah source masternya tersedia. Step berikutnya tidak boleh kembali memakai harga raw material awal sebagai shortcut.
 - estimasi biaya produksi BOM mengambil tarif dari Tahapan Produksi.
@@ -410,6 +416,7 @@ Rule aktif:
 - Complete Work Log wajib menghitung accrued labor dari master Tahapan Produksi (`payrollMode`, `payrollRate`, `payrollQtyBase`, `payrollOutputBasis`, `includePayrollInHpp`) dan operator. Jika step direct labor rate 0/operator kosong, complete harus ditolak agar HPP tidak material-only.
 - Payroll final mengubah `laborCostActual`, `totalCostActual`, dan `costPerGoodUnit` hanya saat ada final line yang masuk HPP, lalu menjalankan reconcile output HPP/master cost.
 - Pembelian/produksi masuk memakai weighted average dengan guard cost 0: stok lama yang cost/HPP-nya 0 tidak boleh menurunkan average cost saat incoming cost valid tersedia.
+- Untuk Pembelian Raw Material, incoming cost wajib memakai `totalActualPurchase / totalStockIn`, sehingga ongkir, biaya layanan, diskon, dan konversi paket ikut membentuk modal per satuan stok.
 - Reconcile HPP tidak boleh menambah/mengurangi stock qty, tidak boleh membuat inventory log baru, dan tidak boleh mengubah status Work Log/PO.
 
 Boundary data historis:

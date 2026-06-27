@@ -92,6 +92,27 @@ export const getVariantAvailableStockValue = (variant = {}) => {
   return Math.max(availableStock, 0);
 };
 
+const resolveStockVariantRows = (record = {}) => {
+  const variants = Array.isArray(record?.variants) ? record.variants : [];
+  const variantOptions = Array.isArray(record?.variantOptions) ? record.variantOptions : [];
+  if (variants.length > 0) return variants;
+  if (variantOptions.length > 0) return variantOptions;
+  return [];
+};
+
+export const resolveVariantLowStockThreshold = (variant = {}, fallbackThreshold = 0) => {
+  const directThreshold = Number(variant?.minStockAlert ?? variant?.minStock);
+  if (Number.isFinite(directThreshold) && directThreshold >= 0) return directThreshold;
+  return Math.max(toNumber(fallbackThreshold), 0);
+};
+
+export const resolveVariantMinimumStockTotal = (record = {}, fallbackThreshold = 0) => {
+  const variants = resolveStockVariantRows(record);
+  return variants
+    .filter((variant) => variant?.isActive !== false)
+    .reduce((sum, variant) => sum + resolveVariantLowStockThreshold(variant, fallbackThreshold), 0);
+};
+
 export const getVariantStockStatusMeta = (variant = {}, threshold = 0) => {
   if (variant?.isActive === false) {
     return { status: 'safe', label: 'Aman', color: 'green', pillClassName: '' };
@@ -120,13 +141,15 @@ export const getLowStockVariantEntries = (
     getVariantLabel,
   } = {},
 ) => {
-  const variants = Array.isArray(record?.variants) ? record.variants : [];
-  const hasVariants = (record?.hasVariants === true || variants.length > 0) && variants.length > 0;
+  const variants = resolveStockVariantRows(record);
+  const hasVariants = (record?.hasVariants === true || record?.hasVariantOptions === true || variants.length > 0)
+    && variants.length > 0;
 
   if (!hasVariants) return [];
 
   const parsedThreshold = Number(threshold);
-  const resolvedThreshold = Number.isFinite(parsedThreshold)
+  const hasExplicitThreshold = threshold !== undefined && threshold !== null && Number.isFinite(parsedThreshold);
+  const fallbackThreshold = hasExplicitThreshold
     ? parsedThreshold
     : resolveMasterLowStockThreshold(record, sourceType);
   const resolvedUnit = unit || record?.stockUnit || record?.unit || record?.baseUnit || 'pcs';
@@ -137,15 +160,19 @@ export const getLowStockVariantEntries = (
         ? getVariantLabel(variant, index)
         : variant?.variantLabel || variant?.label || variant?.name || variant?.variantName || variant?.color || `Varian ${index + 1}`;
       const stock = getVariantAvailableStockValue(variant);
-      const statusMeta = getVariantStockStatusMeta(variant, resolvedThreshold);
+      const variantThreshold = hasExplicitThreshold
+        ? Math.max(parsedThreshold, 0)
+        : resolveVariantLowStockThreshold(variant, fallbackThreshold);
+      const statusMeta = getVariantStockStatusMeta(variant, variantThreshold);
 
       return {
+        ...statusMeta,
         key: variant?.variantKey || variant?.sku || variant?.color || label || `variant-${index}`,
         label,
         stock,
         unit: resolvedUnit,
-        threshold: resolvedThreshold,
-        ...statusMeta,
+        threshold: variantThreshold,
+        statusLabel: statusMeta.label,
       };
     })
     .filter((item) => item.status !== 'safe');
@@ -278,10 +305,14 @@ export const getStockReadModelStatusMeta = (
   } = {},
 ) => {
   const safeStockValue = toNumber(stockValue);
-  const safeThreshold = toNumber(threshold);
+  const parsedThreshold = Number(threshold);
+  const hasExplicitThreshold = threshold !== undefined
+    && threshold !== null
+    && Number.isFinite(parsedThreshold);
+  const safeThreshold = hasExplicitThreshold ? Math.max(parsedThreshold, 0) : 0;
   const variantStatusMeta = getVariantAwareStockStatusMeta(record, {
     sourceType,
-    threshold: safeThreshold,
+    threshold: hasExplicitThreshold ? safeThreshold : undefined,
   });
 
   if (variantStatusMeta?.label === 'Kosong') {
@@ -366,17 +397,23 @@ export const buildStockReadModelRow = (
   const sourceConfig = STOCK_READ_MODEL_SOURCE_CONFIG[resolvedSourceType] || STOCK_READ_MODEL_SOURCE_CONFIG.product;
   const resolvedTypeLabel = typeLabel || sourceConfig.typeLabel;
   const quantities = getStockReadModelQuantities(record);
-  const minStockThreshold = resolveMasterLowStockThreshold(record, resolvedSourceType);
+  const masterMinStockThreshold = resolveMasterLowStockThreshold(record, resolvedSourceType);
+  const usesVariantMinimumStock = resolvedSourceType === 'material'
+    && (record?.hasVariants === true || record?.hasVariantOptions === true)
+    && resolveStockVariantRows(record).length > 0;
+  const minStockThreshold = usesVariantMinimumStock
+    ? resolveVariantMinimumStockTotal(record, 0)
+    : masterMinStockThreshold;
   const unitDisplay = unit || record?.stockUnit || record?.unit || record?.baseUnit || 'pcs';
   const displayName = name || record?.name || record?.productName || record?.materialName || '-';
   const statusMeta = getStockReadModelStatusMeta(record, {
     sourceType: resolvedSourceType,
-    threshold: minStockThreshold,
+    threshold: usesVariantMinimumStock ? undefined : minStockThreshold,
     stockValue: quantities.availableStock,
   });
   const affectedVariantSummary = formatAffectedVariantStockSummary(record, {
     sourceType: resolvedSourceType,
-    threshold: minStockThreshold,
+    threshold: usesVariantMinimumStock ? undefined : minStockThreshold,
     unit: unitDisplay,
     maxItems: affectedVariantMaxItems,
   });

@@ -857,9 +857,327 @@
   margin: 0;
 }
 
+.dashboard-setup-trigger {
+  display: inline-flex;
+  align-items: center;
+  border-color: color-mix(in srgb, var(--ims-color-primary) 28%, var(--ims-border-color));
+  background: color-mix(in srgb, var(--ims-color-primary) 7%, var(--ims-bg-card));
+  color: var(--ims-color-primary);
+  font-weight: 700;
+}
+
+.dashboard-setup-trigger:hover,
+.dashboard-setup-trigger:focus-visible {
+  border-color: var(--ims-color-primary);
+  background: color-mix(in srgb, var(--ims-color-primary) 11%, var(--ims-bg-card));
+  color: var(--ims-color-primary-active);
+}
+
+.dashboard-setup-trigger-progress {
+  display: inline-flex;
+  min-width: 34px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  margin-left: 2px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ims-color-primary) 13%, transparent);
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.dashboard-setup-drawer-root .ant-drawer-mask {
+  background: rgba(5, 18, 39, 0.28);
+  backdrop-filter: blur(2px);
+}
+
+.dashboard-setup-drawer-root .ant-drawer-content {
+  background: var(--ims-bg-card);
+}
+
+.dashboard-setup-drawer-root .ant-drawer-header {
+  padding: 16px 18px;
+  border-bottom-color: var(--ims-border-color-soft);
+}
+
+.dashboard-setup-drawer-root .ant-drawer-body {
+  padding: 16px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--ims-color-primary) 4%, transparent), transparent 220px),
+    var(--ims-bg-page);
+}
+
+.dashboard-setup-drawer-root .ant-drawer-footer {
+  padding: 12px 16px;
+  border-top-color: var(--ims-border-color-soft);
+  background: var(--ims-bg-card);
+}
+
+.dashboard-setup-drawer-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.dashboard-setup-drawer-title > span:last-child {
+  display: block;
+  min-width: 0;
+}
+
+.dashboard-setup-drawer-title strong,
+.dashboard-setup-drawer-title small {
+  display: block;
+}
+
+.dashboard-setup-drawer-title strong {
+  color: var(--ims-text-primary);
+  font-size: 14px;
+}
+
+.dashboard-setup-drawer-title small {
+  margin-top: 2px;
+  color: var(--ims-text-muted);
+  font-size: 10.5px;
+  font-weight: 500;
+}
+
+.dashboard-setup-drawer-title-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ims-color-primary) 10%, transparent);
+  color: var(--ims-color-primary);
+  font-size: 16px;
+}
+
+.dashboard-setup-drawer-progress-tag {
+  margin: 0;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.dashboard-setup-drawer-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dashboard-setup-summary {
+  padding: 15px;
+  border: 1px solid color-mix(in srgb, var(--ims-color-primary) 22%, var(--ims-border-color-soft));
+  border-radius: 14px;
+  background: var(--ims-bg-card);
+  box-shadow: var(--ims-shadow-soft);
+}
+
+.dashboard-setup-summary-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  color: var(--ims-text-muted);
+  font-size: 11px;
+}
+
+.dashboard-setup-summary-topline strong {
+  color: var(--ims-text-primary);
+  font-size: 11.5px;
+}
+
+.dashboard-setup-next-step {
+  display: grid;
+  margin-top: 14px;
+  padding: 13px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--ims-color-primary) 7%, var(--ims-bg-card-soft));
+}
+
+.dashboard-setup-next-step > span:first-child {
+  color: var(--ims-color-primary);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.dashboard-setup-next-step > strong {
+  margin-top: 4px;
+  color: var(--ims-text-primary);
+  font-size: 13px;
+}
+
+.dashboard-setup-next-step > .ant-typography {
+  margin-top: 3px;
+  color: var(--ims-text-muted);
+  font-size: 10.8px;
+  line-height: 1.5;
+}
+
+.dashboard-setup-next-action {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 6px;
+  margin-top: 9px;
+  color: var(--ims-color-primary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dashboard-setup-phase-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dashboard-setup-phase {
+  min-width: 0;
+}
+
+.dashboard-setup-phase-heading {
+  padding: 0 2px 8px;
+}
+
+.dashboard-setup-phase-heading strong,
+.dashboard-setup-phase-heading small {
+  display: block;
+}
+
+.dashboard-setup-phase-heading strong {
+  color: var(--ims-text-primary);
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+}
+
+.dashboard-setup-phase-heading small {
+  margin-top: 2px;
+  color: var(--ims-text-muted);
+  font-size: 10.4px;
+  line-height: 1.4;
+}
+
+.dashboard-setup-step-list {
+  overflow: hidden;
+  border: 1px solid var(--ims-border-color-soft);
+  border-radius: 13px;
+  background: var(--ims-bg-card);
+}
+
+.dashboard-setup-step {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 30px minmax(0, 1fr) auto 12px;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--ims-border-color-soft);
+  color: inherit;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.dashboard-setup-step:last-child {
+  border-bottom: 0;
+}
+
+.dashboard-setup-step:hover {
+  color: inherit;
+  background: color-mix(in srgb, var(--ims-color-primary) 5%, var(--ims-bg-card));
+}
+
+.dashboard-setup-step-number {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--ims-color-warning) 12%, transparent);
+  color: var(--ims-color-warning);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.dashboard-setup-step.is-complete .dashboard-setup-step-number {
+  background: color-mix(in srgb, var(--ims-color-success) 12%, transparent);
+  color: var(--ims-color-success);
+}
+
+.dashboard-setup-step.is-warning .dashboard-setup-step-number {
+  background: color-mix(in srgb, var(--ims-color-danger) 11%, transparent);
+  color: var(--ims-color-danger);
+}
+
+.dashboard-setup-step-copy {
+  min-width: 0;
+}
+
+.dashboard-setup-step-copy strong,
+.dashboard-setup-step-copy small {
+  display: block;
+}
+
+.dashboard-setup-step-copy strong {
+  color: var(--ims-text-primary);
+  font-size: 11.8px;
+}
+
+.dashboard-setup-step-copy small {
+  overflow: hidden;
+  margin-top: 2px;
+  color: var(--ims-text-muted);
+  font-size: 10.2px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-setup-step-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ims-color-warning);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.dashboard-setup-step.is-complete .dashboard-setup-step-status {
+  color: var(--ims-color-success);
+}
+
+.dashboard-setup-step.is-warning .dashboard-setup-step-status {
+  color: var(--ims-color-danger);
+}
+
+.dashboard-setup-step-arrow {
+  color: var(--ims-text-muted);
+  font-size: 10px;
+}
+
+.dashboard-setup-drawer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dashboard-setup-drawer-footer .ant-typography {
+  max-width: 280px;
+  color: var(--ims-text-muted);
+  font-size: 10.2px;
+  line-height: 1.4;
+}
+
 .dashboard-priority-row:focus-visible,
 .dashboard-action-row:focus-visible,
 .dashboard-stock-row:focus-visible,
+.dashboard-setup-step:focus-visible,
 .dashboard-exception-list > a:focus-visible,
 .dashboard-section-heading > a:focus-visible {
   outline: none;
@@ -1010,6 +1328,7 @@
   .dashboard-sales-chart-wrap {
     height: 180px;
   }
+
 }
 
 @media (max-width: 560px) {
@@ -1056,6 +1375,37 @@
     flex-direction: column;
     gap: 6px;
   }
+
+  .dashboard-setup-trigger > span:not(.ant-btn-icon):not(.dashboard-setup-trigger-progress) {
+    display: none;
+  }
+
+  .dashboard-setup-drawer-root .ant-drawer-content-wrapper {
+    width: min(100vw, 500px) !important;
+  }
+
+  .dashboard-setup-step {
+    grid-template-columns: 28px minmax(0, 1fr) 12px;
+  }
+
+  .dashboard-setup-step-status {
+    display: none;
+  }
+
+  .dashboard-setup-step-copy small {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .dashboard-setup-drawer-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dashboard-setup-drawer-footer .ant-typography {
+    max-width: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1063,6 +1413,10 @@
   .dashboard-priority-row,
   .dashboard-action-row,
   .dashboard-stock-row {
+    transition: none;
+  }
+
+  .dashboard-setup-step {
     transition: none;
   }
 }

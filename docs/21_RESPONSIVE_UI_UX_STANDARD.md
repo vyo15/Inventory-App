@@ -51,9 +51,9 @@ Docs tidak boleh mengalahkan source aktual. Jika dokumen ini berbeda dengan file
 ### Desktop dan laptop
 
 - Floating dock hanya menampilkan top-level module.
-- Klik top-level module membuka Dashboard atau Module Hub.
+- Klik top-level module membuka Dashboard, halaman direct bila hanya ada satu tujuan, atau Module Hub bila memiliki beberapa halaman.
 - Tidak ada submenu pop-up di dock desktop.
-- Active state wajib benar pada canonical hub dan seluruh child route `/inventory/...` serta `/production/...`. Exact hub `/stock` dan `/produksi` tidak aktif; compatibility child route lama hanya melakukan redirect role-guarded ke canonical destination.
+- Active state wajib benar pada Module Hub, direct module `/inventory/stock-management`, dan seluruh child route `/production/...`. `/inventory` hanya redirect role-guarded; exact hub `/stock` dan `/produksi` tidak aktif.
 - Seluruh icon, active pill, focus outline, dan marker gold harus berada di dalam shape rail.
 - Light dan dark mode memakai asset rail terpisah; jangan mengganti warna rail dengan filter CSS acak.
 
@@ -75,7 +75,7 @@ Docs tidak boleh mengalahkan source aktual. Jika dokumen ini berbeda dengan file
 
 ## 4. Role guard dan keamanan navigasi
 
-- `sidebarMenuItems` adalah sumber label, urutan, grouping, path, hub path, icon, dan allowed role.
+- `sidebarMenuItems` adalah sumber label, urutan, grouping, path/hub path, icon, metadata section workspace, dan allowed role.
 - `filterSidebarMenuItemsByRole()` wajib dipakai oleh floating dock, Drawer tablet, bottom navigation, bottom sheet, dan Module Hub.
 - `sidebarNavigation.js` menjadi helper bersama untuk active route dan target navigasi. Jangan menduplikasi resolver path di komponen lain.
 - Hidden menu bukan security control. Hub route dan child route tetap wajib memakai `ProtectedRoute`.
@@ -89,7 +89,7 @@ Docs tidak boleh mengalahkan source aktual. Jika dokumen ini berbeda dengan file
 - Header compact, brand dan greeting berada satu garis.
 - Action utama berada di kanan Page Header.
 - Tabel profesional tetap menjadi tampilan utama untuk data banyak.
-- Module Hub maksimal 3 kolom pada area yang cukup lebar.
+- Module Hub maksimal 3 kolom pada area yang cukup lebar dan section mengikuti kelompok fungsi pada metadata role-aware.
 - Summary/KPI boleh 3–4 kolom sesuai isi, tetapi tidak boleh menjadi report penuh.
 - Wrapper global tetap transparan; jangan mengembalikan card besar yang membungkus seluruh halaman.
 

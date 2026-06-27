@@ -20,6 +20,8 @@ vi.mock("../../data/adapters/sqlite/sqliteTransactionsAdapter", () => ({
 vi.mock("../MasterData/productsService", () => ({ listenProducts: vi.fn() }));
 vi.mock("../MasterData/rawMaterialsService", () => ({ listenRawMaterials: vi.fn() }));
 vi.mock("../MasterData/suppliersService", () => ({
+  getSupplierCatalogOffer: (supplier = {}, offerId = "") => (supplier.catalogOffers || [])
+    .find((offer) => String(offer.id) === String(offerId)) || null,
   getSupplierDisplayName: (supplier = {}) => supplier.name || "",
   getSupplierReferenceId: (supplier = {}) => supplier.id || "",
 }));
@@ -39,9 +41,30 @@ describe("transaction commit services", () => {
     await expect(createPurchaseTransaction({ values: { quantity: 0 } })).rejects.toThrow("Item pembelian wajib dipilih");
 
     const result = await createPurchaseTransaction({
-      values: { quantity: 2, itemType: "product", totalCost: 50000 },
-      selectedItem: { id: "product-1", name: "Bunga" },
-      selectedSupplier: { id: "supplier-1", name: "Supplier A" },
+      values: {
+        type: "product",
+        itemId: "product-1",
+        supplierId: "supplier-1",
+        catalogOfferId: "offer-1",
+        quantity: 2,
+        subtotalItems: 50000,
+        totalCost: 50000,
+        priceVerified: true,
+        priceVerifiedAt: "2026-06-27T10:00:00.000Z",
+        verifiedCatalogPrice: 25000,
+      },
+      products: [{ id: "product-1", name: "Bunga", stockUnit: "pcs" }],
+      suppliers: [{
+        id: "supplier-1",
+        name: "Supplier A",
+        catalogOffers: [{
+          id: "offer-1",
+          itemType: "product",
+          itemId: "product-1",
+          supplierItemPrice: 25000,
+          productLink: "https://example.com/bunga",
+        }],
+      }],
     });
 
     expect(result).toEqual({ id: "purchase-1" });
@@ -51,7 +74,51 @@ describe("transaction commit services", () => {
       sourceType: "product",
       quantity: 2,
       totalAmount: 50000,
+      catalogOfferId: "offer-1",
+      priceVerified: true,
+      items: [expect.objectContaining({ sourceId: "product-1", quantity: 2 })],
       status: "Selesai",
+    }));
+  });
+
+  it("purchase bahan baku mengirim total stok hasil konversi ke stock-in", async () => {
+    mocks.commitPurchase.mockResolvedValue({ id: "purchase-material-1" });
+
+    await createPurchaseTransaction({
+      values: {
+        type: "material",
+        itemId: "material-1",
+        supplierId: "supplier-1",
+        catalogOfferId: "offer-material-1",
+        quantity: 3,
+        conversionValue: 10,
+        totalStockIn: 30,
+        subtotalItems: 60000,
+        totalCost: 65000,
+        priceVerified: true,
+        priceVerifiedAt: "2026-06-27T10:00:00.000Z",
+        verifiedCatalogPrice: 20000,
+      },
+      materials: [{ id: "material-1", name: "Kain Flanel", stockUnit: "lembar" }],
+      suppliers: [{
+        id: "supplier-1",
+        name: "Supplier A",
+        catalogOffers: [{
+          id: "offer-material-1",
+          itemType: "raw_material",
+          itemId: "material-1",
+          supplierItemPrice: 20000,
+          conversionValue: 10,
+          stockUnit: "lembar",
+        }],
+      }],
+    });
+
+    expect(mocks.commitPurchase).toHaveBeenCalledWith(expect.objectContaining({
+      sourceType: "raw_material",
+      quantity: 3,
+      totalStockIn: 30,
+      items: [expect.objectContaining({ sourceType: "raw_material", quantity: 30 })],
     }));
   });
 

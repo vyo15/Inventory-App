@@ -237,16 +237,16 @@ Test memakai database SQLite temporary di folder sistem dan tidak menunjuk ke da
 - [ ] Dark mode terbaca.
 - [ ] Desktop `>= 1200px` menampilkan floating dock; active icon dan marker tetap seluruhnya berada di dalam rail.
 - [ ] Desktop `993-1199px` dan viewport tinggi pendek menampilkan dock compact tanpa icon keluar/overlap.
-- [ ] Klik top-level module membuka Module Hub tanpa submenu pop-up.
-- [ ] Module Hub hanya menampilkan child route yang diizinkan role aktif.
-- [ ] Active state dock tetap benar saat berada di hub route maupun halaman child.
-- [ ] Canonical hub `/inventory` dan `/production` dapat dibuka. Exact hub lama `/stock` dan `/produksi` tidak dihidupkan kembali; hanya child route legacy terdaftar yang redirect melalui guard yang sama.
+- [ ] Klik top-level multi-halaman membuka Module Hub tanpa submenu pop-up; modul satu halaman langsung membuka halaman tujuan.
+- [ ] Module Hub hanya menampilkan child route yang diizinkan role aktif dan section kosong tidak ikut dirender.
+- [ ] Active state dock tetap benar saat berada di hub route, halaman child, maupun direct module satu halaman.
+- [ ] `/inventory` melakukan redirect role-guarded ke `/inventory/stock-management`, sedangkan `/production` tetap membuka Production Workspace. Exact hub lama `/stock` dan `/produksi` tidak dihidupkan kembali; hanya child route legacy terdaftar yang redirect melalui guard yang sama.
 - [ ] Role `user` tidak melihat Module Hub Master Data, Finance, Sistem, Laporan, Production Setup, Payroll, atau HPP.
 - [ ] Tablet `768-992px` menampilkan tombol menu + Drawer kiri; bottom navigation tidak tampil.
-- [ ] Mobile `<= 767px` menampilkan bottom navigation Dashboard, Stock, Menu, Transaksi, dan Produksi.
+- [ ] Mobile `<= 767px` menampilkan bottom navigation Dashboard, Stok, Menu, Transaksi, dan Produksi.
 - [ ] Tombol tengah hanya membuka bottom sheet menu, bukan create/mutation/destructive action.
 - [ ] Bottom sheet role-aware: Administrator melihat seluruh modul; `user` hanya melihat modul operasional.
-- [ ] Pilih modul menutup bottom sheet dan membuka Module Hub yang sesuai.
+- [ ] Pilih modul menutup bottom sheet lalu membuka Module Hub atau halaman direct sesuai jumlah halaman modul.
 - [ ] Mobile 360x640, 390x844, dan 430x932 tidak horizontal scroll body untuk list utama.
 - [ ] Halaman paling bawah, pagination, action footer, modal, dan Drawer tidak tertutup bottom navigation.
 - [ ] Theme toggle telepon berada di bottom sheet; FloatButton theme tidak bertabrakan dengan bottom navigation.

@@ -36,6 +36,45 @@ Source aktual memakai backend Node.js + SQLite sebagai runtime utama. Dokumen in
 - Setelah shutdown normal, file WAL/SHM harus dilepas. Jika proses mati paksa, sidecar dapat tertinggal dan harus dibiarkan agar SQLite melakukan recovery saat backend dibuka kembali.
 - Backup portable tetap satu file `.imsbackup`; database runtime tidak boleh dijalankan langsung dari package backup.
 
+## Supplier catalog contract — schema version 9
+
+### `supplier_catalog_offers`
+
+- Menjadi relasi terstruktur antara Supplier dan master `products`/`raw_materials`.
+- Satu supplier boleh memiliki banyak item; satu item boleh memiliki banyak supplier; kombinasi supplier + item yang sama boleh memiliki beberapa link/paket berbeda.
+- Field operasional mencakup item/varian, listing/channel/link, satuan beli, qty referensi, konversi ke satuan stok, harga saat ini, estimasi biaya, status aktif, status ketersediaan, dan metadata pengecekan terakhir.
+- ID tabel, `supplier_id`, `item_id`, dan ID penawaran adalah relasi backend-only dan tidak boleh ditampilkan sebagai informasi utama UI.
+- Penawaran yang pernah dipakai transaksi tidak di-hard-delete. Link mati, barang habis, atau penawaran lama memakai status ketersediaan/nonaktif agar snapshot dan histori tetap dapat ditelusuri.
+
+### `supplier_catalog_history`
+
+- Menyimpan perubahan harga, pengecekan harga sama, perubahan link/detail, aktif/nonaktif, barang habis, link bermasalah, serta verifikasi dari Pembelian.
+- Setiap record wajib membawa `supplier_id`; query UI wajib mengambil histori satu supplier yang sedang dibuka.
+- Harga lama, waktu perubahan/pengecekan, dan actor hanya ditampilkan pada Histori Toko, bukan tabel katalog utama.
+
+### Compatibility dan migrasi
+
+- `materialDetails` lama tetap dibaca sebagai compatibility snapshot.
+- Migrasi katalog menyalin `materialDetails` lama ke `supplier_catalog_offers` hanya bila supplier belum memiliki penawaran terstruktur; payload lama tidak dihapus secara destructive.
+- Penulisan dan perubahan baru menggunakan tabel katalog terstruktur.
+
+### Purchase verification contract
+
+- Setiap Pembelian baru wajib membawa supplier, satu penawaran aktif/tersedia, item dan varian yang sesuai, serta bukti verifikasi harga untuk qty/subtotal saat ini.
+- Backend menghitung ulang harga aktual per satuan beli dari subtotal dan qty; nilai yang tidak sama dengan signature verifikasi ditolak sebelum mutasi stok.
+- Bila harga berubah, update katalog dan insert histori dilakukan di transaction yang sama dengan purchase, stock-in, inventory log, expense, dan ledger.
+- Pembelian lama tetap memakai snapshot supplier, item, link, konversi, dan harga aktual yang tersimpan pada transaksi.
+
+## Raw Material master contract
+
+- Relasi sumber restock menggunakan `supplier_catalog_offers`; master `raw_materials` tidak mengunci satu supplier. Snapshot supplier lama tetap dibaca untuk compatibility tetapi tidak menjadi source UI/flow baru.
+- `averageActualUnitCost` adalah nilai transaction-derived. Update master wajib preserve nilai ini; Pembelian Raw Material menghitung weighted average dari stok/cost lama dan total biaya aktual per satuan stok masuk.
+- Raw Material tanpa varian memakai minimum stok top-level. Raw Material bervarian memakai `variants[].minStockAlert`; top-level minimum untuk data baru disimpan `0`, sedangkan read model boleh menyimpan total minimum varian aktif sebagai aggregate.
+- Nama harus unik case-insensitive, kategori harus aktif bertipe `raw_material_group`, unit harus termasuk daftar yang didukung, dan angka stok/minimum/harga/modal tidak boleh negatif.
+- Stok awal > 0 wajib mempunyai modal stok awal > 0.
+- Deaktivasi ditolak bila master/varian/varian arsip masih memiliki current atau reserved stock, atau bila bahan masih menjadi dependency BOM/proses produksi aktif.
+- Pembaruan weighted average cost, master raw material, read model, stock-in, purchase, expense/ledger, supplier catalog/history, dan audit wajib berada dalam transaction SQLite yang sama.
+
 ## Guard mutation
 
 Mutation berikut wajib atomic/guarded di backend:

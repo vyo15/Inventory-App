@@ -8,9 +8,8 @@
 // - Total master dihitung otomatis dari seluruh varian
 // =====================================================
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  AutoComplete,
   Button,
   Card,
   Col,
@@ -63,6 +62,12 @@ import DataTableView from "../../components/Layout/Table/DataTableView";
 import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
 import ImsNotice from "../../components/Layout/Feedback/ImsNotice";
 import InfoPopoverButton from "../../components/Layout/Feedback/InfoPopoverButton";
+import { listCategories } from "../../data/repositories/categoriesRepository";
+import { CATEGORY_TYPES } from "../../constants/categoryOptions";
+import {
+  buildCategorySelectOptions,
+  resolveCategoryLabel,
+} from "../../utils/categories/categoryHelpers";
 import SemiFinishedMaterialsListView from "./components/SemiFinishedMaterialsListView";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 import { isVariantStockEmpty } from '../../utils/variants/variantArchiveHelpers';
@@ -73,7 +78,6 @@ import {
   FALLBACK_SEMI_FINISHED_GROUP_KEY,
   FALLBACK_SEMI_FINISHED_GROUP_LABEL,
   formatStockWithUnit,
-  getSemiFinishedGroupLabel,
   getStockStatusMeta,
   getVariantDisplayLabel,
   normalizeFormVariants,
@@ -96,6 +100,8 @@ import {
 const SemiFinishedMaterials = () => {
   const [loading, setLoading] = useState(false);
   const [materials, setMaterials] = useState([]);
+  const [flowerTypes, setFlowerTypes] = useState([]);
+  const [componentGroups, setComponentGroups] = useState([]);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -131,11 +137,47 @@ const SemiFinishedMaterials = () => {
     return Boolean(variant.variantKey) && !isVariantStockEmpty(variant);
   };
   const stockEditHelpText = 'Ubah stok lewat Stock Management / Stock Adjustment / transaksi resmi.';
-  const flowerGroupFormOptions = useMemo(() => buildSemiFinishedGroupOptions(materials), [materials]);
+  const flowerTypeSelectOptions = useMemo(() => {
+    const masterOptions = buildCategorySelectOptions(flowerTypes, CATEGORY_TYPES.FLOWER_TYPE);
+    const masterLabels = new Set(masterOptions.map((option) => String(option.label || '').toLowerCase()));
+    const legacyOptions = materials
+      .filter((item) => !item.flowerTypeId && item.flowerGroup)
+      .map((item) => String(item.flowerGroup || '').trim())
+      .filter((label, index, rows) => label && rows.indexOf(label) === index)
+      .filter((label) => !masterLabels.has(label.toLowerCase()))
+      .map((label) => ({ value: `legacy:${label}`, label: `${label} (data lama)` }));
+    return [...masterOptions, ...legacyOptions];
+  }, [flowerTypes, materials]);
+  const componentGroupSelectOptions = useMemo(() => {
+    const masterOptions = buildCategorySelectOptions(
+      componentGroups,
+      CATEGORY_TYPES.SEMI_FINISHED_GROUP,
+    );
+    const masterLabels = new Set(masterOptions.map((option) => String(option.label || '').toLowerCase()));
+    const legacyOptions = materials
+      .filter((item) => !item.categoryId && (item.componentGroup || item.componentGroupName))
+      .map((item) => String(item.componentGroup || item.componentGroupName || '').trim())
+      .filter((label, index, rows) => label && rows.indexOf(label) === index)
+      .filter((label) => !masterLabels.has(label.toLowerCase()))
+      .map((label) => ({ value: `legacy:${label}`, label: `${label} (data lama)` }));
+    return [...masterOptions, ...legacyOptions];
+  }, [componentGroups, materials]);
   const flowerGroupFilterOptions = useMemo(
     () => buildSemiFinishedGroupOptions(materials, { includeGeneral: true }),
     [materials],
   );
+  const resolveFlowerTypeLabel = useCallback((record = {}) => resolveCategoryLabel({
+    categoryId: record.flowerTypeId,
+    categories: flowerTypes,
+    fallback: record.flowerType || record.flowerTypeName || record.flowerGroup,
+    emptyLabel: FALLBACK_SEMI_FINISHED_GROUP_LABEL,
+  }), [flowerTypes]);
+  const resolveComponentGroupLabel = useCallback((record = {}) => resolveCategoryLabel({
+    categoryId: record.categoryId,
+    categories: componentGroups,
+    fallback: record.componentGroup || record.componentGroupName,
+    emptyLabel: '',
+  }), [componentGroups]);
 
   // ---------------------------------------------------------------------------
   // Loader utama halaman.
@@ -145,8 +187,14 @@ const SemiFinishedMaterials = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const result = await getAllSemiFinishedMaterials();
+      const [result, flowerTypeRows, componentGroupRows] = await Promise.all([
+        getAllSemiFinishedMaterials(),
+        listCategories({ type: CATEGORY_TYPES.FLOWER_TYPE }),
+        listCategories({ type: CATEGORY_TYPES.SEMI_FINISHED_GROUP }),
+      ]);
       setMaterials(result);
+      setFlowerTypes(flowerTypeRows);
+      setComponentGroups(componentGroupRows);
     } catch (error) {
       console.error(error);
       message.error("Gagal memuat data semi finished materials");
@@ -235,6 +283,8 @@ const SemiFinishedMaterials = () => {
         String(item.code || "").toLowerCase().includes(searchText) ||
         String(item.name || "").toLowerCase().includes(searchText) ||
         String(item.description || "").toLowerCase().includes(searchText) ||
+        resolveFlowerTypeLabel(item).toLowerCase().includes(searchText) ||
+        resolveComponentGroupLabel(item).toLowerCase().includes(searchText) ||
         variantColorTexts.some((text) => String(text || "").toLowerCase().includes(searchText));
 
       const matchStatus =
@@ -251,7 +301,7 @@ const SemiFinishedMaterials = () => {
 
       return matchSearch && matchStatus && matchCategory && matchFlowerGroup;
     });
-  }, [materials, search, statusFilter, categoryFilter, flowerGroupFilter]);
+  }, [materials, search, statusFilter, categoryFilter, flowerGroupFilter, resolveFlowerTypeLabel, resolveComponentGroupLabel]);
 
   /* =====================================================
   SECTION: Semi Finished grouped listing — AKTIF
@@ -276,7 +326,7 @@ const SemiFinishedMaterials = () => {
     filteredData.forEach((item) => {
       const rawFamilyKey = normalizeSemiFinishedGroupKey(item.flowerGroup);
       const familyKey = rawFamilyKey || FALLBACK_SEMI_FINISHED_GROUP_KEY;
-      const familyLabel = getSemiFinishedGroupLabel(rawFamilyKey, FALLBACK_SEMI_FINISHED_GROUP_LABEL);
+      const familyLabel = resolveFlowerTypeLabel(item);
 
       const rawCategoryKey = String(item.category || "").trim();
       const categoryKey = rawCategoryKey || "__uncategorized";
@@ -334,7 +384,7 @@ const SemiFinishedMaterials = () => {
         if (b.key === FALLBACK_SEMI_FINISHED_GROUP_KEY) return -1;
         return a.label.localeCompare(b.label);
       });
-  }, [filteredData]);
+  }, [filteredData, resolveFlowerTypeLabel]);
 
   const shouldAutoOpenSemiGroups = Boolean(search.trim()) || statusFilter !== "all" || categoryFilter !== "all" || flowerGroupFilter !== "all";
 
@@ -362,7 +412,15 @@ const SemiFinishedMaterials = () => {
 
   const handleEdit = (record) => {
     setEditingMaterial(record);
-    form.setFieldsValue(buildFormValues(record));
+    form.setFieldsValue({
+      ...buildFormValues(record),
+      flowerTypeId: record.flowerTypeId
+        || (record.flowerGroup ? `legacy:${record.flowerGroup}` : ''),
+      categoryId: record.categoryId
+        || ((record.componentGroup || record.componentGroupName)
+          ? `legacy:${record.componentGroup || record.componentGroupName}`
+          : ''),
+    });
     setFormVisible(true);
   };
 
@@ -398,12 +456,16 @@ const SemiFinishedMaterials = () => {
       setSubmitting(true);
 
       if (editingMaterial?.id) {
-        await updateSemiFinishedMaterial(editingMaterial.id, payload, {
-          expectedVersion: editingMaterial.versionToken || editingMaterial.updatedAt || '',
-        });
+        await updateSemiFinishedMaterial(
+          editingMaterial.id,
+          payload,
+          flowerTypes,
+          componentGroups,
+          { expectedVersion: editingMaterial.versionToken || editingMaterial.updatedAt || '' },
+        );
         message.success("Semi finished material berhasil diperbarui");
       } else {
-        await createSemiFinishedMaterial(payload, [], null);
+        await createSemiFinishedMaterial(payload, flowerTypes, componentGroups);
         message.success("Semi finished material berhasil ditambahkan");
       }
 
@@ -469,7 +531,7 @@ const SemiFinishedMaterials = () => {
       ),
     },
     {
-      title: "Kategori",
+      title: "Klasifikasi",
       key: "category",
       width: "14%",
       render: (_, record) => (
@@ -478,8 +540,13 @@ const SemiFinishedMaterials = () => {
             {SEMI_FINISHED_CATEGORY_MAP[record.category] || "-"}
           </Typography.Text>
           <Typography.Text type="secondary" style={compactCellStyles.meta}>
-            {getSemiFinishedGroupLabel(record.flowerGroup, FALLBACK_SEMI_FINISHED_GROUP_LABEL)}
+            {resolveFlowerTypeLabel(record)}
           </Typography.Text>
+          {resolveComponentGroupLabel(record) ? (
+            <Typography.Text type="secondary" style={compactCellStyles.meta}>
+              {resolveComponentGroupLabel(record)}
+            </Typography.Text>
+          ) : null}
         </div>
       ),
     },
@@ -582,8 +649,9 @@ const SemiFinishedMaterials = () => {
   const semiFinishedMobileCardConfig = {
     title: (record) => record.name || "-",
     subtitle: (record) => [
-      SEMI_FINISHED_CATEGORY_MAP[record.category] || "Kategori belum tercatat",
-      getSemiFinishedGroupLabel(record.flowerGroup, FALLBACK_SEMI_FINISHED_GROUP_LABEL),
+      SEMI_FINISHED_CATEGORY_MAP[record.category] || "Jenis komponen belum tercatat",
+      resolveFlowerTypeLabel(record),
+      resolveComponentGroupLabel(record),
     ].filter(Boolean),
     tags: (record) => {
       const statusMeta = getStockStatusMeta(record);
@@ -787,8 +855,8 @@ const SemiFinishedMaterials = () => {
       {/* ------------------------------------------------------------------ */}
       {/* AKTIF / GUARDED: migrasi header ke shared produksi agar konsisten, tanpa ubah flow CRUD semi finished material. */}
       <ProductionPageHeader
-        title="Semi Finished Materials"
-        description="Master stok internal produksi dengan varian fleksibel, tidak dijual ke customer."
+        title="Komponen Produksi"
+        description="Master semi finished untuk stok internal produksi, dengan jenis komponen dan kelompok yang terpisah."
         onAdd={handleAdd}
         addLabel="Tambah Item"
       />
@@ -834,7 +902,7 @@ const SemiFinishedMaterials = () => {
               value={categoryFilter}
               onChange={setCategoryFilter}
               options={[
-                { value: "all", label: "Semua Kategori" },
+                { value: "all", label: "Semua Jenis Komponen" },
                 ...SEMI_FINISHED_CATEGORIES,
               ]}
             />
@@ -972,9 +1040,10 @@ const SemiFinishedMaterials = () => {
 
             <Col xs={24} md={8}>
               <Form.Item
-                label="Kategori"
+                label="Jenis Komponen"
                 name="category"
-                rules={[{ required: true, message: "Kategori wajib dipilih" }]}
+                rules={[{ required: true, message: "Jenis komponen wajib dipilih" }]}
+                extra="Dipakai oleh logic produksi dan perhitungan resep komponen."
               >
                 <Select options={SEMI_FINISHED_CATEGORIES} />
               </Form.Item>
@@ -983,17 +1052,30 @@ const SemiFinishedMaterials = () => {
             <Col xs={24} md={8}>
               <Form.Item
                 label="Jenis Bunga"
-                name="flowerGroup"
+                name="flowerTypeId"
                 rules={[{ required: true, message: "Jenis bunga wajib dipilih" }]}
               >
-                <AutoComplete
-                  options={flowerGroupFormOptions}
-                  placeholder="Pilih atau ketik jenis bunga..."
-                  filterOption={(inputValue, option) =>
-                    String(option?.label || option?.value || "")
-                      .toLowerCase()
-                      .includes(String(inputValue || "").toLowerCase())
-                  }
+                <Select
+                  showSearch
+                  optionFilterProp="label"
+                  options={flowerTypeSelectOptions}
+                  placeholder="Pilih jenis bunga"
+                />
+              </Form.Item>
+            </Col>
+
+            <Col xs={24} md={8}>
+              <Form.Item
+                label="Kelompok Komponen"
+                name="categoryId"
+                extra="Opsional untuk pencarian dan laporan; tidak mengubah logic produksi."
+              >
+                <Select
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  options={componentGroupSelectOptions}
+                  placeholder="Pilih kelompok komponen"
                 />
               </Form.Item>
             </Col>
@@ -1472,11 +1554,14 @@ Risiko:
             <Card size="small" title="Ringkasan Item">
               <Descriptions column={1} bordered size="small">
                 <Descriptions.Item label="Nama">{selectedMaterial.name || "-"}</Descriptions.Item>
-                <Descriptions.Item label="Kategori">
+                <Descriptions.Item label="Jenis Komponen">
                   {SEMI_FINISHED_CATEGORY_MAP[selectedMaterial.category] || "-"}
                 </Descriptions.Item>
                 <Descriptions.Item label="Jenis Bunga">
-                  {getSemiFinishedGroupLabel(selectedMaterial.flowerGroup, FALLBACK_SEMI_FINISHED_GROUP_LABEL)}
+                  {resolveFlowerTypeLabel(selectedMaterial)}
+                </Descriptions.Item>
+                <Descriptions.Item label="Kelompok Komponen">
+                  {resolveComponentGroupLabel(selectedMaterial) || '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Status">
                   <Tag color={selectedMaterialStatusMeta?.color || "default"}>

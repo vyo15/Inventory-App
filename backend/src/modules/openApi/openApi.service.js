@@ -71,6 +71,9 @@ const buildOpenApiDocument = ({ baseUrl = "http://localhost:3001" } = {}) => ({
     "/api/maintenance/status": {
       get: { tags: ["Maintenance"], summary: "Status database, queue, logger, backup, dan auth compatibility", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Status maintenance" } } },
     },
+    "/api/maintenance/initial-setup-readiness": {
+      get: { tags: ["Maintenance"], summary: "Checklist read-only kesiapan setup database awal", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Progress setup master, stok awal, dan backup baseline" } } },
+    },
     "/api/maintenance/backups/import": {
       post: { tags: ["Maintenance"], summary: "Import dan verifikasi File Backup IMS secara atomic", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Backup terdaftar dan diaudit" }, 400: { description: "Backup invalid" } } },
     },

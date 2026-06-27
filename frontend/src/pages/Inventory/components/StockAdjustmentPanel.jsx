@@ -32,6 +32,7 @@ import * as sqliteStockAdjustmentsAdapter from '../../../data/adapters/sqlite/sq
 import { listenProducts } from '../../../services/MasterData/productsService';
 import { listenRawMaterials } from '../../../services/MasterData/rawMaterialsService';
 import { getActiveSemiFinishedMaterials } from '../../../services/Produksi/semiFinishedMaterialsService';
+import { compareRecordsByNameAsc, upsertRecordById } from '../../../utils/state/recordCollectionState';
 
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
@@ -531,6 +532,30 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
           unitCost: Number(values.unitCost || 0),
           transactionDate: values.date.toDate().toISOString(),
         });
+        try {
+          const refreshedAdjustments = await sqliteStockAdjustmentsAdapter.listStockAdjustments({ limit: 500 });
+          setStockAdjustmentRecords(refreshedAdjustments);
+        } catch (refreshError) {
+          console.error("Penyesuaian tersimpan, tetapi riwayat belum bisa dimuat ulang:", refreshError);
+          message.warning("Penyesuaian tersimpan. Riwayat akan diperbarui otomatis.");
+        }
+
+        const updatedItem = result?.item || null;
+        const updatedSourceType = result?.stockReadModel?.sourceType || "";
+        if (updatedSourceType === "raw_material") {
+          setRawMaterials((current) => upsertRecordById(current, updatedItem, {
+            comparator: compareRecordsByNameAsc,
+          }));
+        } else if (updatedSourceType === "semi_finished") {
+          setSemiFinishedMaterials((current) => upsertRecordById(current, updatedItem, {
+            comparator: compareRecordsByNameAsc,
+          }));
+        } else if (updatedSourceType === "product") {
+          setFinishedProducts((current) => upsertRecordById(current, updatedItem, {
+            comparator: compareRecordsByNameAsc,
+          }));
+        }
+
         message.success("Penyesuaian stok berhasil disimpan");
         resetAdjustmentFormState();
         onAdjustmentSaved?.(result);

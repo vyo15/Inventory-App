@@ -7,14 +7,16 @@ import {
   Input,
   Space,
   Switch,
+  Button,
+  Tag,
 } from "antd";
 import { formatNumberId, parseIntegerIdInput } from "../../../utils/formatters/numberId";
 import ResponsiveFormSection from "../../../components/Layout/Mobile/ResponsiveFormSection";
 import RupiahInputNumber from "../../../components/Layout/Forms/RupiahInputNumber";
 import { showFormValidationFeedback } from "../../../utils/forms/formValidationFeedback";
 import {
+  calculateSupplierMaterialRestockMetrics,
   getSupplierOptionLabel,
-  getSupplierProductLinkForMaterial,
 } from "../../../services/MasterData/suppliersService";
 import PurchaseOcrDraftPanel from "./PurchaseOcrDraftPanel";
 import PurchaseStockPreview from "./PurchaseStockPreview";
@@ -48,7 +50,10 @@ const PurchaseFormModal = ({
   filteredSuppliers,
   itemId,
   supplierId,
-  selectedSupplier,
+  selectedSupplierOffers,
+  selectedCatalogOffer,
+  priceVerified,
+  onVerifyPrice,
   shopeeOcrState,
   shopeeOcrApplyFeedback,
   handleShopeeScreenshotUpload,
@@ -64,7 +69,7 @@ const PurchaseFormModal = ({
         onOk={form.submit}
         onCancel={onCancel}
         confirmLoading={isSubmittingPurchase}
-        okButtonProps={{ disabled: isSubmittingPurchase }}
+        okButtonProps={{ disabled: isSubmittingPurchase || !priceVerified }}
         cancelButtonProps={{ disabled: isSubmittingPurchase }}
         okText="Simpan"
         cancelText="Batal"
@@ -159,22 +164,18 @@ const PurchaseFormModal = ({
             label="Nama Supplier"
             rules={[{ required: true, message: "Supplier wajib dipilih" }]}
             extra={
-              itemType === "material" && itemId
+              itemId
                 ? filteredSuppliers.length
-                  ? "Supplier difilter dari katalog Supplier yang menyediakan bahan ini."
-                  : "Belum ada supplier yang menyediakan bahan ini. Tambahkan material ini di menu Supplier terlebih dahulu."
-                : "Pilih supplier"
+                  ? "Hanya toko yang memiliki katalog untuk barang dan varian ini."
+                  : "Belum ada toko yang menyediakan barang ini. Tambahkan melalui menu Supplier."
+                : "Pilih barang terlebih dahulu."
             }
           >
             <Select
               placeholder="Pilih supplier"
               showSearch
               optionFilterProp="children"
-              notFoundContent={
-                itemType === "material" && itemId
-                  ? "Belum ada supplier relevan untuk bahan ini"
-                  : "Supplier tidak ditemukan"
-              }
+              notFoundContent={itemId ? "Belum ada supplier relevan" : "Supplier tidak ditemukan"}
             >
               {filteredSuppliers.map((item) => (
                 <Option key={item.id} value={item.id}>
@@ -184,29 +185,65 @@ const PurchaseFormModal = ({
             </Select>
           </Form.Item>
 
-          {/* ===============================================================
-              Field Link Produk untuk referensi restock berikutnya.
-              Fungsi: menyimpan URL produk dari transaksi pembelian terakhir.
-              Alasan perubahan: saat supplier dipilih, default link dibaca dari
-              materialDetails supplier yang cocok dengan bahan ini agar user tidak
-              perlu copy-paste ulang dari menu Supplier.
-              Status: aktif dipakai sebagai data referensi; field tetap boleh
-              disesuaikan untuk histori purchase ini, tetapi tidak dipakai untuk
-              perhitungan harga, stok, kas, saving, expense, atau laporan.
-          =============================================================== */}
           <Form.Item
-            name="productLink"
-            label="Link Produk Restock"
+            name="catalogOfferId"
+            label="Link / Paket Toko"
+            rules={[{ required: true, message: "Link atau paket toko wajib dipilih" }]}
             extra={
-              itemType === "material" && supplierId
-                ? getSupplierProductLinkForMaterial(selectedSupplier || {}, itemId)
-                  ? "Default dari katalog Supplier. Jika link marketplace berubah saat pembelian, boleh disesuaikan untuk histori purchase ini."
-                  : "Supplier ini belum punya link produk untuk bahan ini."
-                : "Opsional. Dipakai untuk referensi restock berikutnya, bukan untuk perhitungan pembelian."
+              supplierId
+                ? selectedSupplierOffers.length
+                  ? "Pilih penawaran yang akan dipakai untuk Pembelian ini."
+                  : "Toko ini belum memiliki penawaran aktif untuk barang dan varian terpilih."
+                : "Pilih supplier terlebih dahulu."
             }
           >
-            <Input placeholder="Link produk marketplace / supplier" />
+            <Select
+              placeholder="Pilih link atau paket"
+              showSearch
+              optionFilterProp="children"
+              disabled={!supplierId || !selectedSupplierOffers.length}
+            >
+              {selectedSupplierOffers.map((offer) => {
+                const metrics = calculateSupplierMaterialRestockMetrics(offer);
+                const label = offer.listingName
+                  || [offer.channel, offer.purchaseUnit].filter(Boolean).join(" · ")
+                  || "Penawaran toko";
+                return (
+                  <Option key={offer.id || offer.catalogOfferId} value={offer.id || offer.catalogOfferId}>
+                    {`${label} — ${formatNumberId(metrics.supplierItemPrice || 0)}`}
+                  </Option>
+                );
+              })}
+            </Select>
           </Form.Item>
+
+          <Form.Item name="productLink" hidden>
+            <Input />
+          </Form.Item>
+
+          {selectedCatalogOffer ? (
+            <div className="ims-readonly-field" style={{ marginBottom: 16 }}>
+              <Space direction="vertical" size={6} style={{ width: "100%" }}>
+                <Space wrap>
+                  <strong>{selectedCatalogOffer.listingName || selectedCatalogOffer.itemName}</strong>
+                  {selectedCatalogOffer.channel ? <Tag>{selectedCatalogOffer.channel}</Tag> : null}
+                </Space>
+                <Space wrap>
+                  <span>Harga katalog: Rp {formatNumberId(selectedCatalogOffer.supplierItemPrice || 0)}</span>
+                  {selectedCatalogOffer.productLink ? (
+                    <Button
+                      size="small"
+                      href={selectedCatalogOffer.productLink}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Buka Toko
+                    </Button>
+                  ) : null}
+                </Space>
+              </Space>
+            </div>
+          ) : null}
 
           {/* ===============================================================
               OCR Draft Screenshot Shopee.
@@ -434,6 +471,51 @@ const PurchaseFormModal = ({
                 subtotalManualOverrideRef.current = true;
               }}
             />
+          </Form.Item>
+
+          <Form.Item name="priceVerified" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name="priceVerifiedAt" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name="verifiedCatalogPrice" hidden>
+            <InputNumber />
+          </Form.Item>
+
+          <Form.Item shouldUpdate noStyle>
+            {({ getFieldValue }) => {
+              const qty = Math.round(Number(getFieldValue("quantity") || 0));
+              const subtotal = Math.round(Number(getFieldValue("subtotalItems") || 0));
+              const actualPackagePrice = qty > 0 ? Math.round(subtotal / qty) : 0;
+              const referencePrice = Math.round(Number(selectedCatalogOffer?.supplierItemPrice || 0));
+              const isChanged = Boolean(priceVerified && actualPackagePrice !== referencePrice);
+              return (
+                <div className="ims-readonly-field" style={{ marginBottom: 16 }}>
+                  <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                    <Space wrap style={{ justifyContent: "space-between", width: "100%" }}>
+                      <strong>Verifikasi Harga Aktual</strong>
+                      <Tag color={priceVerified ? (isChanged ? "gold" : "green") : "default"}>
+                        {priceVerified ? (isChanged ? "Harga berubah" : "Harga sesuai") : "Belum diverifikasi"}
+                      </Tag>
+                    </Space>
+                    <span>
+                      Harga aktual per paket: <strong>Rp {formatNumberId(actualPackagePrice)}</strong>
+                    </span>
+                    <span style={{ opacity: 0.72 }}>
+                      Buka toko, cocokkan harga dan isi paket, lalu konfirmasi sebelum menyimpan.
+                    </span>
+                    <Button
+                      type={priceVerified ? "default" : "primary"}
+                      onClick={onVerifyPrice}
+                      disabled={!selectedCatalogOffer || qty <= 0 || actualPackagePrice <= 0}
+                    >
+                      {priceVerified ? "Verifikasi Ulang" : "Verifikasi Harga"}
+                    </Button>
+                  </Space>
+                </div>
+              );
+            }}
           </Form.Item>
 
           {!isOfflinePurchase ? (

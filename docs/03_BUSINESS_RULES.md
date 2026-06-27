@@ -49,7 +49,9 @@ Status saving:
 Saat pembelian disimpan:
 - simpan transaksi ke `purchases`
 - tambah stok item
-- untuk bahan baku tertentu update `averageActualUnitCost` dan `restockReferencePrice`
+- untuk Bahan Baku, hitung `averageActualUnitCost` dengan weighted average dari nilai stok lama dan total biaya aktual pembelian per satuan stok masuk
+- `restockReferencePrice` tetap harga acuan/manual dan tidak boleh ditimpa otomatis oleh modal transaksi
+- pembaruan modal, stok, katalog supplier, `inventory_logs`, expense, ledger, dan audit wajib berada dalam transaction SQLite yang sama
 - catat `inventory_logs` dengan type `purchase_in`
 - buat pengeluaran otomatis ke `expenses`
 
@@ -67,6 +69,29 @@ Guard aktif:
 - Jika total pesanan tidak cocok dengan rumus sistem atau marker Shopee kurang kuat, user wajib melihat warning/konfirmasi sebelum hasil OCR boleh diterapkan.
 - Catatan transaksi menyimpan ringkasan OCR teks saja; bukti screenshot tidak disimpan di database/storage lama maupun folder project.
 - Popup detail OCR bersifat tampilan audit/read-only. Tombol Print hanya mencetak struk OCR tanpa mengubah data transaksi.
+
+## 1A. Kategori & Kelompok Master
+
+Kategori master memakai satu tabel dengan scope yang terpisah:
+- `product_form` untuk **Bentuk Produk** seperti Bouquet atau Bunga Tangkai;
+- `flower_type` untuk **Jenis Bunga** seperti Mawar atau Tulip;
+- `raw_material_group` untuk **Kelompok Bahan** seperti Kain Flanel, Kawat, atau Kemasan;
+- `semi_finished_group` untuk **Kelompok Komponen** sebagai metadata pencarian/laporan.
+
+Rule aktif:
+- Struktur kategori maksimal dua tingkat: kategori utama → subkategori.
+- Nama kategori unik secara case-insensitive pada scope dan parent yang sama.
+- Produk, bahan, dan komponen memilih kategori paling spesifik melalui `categoryId`.
+- Nama kategori pada record item hanya snapshot compatibility; tampilan terbaru mengutamakan master berdasarkan `categoryId`.
+- Kategori yang masih digunakan atau masih memiliki child tidak boleh dinonaktifkan.
+- Warna, ukuran, jumlah tangkai, satuan pembelian, dan nilai konversi bukan kategori.
+- Kategori tidak menentukan harga, Pricing Rule, stok minimum, BOM, HPP, atau flow produksi.
+- Pada Semi Finished, field `category` lama tetap berarti **Jenis Komponen** (`pola`, `kelopak`, `daun`, `kawat`, `lainnya`) untuk logic produksi. `semi_finished_group` hanya metadata pengelompokan dan tidak boleh menggantikan field tersebut.
+
+Konversi pembelian tetap mengikuti transaksi:
+- purchase menyimpan Qty Beli, Satuan Beli, nilai konversi, dan hasil Stok Masuk;
+- inventory, BOM, dan stock report memakai satuan stok dasar;
+- kategori tidak menyimpan atau menggandakan rule konversi unit.
 
 ## 2. Rule Penjualan
 
@@ -672,31 +697,36 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Profit Loss membaca payroll lewat `expenses`, bukan langsung dari `production_payrolls`, agar tidak double count.
 - Expense payroll tidak boleh dihapus otomatis saat payroll paid dibatalkan sebelum business rule rollback disepakati.
 
-## 15. Rule Supplier & Raw Material
+## 15. Rule Supplier, Katalog Toko, dan Relasi Barang
 
-### 15.1 Supplier sebagai katalog vendor/restock
-- Supplier adalah master/katalog vendor untuk referensi restock.
-- Supplier boleh menyimpan daftar material yang dijual melalui `materialDetails`.
-- `materialDetails.productLink`, `materialDetails.referencePrice`, dan `materialDetails.note` hanya informasi restock.
-- Supplier tidak boleh memasang supplier baru ke Raw Material berdasarkan katalog `materialDetails`.
-- Saat master Supplier diedit, sistem boleh memperbarui snapshot `supplierName` dan `supplierLink` hanya pada Raw Material yang sudah memiliki `supplierId` sama.
-- Saat master Supplier dihapus, sistem boleh mengosongkan snapshot supplier hanya pada Raw Material yang masih menunjuk `supplierId` tersebut.
-- Tidak ada tombol atau flow aktif “Sinkronkan Bahan” dari Supplier ke Raw Material.
+### 15.1 Supplier sebagai identitas toko
+- Supplier menyimpan identitas toko/vendor: nama, link toko utama, kontak, alamat, catatan, dan status.
+- `supplierId`, ID penawaran, ID item, serta kode internal tetap dibuat/disimpan backend dan tidak ditampilkan pada form, tabel, drawer, tooltip, atau fallback UI utama.
+- Kode/ID internal tidak boleh dihapus dari data karena tetap diperlukan untuk relasi, migrasi, dan audit backend.
+- Satu komponen detail drawer dipakai ulang untuk semua supplier; drawer selalu memuat satu toko yang dipilih, bukan menggabungkan seluruh supplier.
 
-### 15.2 Raw Material memilih supplier manual
-- Raw Material tetap source utama stok bahan.
-- Supplier pada Raw Material dipilih manual dari form Raw Material.
-- Snapshot manual yang boleh disimpan di raw material:
-  - `supplierId`
-  - `supplierName`
-  - `supplierLink`
-- Data historis dengan snapshot supplier tetap aman dibaca; snapshot boleh ikut diperbarui/dibersihkan hanya melalui cascade berdasarkan `supplierId` yang sudah dipilih manual.
+### 15.2 Katalog toko sebagai relasi many-to-many
+- Katalog aktif disimpan pada `supplier_catalog_offers`, bukan sebagai satu field link pada master item.
+- Satu supplier boleh menyediakan banyak Produk dan Bahan Baku.
+- Satu Produk/Bahan Baku boleh disediakan banyak supplier.
+- Kombinasi supplier + item yang sama boleh memiliki banyak link/paket selama penawarannya berbeda.
+- Setiap penawaran menyimpan item type/id, varian bila ada, nama listing, channel, link, satuan beli, qty paket, konversi, satuan stok, harga saat ini, estimasi biaya, status aktif, dan status ketersediaan.
+- `materialDetails` lama tetap dibaca sebagai compatibility dan dimigrasikan aman; penulisan baru memakai katalog terstruktur.
+- Supplier/katalog tidak mengunci master barang pada satu supplier dan tidak melakukan cascade otomatis ke Product/Raw Material.
 
-### 15.3 Batas ke Purchases
-- Purchases boleh memakai supplier sebagai referensi vendor.
-- Harga aktual pembelian tetap berasal dari transaksi pembelian.
-- Harga referensi supplier tidak boleh menggantikan `actualUnitCost` atau harga aktual pembelian.
-- Klik link supplier/product restock tidak membuat purchase dan tidak mengubah stok.
+### 15.3 Histori wajib per toko
+- Histori harga, pengecekan, link, status, dan verifikasi Pembelian disimpan di `supplier_catalog_history` dengan `supplier_id` yang jelas.
+- Saat drawer Toko A dibuka, hanya histori Toko A yang boleh dimuat dan ditampilkan; histori toko lain tidak boleh tercampur.
+- Harga lama, waktu pengecekan, waktu perubahan, dan pelaku perubahan tidak ditampilkan di katalog utama. Detail tersebut hanya tersedia pada tab **Histori Toko**.
+- Katalog utama hanya menampilkan kondisi terbaru: barang, toko/channel, paket, harga saat ini, harga per unit, status, dan aksi.
+- Penawaran tidak dihapus saat link mati/barang habis; gunakan status ketersediaan atau nonaktif agar histori transaksi tetap utuh.
+
+### 15.4 Batas ke Purchases
+- Purchases wajib memilih supplier dan satu penawaran/link katalog yang sesuai item serta varian.
+- Harga aktual wajib diverifikasi pada setiap Pembelian sebelum commit, walaupun katalog baru diperiksa sebelumnya.
+- Jika harga aktual berubah, perubahan harga katalog, histori toko, purchase, stock-in, inventory log, dan expense wajib berada dalam transaksi SQLite yang sama agar tidak partial.
+- Harga aktual Pembelian tetap snapshot transaksi dan tidak boleh berubah ketika katalog diedit kemudian.
+- Klik link atau tombol Beli hanya membuka/prefill form; stok, kas, expense, dan laporan baru berubah setelah commit Pembelian berhasil.
 
 ## 16. Rule Restock Assistant
 
@@ -709,7 +739,7 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Stok/kas/expense hanya berubah setelah user menyimpan transaksi di halaman Purchases.
 - Supplier terakhir dibeli dan link produk terakhir wajib berasal dari transaksi Purchases terakhir untuk bahan tersebut.
 - Jika belum ada purchase/link produk, UI harus menampilkan fallback/empty state aman dan tidak boleh memakai link toko supplier sebagai link produk utama.
-- Menu Supplier tetap menjadi tempat melihat semua supplier, harga referensi, link produk katalog, dan catatan supplier.
+- Menu Supplier menampilkan daftar toko secara ringkas. Katalog dan Histori Toko hanya dimuat pada drawer supplier yang sedang dipilih agar data antartoko tidak tercampur.
 
 ## 15. Rule Final Stok Varian
 
@@ -725,6 +755,10 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Untuk Product dan Semi Finished, minimum stok final adalah field master: `products.minStockAlert` dan `semi_finished_materials.minStockAlert`, berlaku untuk item non-varian maupun bervarian.
 - `variants[].minStockAlert` pada Product/Semi Finished hanya data historis/compatibility field jika masih ada di data historis/helper generic; UI dan service master tidak boleh menjadikannya source utama threshold low-stock.
 - Saat Product/Semi Finished bervarian dibuat atau di-edit, total stok master tetap dihitung dari varian, tetapi `minStockAlert` master wajib berasal dari input master `values.minStockAlert`, bukan penjumlahan varian.
+- Untuk Raw Material tanpa varian, minimum stok memakai field master `minStock`/`minStockAlert`.
+- Untuk Raw Material bervarian, minimum stok operasional wajib berasal dari `variants[].minStockAlert`; nilai top-level disimpan `0` untuk data baru agar threshold master tidak diterapkan ulang ke setiap varian.
+- Read model Raw Material bervarian boleh menyimpan jumlah seluruh minimum varian aktif untuk ringkasan aggregate, tetapi status low-stock tetap harus mengevaluasi setiap varian terhadap minimum masing-masing.
+- Data Raw Material lama yang belum memiliki `variants[].minStockAlert` boleh memakai `minStock` master sebagai fallback compatibility saat dibaca, lalu dinormalisasi ketika master disimpan kembali.
 - Untuk modal/HPP Semi Finished bervarian: jika stok varian ada, master `averageCostPerUnit` wajib weighted by stock; jika semua stok 0, read-model cost tidak boleh dirata-ratakan dengan varian yang cost-nya 0. Gunakan rata-rata varian aktif yang punya cost > 0, lalu fallback `lastProductionCostPerUnit` untuk tampilan/BOM cost source.
 - Reset/Maintenance hanya alat audit/repair/development, bukan flow harian user untuk menjaga stok tetap sinkron.
 
@@ -771,12 +805,26 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Mode Rule hanya boleh melakukan auto-preview harga saat base cost dan rule valid. Jika base cost/rule belum valid, tampilkan warning/preview tidak siap tanpa mengisi harga asal.
 - Product memakai basis cost `hppPerUnit` untuk preview Pricing Rule.
 - Raw Material memakai `averageActualUnitCost` sebagai basis utama dengan fallback `restockReferencePrice`.
+- `averageActualUnitCost` adalah transaction-derived, read-only pada edit master, dan hanya boleh berubah dari Pembelian/flow valuation resmi.
+- Saat membuat Raw Material dengan stok awal > 0, modal stok awal per satuan wajib > 0 agar nilai persediaan dan HPP tidak dimulai dari nol palsu.
 - Semua preview harga wajib lewat `buildSinglePricingPreview` dari `pricingService`; jangan membuat formula pricing baru di page/component.
 - `PricingModeSwitch` hanya shared UI switch Manual/Rule, bukan source formula pricing, bukan validation service, bukan query backend/database, dan bukan tempat auto-preview.
 - Auto-preview Product dan Raw Material tetap local di halaman masing-masing kecuali ada audit patch terpisah yang membuktikan shared hook lebih aman.
 - PricingRules preview/apply tetap skip item Manual dan hanya memproses item yang memang berada pada mode Rule/valid.
 - Apply Pricing Rule SQLite wajib memakai endpoint batch atomic. Seluruh item membawa `expectedVersion`; satu conflict atau item invalid menyebabkan seluruh batch rollback.
 - Frontend tidak boleh melakukan loop direct `PUT` Product/Raw Material untuk apply massal karena dapat menghasilkan partial apply.
+
+## Rule Guard Master Bahan Baku
+
+- Raw Material tidak terikat pada satu Supplier di master. Sumber restock dikelola melalui `supplier_catalog_offers`; satu bahan boleh memiliki banyak toko dan banyak link/paket.
+- Form/tabel utama Raw Material tidak menampilkan supplier snapshot lama, kode master, atau ID teknis. UI cukup menampilkan ringkasan jumlah toko/link dan aksi ke katalog Supplier.
+- Nama Raw Material wajib unik case-insensitive; kategori wajib aktif dengan tipe `raw_material_group`; satuan stok wajib berasal dari daftar unit yang didukung.
+- Nilai stok, minimum stok, harga, dan modal tidak boleh negatif. Stok awal > 0 wajib mempunyai modal stok awal > 0.
+- `averageActualUnitCost` tidak boleh diedit melalui update master. Backend wajib preserve nilai terbaru dan menghitung weighted average secara atomic pada Pembelian Bahan Baku.
+- Raw Material tidak boleh dinonaktifkan jika masih mempunyai current/reserved stock pada master, varian aktif, atau varian arsip.
+- Raw Material juga tidak boleh dinonaktifkan jika masih dipakai BOM aktif atau proses produksi aktif yang menyimpan referensi material tersebut.
+- Guard nonaktif wajib berada di backend; menyembunyikan/toggle-disable di UI saja tidak cukup.
+- Link Pembelian/restock historis hanya boleh dibuka jika skemanya `http://` atau `https://`.
 
 ## 17. Rule Maintenance Center dan Backup Data Aman
 
@@ -792,35 +840,38 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - UI tidak menampilkan tab reset, reset/baseline HPP, atau service repair stub. Fitur sandbox testing harus memakai database terpisah dan approval khusus.
 - Reset destructive baru hanya boleh dibuat setelah desain guard baru disetujui: backup otomatis, preview dampak, protected master, keyword, audit log awal/akhir, dan batas operasi aman.
 
-## 19. Rule Purchases Supplier Restock Prefill
+## 19. Rule Purchases Supplier Catalog dan Verifikasi Harga
 
-- Form Purchases boleh membaca katalog Supplier `materialDetails` secara read-only untuk mengisi awal Link Produk dan Harga Supplier Tercatat.
-- Link Produk di Purchases berasal dari `materialDetails[].productLink` supplier yang dipilih dan materialId yang cocok; link produk bahan lain tidak boleh dipakai.
-- Harga Supplier Tercatat berasal dari katalog Supplier yang dipilih dan hanya menjadi harga pembanding per satuan stok.
-- Harga Supplier Tercatat tidak boleh menjadi harga aktual pembelian, tidak boleh menjadi `actualUnitCost`, dan tidak boleh mengubah kas/expense secara langsung.
-- Harga aktual pembelian tetap berasal dari subtotal transaksi, ongkir, diskon ongkir, voucher/koin/potongan, dan biaya layanan.
-- `totalStockIn` tetap dihitung dari `Qty Beli × Konversi Supplier` untuk bahan baku.
-- Total Pembanding Supplier di Purchases memakai komponen katalog supplier: `Qty Beli × Harga Barang Supplier + Ongkir Default Supplier + Biaya Layanan Default Supplier - Diskon Default Supplier`; jangan menggandakan ongkir/admin dengan mengalikan harga per satuan stok saat Qty Beli lebih dari 1.
-- Supplier dropdown pada pembelian bahan baku harus memprioritaskan supplier yang menyediakan material tersebut; jangan fallback diam-diam ke semua supplier.
-- Supplier tetap katalog vendor/restock dan tidak otomatis menulis ke Raw Material.
+- Form Purchases membaca `supplier_catalog_offers` berdasarkan jenis item, item, varian, dan supplier yang dipilih.
+- Supplier dropdown hanya menampilkan toko yang memiliki penawaran aktif dan tersedia untuk item/varian tersebut; jangan fallback diam-diam ke semua supplier.
+- Setelah supplier dipilih, user wajib memilih satu link/paket katalog. Link transaksi menjadi snapshot dari penawaran tersebut dan bukan input URL bebas.
+- Prefill katalog boleh mengisi satuan beli, konversi, tipe online/offline, harga barang, dan estimasi biaya, tetapi user tetap memasukkan biaya aktual transaksi.
+- Verifikasi harga wajib dilakukan setelah Qty dan Subtotal Barang aktual tersedia. Harga paket aktual dihitung `Subtotal Barang / Qty Beli`.
+- Mengubah supplier, penawaran, Qty, atau Subtotal setelah verifikasi wajib membatalkan status verifikasi dan meminta verifikasi ulang.
+- Jika harga aktual berbeda, katalog diperbarui saat commit Pembelian dan histori perubahan dicatat pada toko terkait.
+- UI Purchases hanya menampilkan status `Belum diverifikasi`, `Harga sesuai`, atau `Harga berubah`; harga lama dan waktu perubahan tetap berada di Histori Toko.
+- `totalStockIn` bahan baku tetap `Qty Beli × Konversi Supplier`; Product memakai Qty Beli sebagai stock-in.
+- Purchase wajib menyimpan snapshot nama supplier/item, penawaran, link, satuan, konversi, harga terverifikasi, dan varian agar histori tidak bergantung pada master terbaru.
 
 ## 20. Rule Katalog Restock Supplier
 
 - Supplier adalah katalog vendor/restock, bukan transaksi pembelian.
-- Field kategori/keterangan supplier lama hanya data historis read-only dan bukan input utama flow restock.
-- Setiap `materialDetails` supplier boleh menyimpan konteks restock: link produk, tipe pembelian, satuan beli, qty per pembelian, konversi ke satuan stok, satuan stok, harga barang supplier, ongkir estimasi, biaya admin, diskon, dan catatan.
-- Harga Estimasi Supplier / Satuan Stok dihitung dari katalog supplier sebagai pembanding: `(harga barang + ongkir + biaya admin - diskon) / total stok hasil konversi`.
-- Harga Estimasi Supplier bukan harga aktual pembelian, bukan `actualUnitCost`, dan tidak boleh membuat kas/expense/laporan berubah.
-- Purchases boleh memakai katalog Supplier untuk prefill Link Produk, Satuan Beli, Konversi, dan Harga Supplier Tercatat, tetapi user tetap wajib mengisi transaksi aktual dan klik Simpan.
-- Supplier tetap tidak boleh otomatis memasang supplier ke Raw Material berdasarkan `materialDetails`.
+- Tabel utama Supplier tidak menampilkan kode atau ID internal.
+- Drawer supplier reusable memiliki tab **Ringkasan**, **Katalog**, dan **Histori Toko**.
+- Katalog mendukung Produk dan Bahan Baku, banyak barang per toko, banyak toko per barang, serta banyak link/paket untuk barang yang sama.
+- Harga per unit stok dihitung dari `(Qty beli × harga barang + estimasi ongkir + biaya layanan - diskon) / total stok hasil konversi`.
+- Harga dan biaya katalog hanya referensi. Ongkir, voucher, diskon, biaya layanan, dan total aktual tetap berasal dari Pembelian.
+- Status katalog utama boleh menunjukkan `Perlu dicek`, `Aktif`, `Barang habis`, `Link bermasalah`, atau `Nonaktif` tanpa menampilkan timestamp.
+- Pengecekan manual memperbarui status/harga terbaru dan menulis Histori Toko; harga lama tidak ditampilkan pada katalog utama.
+- Penawaran yang pernah dipakai transaksi dinonaktifkan, bukan dihapus permanen.
 
 ## 21. Rule Stok Masuk Purchases dari Konversi Supplier
 
 - Purchases wajib menampilkan **Stok Masuk total** sebagai informasi utama, bukan menjadikan **Konversi Supplier** sebagai input utama/editable.
 - Untuk bahan baku, rumus final tetap: `Stok Masuk = Qty Beli × Konversi Supplier`.
-- Konversi Supplier berasal dari katalog Supplier `materialDetails.conversionValue`, bersifat read-only di Purchases, dan hanya menjadi sumber hitung stok masuk.
+- Konversi Supplier berasal dari penawaran terpilih pada `supplier_catalog_offers.conversion_value`, bersifat read-only di Purchases, dan hanya menjadi sumber hitung stok masuk.
 - Qty Beli boleh diubah user dan hanya boleh mengubah Stok Masuk, subtotal default jika belum diedit manual, dan ringkasan pembanding.
-- Perubahan Qty Beli tidak boleh mereset Supplier, Link Produk Restock, purchaseType, biaya supplier, atau Harga Supplier Tercatat.
+- Perubahan Qty Beli tidak boleh mereset Supplier atau penawaran yang masih sesuai item/varian, tetapi wajib membatalkan status verifikasi harga agar harga aktual dikonfirmasi ulang.
 - Reject/selisih barang setelah diterima ditangani lewat Penyesuaian Stok agar audit stok tetap jelas, bukan dengan mengubah konversi di Purchases.
 - Selisih Hemat tetap dihitung dari `Total Pembanding Supplier - Total Aktual Pembelian` dan hanya menjadi informasi efisiensi, bukan pengurang kas.
 
@@ -1070,7 +1121,8 @@ Patch Auth/User Management tidak boleh mengubah rumus stok, Purchases, Returns, 
 ## 24. Rule Tampilan Saldo Stok Locked — 2026-05-06
 - Table yang menampilkan **saldo stok item/master** harus menampilkan `Total`, `Tersedia`, dan semua variant pill langsung di table bila row memiliki `variants[]`.
 - Variant pill tidak boleh menambah teks status panjang seperti `Kosong`/`Stok Rendah` di dalam pill karena membuat tabel berantakan saat varian banyak. Status varian boleh diberi tone visual soft, sedangkan ringkasan varian bermasalah ditaruh sebagai caption ringkas di area status/nama item.
-- Untuk item bervarian, status low-stock utama wajib membaca setiap varian terhadap threshold master (`minStock` untuk Raw Material, `minStockAlert` untuk Product/Semi Finished). Aggregate master tetap boleh tampil sebagai total, tetapi tidak boleh membuat item terlihat aman jika ada varian kosong/di bawah minimum.
+- Untuk Product/Semi Finished bervarian, status low-stock utama wajib membaca setiap varian terhadap threshold master `minStockAlert`.
+- Untuk Raw Material bervarian, status low-stock wajib membaca setiap varian terhadap `variants[].minStockAlert`; aggregate master hanya ringkasan dan tidak boleh membuat item terlihat aman jika satu varian kosong/di bawah minimum.
 - Rule ini berlaku untuk tampilan saldo stok item seperti Products, Raw Materials, Semi Finished Materials, Dashboard Stok Kritis, dan Stock Report.
 - Rule ini tidak berlaku untuk Qty transaksi, Stok Masuk Purchases, Stock Adjustment quantity, inventory log delta, atau field audit lain yang bukan saldo stok master. Untuk inventory log delta, Qty boleh menampilkan satuan dari `stockUnit`/`unit`, tetapi tidak boleh berubah menjadi komponen saldo stok master.
 - Perubahan tampilan compact table tidak boleh mengubah rumus stok, mutation, reserved stock, available stock, HPP, pricing, export mapping, atau schema SQLite/backend.
@@ -1159,7 +1211,7 @@ Catatan lock:
 - Code master item/config immutable saat edit; perubahan nama/kategori/warna/target tidak boleh regenerate code existing.
 - User tidak boleh input manual code master item/config.
 - Field `code` tidak boleh dihapus dari payload/data karena masih dipakai internal reference, export, dan audit teknis.
-- Customer/Supplier/transaksi/audit reference tidak boleh disembunyikan dari UI.
+- Nomor referensi transaksi dan audit bisnis tetap ditampilkan bila diperlukan operasional. Kode master Customer/Supplier serta seluruh ID teknis tetap backend-only dan tidak ditampilkan pada UI utama.
 - SKU Variant/kode variant tetap compatibility/backstage; UI utama cukup menampilkan nama varian, status, dan stok.
 
 

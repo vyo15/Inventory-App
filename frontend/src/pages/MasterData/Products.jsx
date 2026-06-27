@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Button,
@@ -36,6 +36,11 @@ import ResponsiveFormSection from '../../components/Layout/Mobile/ResponsiveForm
 import MasterRecordActions from './components/MasterRecordActions';
 import { buildMasterRecordMobileActions } from './components/masterRecordActionHelpers';
 import { listCategories } from '../../data/repositories/categoriesRepository';
+import { CATEGORY_TYPES } from '../../constants/categoryOptions';
+import {
+  buildCategorySelectOptions,
+  resolveCategoryLabel,
+} from '../../utils/categories/categoryHelpers';
 
 import { ensureAtLeastOneVariant } from '../../utils/variants/variantHelpers';
 import {
@@ -46,6 +51,7 @@ import {
   updateProduct,
 } from '../../services/MasterData/productsService';
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
+import { compareRecordsByNameAsc, upsertRecordById } from '../../utils/state/recordCollectionState';
 import { buildSinglePricingPreview, listPricingRulesByTargetType } from '../../services/Pricing/pricingService';
 import PricingModeSwitch from '../../components/Pricing/PricingModeSwitch';
 import { isVariantStockEmpty } from '../../utils/variants/variantArchiveHelpers';
@@ -81,6 +87,7 @@ const Products = () => {
   // ---------------------------------------------------------------------------
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [flowerTypes, setFlowerTypes] = useState([]);
   const [pricingRules, setPricingRules] = useState([]);
   const [loading, setLoading] = useState(false);
   const [formVisible, setFormVisible] = useState(false);
@@ -151,12 +158,14 @@ const Products = () => {
 
     const loadSqliteCompanions = async () => {
       try {
-        const [categoryRows, pricingRuleRows] = await Promise.all([
-          listCategories(),
+        const [categoryRows, flowerTypeRows, pricingRuleRows] = await Promise.all([
+          listCategories({ type: CATEGORY_TYPES.PRODUCT_FORM }),
+          listCategories({ type: CATEGORY_TYPES.FLOWER_TYPE }),
           listPricingRulesByTargetType('products'),
         ]);
         if (disposed) return;
         setCategories(categoryRows);
+        setFlowerTypes(flowerTypeRows);
         setPricingRules(pricingRuleRows);
       } catch (error) {
         console.error(error);
@@ -181,6 +190,27 @@ const Products = () => {
       return acc;
     }, {});
   }, [pricingRules]);
+
+
+  const categorySelectOptions = useMemo(
+    () => buildCategorySelectOptions(categories, CATEGORY_TYPES.PRODUCT_FORM),
+    [categories],
+  );
+  const flowerTypeSelectOptions = useMemo(
+    () => buildCategorySelectOptions(flowerTypes, CATEGORY_TYPES.FLOWER_TYPE),
+    [flowerTypes],
+  );
+  const resolveProductCategoryLabel = useCallback((record = {}) => resolveCategoryLabel({
+    categoryId: record.categoryId,
+    categories,
+    fallback: record.category || record.categoryName,
+  }), [categories]);
+  const resolveProductFlowerTypeLabel = useCallback((record = {}) => resolveCategoryLabel({
+    categoryId: record.flowerTypeId,
+    categories: flowerTypes,
+    fallback: record.flowerType || record.flowerTypeName,
+    emptyLabel: '',
+  }), [flowerTypes]);
 
   const selectedPricingRule = useMemo(
     () => (pricingRules || []).find((item) => item.id === pricingRuleIdValue) || null,
@@ -270,7 +300,13 @@ const Products = () => {
 
       const matchesSearch = !keyword
         ? true
-        : [item.name, item.category, item.description, ...variantLabels]
+        : [
+            item.name,
+            resolveProductCategoryLabel(item),
+            resolveProductFlowerTypeLabel(item),
+            item.description,
+            ...variantLabels,
+          ]
             .filter(Boolean)
             .some((value) => String(value).toLowerCase().includes(keyword));
 
@@ -281,11 +317,11 @@ const Products = () => {
           : variantModeFilter === 'variant'
             ? item.hasVariants === true
             : item.hasVariants !== true;
-      const matchesCategory = categoryFilter === 'all' ? true : String(item.categoryId || '') === categoryFilter;
+      const matchesCategory = categoryFilter === 'all' ? true : String(item.categoryId || '') === String(categoryFilter);
 
       return matchesSearch && matchesStatus && matchesVariantMode && matchesCategory;
     });
-  }, [products, search, statusFilter, variantModeFilter, categoryFilter]);
+  }, [products, search, statusFilter, variantModeFilter, categoryFilter, resolveProductCategoryLabel, resolveProductFlowerTypeLabel]);
 
   // ---------------------------------------------------------------------------
   // Handler buka form create.
@@ -333,15 +369,16 @@ const Products = () => {
       const values = await form.validateFields();
       setSubmitting(true);
 
-      if (editingProduct?.id) {
-        await updateProduct(editingProduct.id, values, categories, {
+      const savedProduct = editingProduct?.id
+        ? await updateProduct(editingProduct.id, values, categories, flowerTypes, {
           expectedVersion: editingProduct.versionToken || editingProduct.updatedAt || '',
-        });
-        message.success('Produk berhasil diupdate.');
-      } else {
-        await createProduct(values, categories);
-        message.success('Produk berhasil ditambahkan.');
-      }
+        })
+        : await createProduct(values, categories, flowerTypes);
+
+      setProducts((current) => upsertRecordById(current, savedProduct, {
+        comparator: compareRecordsByNameAsc,
+      }));
+      message.success(editingProduct?.id ? 'Produk berhasil diupdate.' : 'Produk berhasil ditambahkan.');
 
       closeFormDrawer();
     } catch (error) {
@@ -387,7 +424,10 @@ const Products = () => {
   // ---------------------------------------------------------------------------
   const handleToggleActive = async (record) => {
     try {
-      await toggleProductActive(record.id, !(record.isActive !== false));
+      const savedProduct = await toggleProductActive(record.id, !(record.isActive !== false));
+      setProducts((current) => upsertRecordById(current, savedProduct, {
+        comparator: compareRecordsByNameAsc,
+      }));
       message.success(record.isActive !== false ? 'Produk dinonaktifkan.' : 'Produk diaktifkan kembali.');
     } catch (error) {
       console.error(error);
@@ -422,7 +462,10 @@ const Products = () => {
       render: (value, record) => (
         <div className={compactCellClassNames.stack}>
           <Text strong>{value || '-'}</Text>
-          <Text type="secondary" className={compactCellClassNames.meta}>{record.category || 'Produk Jadi'}</Text>
+          <Text type="secondary" className={compactCellClassNames.meta}>{resolveProductCategoryLabel(record)}</Text>
+          {resolveProductFlowerTypeLabel(record) ? (
+            <Text type="secondary" className={compactCellClassNames.meta}>{resolveProductFlowerTypeLabel(record)}</Text>
+          ) : null}
           <Space size={6} wrap className="ims-cell-tag-list">
             <Tag color={record.hasVariants ? 'blue' : 'default'}>
               {record.hasVariants ? 'Pakai Varian' : 'Tanpa Varian'}
@@ -500,7 +543,10 @@ const Products = () => {
   const productMobileCardConfig = {
     density: 'compact',
     title: (record) => record.name || '-',
-    subtitle: (record) => [record.category || 'Produk Jadi'],
+    subtitle: (record) => [
+      resolveProductCategoryLabel(record),
+      resolveProductFlowerTypeLabel(record),
+    ].filter(Boolean),
     primary: (record) => {
       const stockSummary = getProductStockSummary(record);
       return `${formatStockWithUnit(stockSummary.availableStock)} tersedia`;
@@ -581,8 +627,8 @@ const Products = () => {
           <Col xs={24} md={6}>
             <Select className="ims-filter-control" value={categoryFilter} onChange={setCategoryFilter} allowClear={false}>
               <Select.Option value="all">Semua Kategori</Select.Option>
-              {(categories || []).map((item) => (
-                <Select.Option key={item.id} value={item.id}>{item.name}</Select.Option>
+              {categorySelectOptions.map((item) => (
+                <Select.Option key={item.value} value={item.value} disabled={item.disabled}>{item.label}</Select.Option>
               ))}
             </Select>
           </Col>
@@ -661,17 +707,36 @@ const Products = () => {
           - Jangan menambahkan input manual code karena dapat merusak immutability dan relasi produk lama.
           ===================================================== */}
           <Row gutter={16}>
-            <Col xs={24} md={12}>
+            <Col xs={24} md={8}>
               <Form.Item name="name" label="Nama Produk" rules={[{ required: true, message: 'Nama produk wajib diisi.' }]}>
-                <Input placeholder="Contoh: Bunga Mawar Flanel" />
+                <Input placeholder="Contoh: Bouquet Mawar Flanel 1 Tangkai" />
               </Form.Item>
             </Col>
-            <Col xs={24} md={12}>
-              <Form.Item name="categoryId" label="Kategori">
+            <Col xs={24} md={8}>
+              <Form.Item
+                name="categoryId"
+                label="Bentuk Produk"
+                rules={[{ required: true, message: 'Bentuk produk wajib dipilih.' }]}
+                extra="Contoh: Bouquet atau Bunga Tangkai."
+              >
+                <Select
+                  placeholder="Pilih bentuk produk"
+                  options={categorySelectOptions}
+                  notFoundContent="Tambahkan Bentuk Produk dari menu Kategori & Kelompok."
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item
+                name="flowerTypeId"
+                label="Jenis Bunga"
+                extra="Opsional untuk produk yang tidak khusus satu jenis bunga."
+              >
                 <Select
                   allowClear
-                  placeholder="Pilih kategori"
-                  options={(categories || []).map((item) => ({ value: item.id, label: item.name }))}
+                  placeholder="Contoh: Mawar"
+                  options={flowerTypeSelectOptions}
+                  notFoundContent="Tambahkan Jenis Bunga dari menu Kategori & Kelompok."
                 />
               </Form.Item>
             </Col>
@@ -1005,7 +1070,10 @@ const Products = () => {
                     <Tag className="ims-status-tag" color={statusMeta.color}>{statusMeta.label}</Tag>
                     {selectedProduct.hasVariants ? <Tag color="blue">Pakai Varian</Tag> : <Tag>Tanpa Varian</Tag>}
                   </Space>
-                  <Text type="secondary">{selectedProduct.category || 'Tanpa kategori'}</Text>
+                  <Text type="secondary">{resolveProductCategoryLabel(selectedProduct)}</Text>
+                  {resolveProductFlowerTypeLabel(selectedProduct) ? (
+                    <Text type="secondary">Jenis bunga: {resolveProductFlowerTypeLabel(selectedProduct)}</Text>
+                  ) : null}
                 </Space>
               </Card>
 
@@ -1023,7 +1091,8 @@ const Products = () => {
 
               <Card size="small" title="Ringkasan">
                 <Descriptions bordered column={1} size="small">
-                  <Descriptions.Item label="Kategori">{selectedProduct.category || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="Bentuk Produk">{resolveProductCategoryLabel(selectedProduct)}</Descriptions.Item>
+                  <Descriptions.Item label="Jenis Bunga">{resolveProductFlowerTypeLabel(selectedProduct) || '-'}</Descriptions.Item>
                   <Descriptions.Item label="Mode Pricing">{getRuleModeLabel(selectedProduct.pricingMode, selectedProduct.pricingRuleId, pricingRuleMap)}</Descriptions.Item>
                   <Descriptions.Item label="Pricing Rule">{pricingRuleMap[selectedProduct.pricingRuleId] || '-'}</Descriptions.Item>
                   <Descriptions.Item label="Minimum Stok">{formatStockWithUnit(selectedProduct.minStockAlert)}</Descriptions.Item>

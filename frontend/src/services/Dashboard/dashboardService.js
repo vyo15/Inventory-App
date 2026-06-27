@@ -6,6 +6,7 @@ import { getAllProductionPayrolls } from "../Produksi/productionPayrollsService"
 import { getAllProductionPlans } from "../Produksi/productionPlanningService";
 import { getAllProductionWorkLogs } from "../Produksi/productionWorkLogsService";
 import { fetchSalesRecords } from "../Transaksi/salesService";
+import { getSqliteInitialSetupReadiness } from "../System/sqliteBackendStatusService";
 import { canAccessRoute, ROUTE_ACCESS_KEYS } from "../../utils/auth/roleAccess";
 import { APP_ROUTES } from "../../config/appRoutes";
 
@@ -41,6 +42,7 @@ export const createEmptyDashboardData = () => ({
   sales: [],
   stockAuditRows: [],
   stockIssueMeta: {},
+  setupReadiness: null,
   planningSummary: {
     ...EMPTY_PLANNING_SUMMARY,
     weekly: { ...EMPTY_PLANNING_PERIOD_SUMMARY },
@@ -353,6 +355,9 @@ const mergeDashboardData = (data = {}) => {
     sales: toArray(data.sales),
     stockAuditRows: toArray(data.stockAuditRows),
     stockIssueMeta: data.stockIssueMeta && typeof data.stockIssueMeta === "object" ? data.stockIssueMeta : {},
+    setupReadiness: data.setupReadiness && typeof data.setupReadiness === "object"
+      ? data.setupReadiness
+      : null,
     planningSummary: {
       ...fallback.planningSummary,
       ...planningSummary,
@@ -427,6 +432,15 @@ export const readDashboardData = async ({ maxListItems = 5, role } = {}) => {
       loader: () => getInventoryLogs({ limit: Math.max(maxListItems, 1) }),
       fallback: toArray,
     },
+    {
+      key: "initial_setup_readiness",
+      routeKey: ROUTE_ACCESS_KEYS.RESET_MAINTENANCE,
+      loader: async () => {
+        const result = await getSqliteInitialSetupReadiness();
+        return result?.data || null;
+      },
+      fallback: null,
+    },
   ];
 
   const reads = await Promise.all(
@@ -474,6 +488,7 @@ export const readDashboardData = async ({ maxListItems = 5, role } = {}) => {
       isLimited: toNumber(lowStockResult.meta?.total) > lowStockRows.length,
     },
     planningSummary,
+    setupReadiness: byKey.initial_setup_readiness || null,
     summary: {
       salesCount: sales.length,
       incomeTotal: incomes.reduce((sum, item) => sum + toNumber(item.totalAmount ?? item.amount ?? item.total), 0),

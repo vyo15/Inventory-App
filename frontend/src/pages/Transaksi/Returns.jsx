@@ -27,6 +27,7 @@ import {
 import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numberId";
 import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
+import { compareRecordsByDateDesc, compareRecordsByNameAsc, upsertRecordById, upsertRecordsById } from "../../utils/state/recordCollectionState";
 import {
   createReturnTransaction,
   listenReturnProducts,
@@ -180,10 +181,29 @@ const Returns = () => {
     setIsSubmittingReturn(true);
 
     try {
-      await createReturnTransaction({
+      const result = await createReturnTransaction({
         values,
         allItems,
       });
+
+      setReturnRecords((current) => upsertRecordById(current, result, {
+        comparator: compareRecordsByDateDesc,
+      }));
+      const mutationResults = Array.isArray(result?.mutationResults) ? result.mutationResults : [];
+      setProducts((current) => upsertRecordsById(
+        current,
+        mutationResults
+          .filter((item) => item?.stockReadModel?.sourceType === "product")
+          .map((item) => item.item),
+        { comparator: compareRecordsByNameAsc },
+      ));
+      setMaterials((current) => upsertRecordsById(
+        current,
+        mutationResults
+          .filter((item) => item?.stockReadModel?.sourceType === "raw_material")
+          .map((item) => item.item),
+        { comparator: compareRecordsByNameAsc },
+      ));
 
       message.success("Retur berhasil ditambahkan!");
       resetReturnFormState();

@@ -39,34 +39,79 @@ export const isSemiFinishedMaterialCodeExists = async (code, excludeId = null) =
   );
 };
 
-const normalizePayload = (values = {}) => {
+const findCategoryById = (categories = [], categoryId = '') => (
+  (categories || []).find((item) => String(item.id) === String(categoryId)) || null
+);
+
+const readLegacySelection = (value = '') => {
+  const normalized = safeTrim(value);
+  return normalized.startsWith('legacy:') ? normalized.slice(7) : '';
+};
+
+const normalizePayload = (values = {}, flowerTypes = [], componentGroups = []) => {
   const code = safeTrim(values.code || values.itemCode).toUpperCase();
+  const flowerType = findCategoryById(flowerTypes, values.flowerTypeId);
+  const componentGroup = findCategoryById(componentGroups, values.categoryId);
+  const flowerTypeName = safeTrim(
+    flowerType?.name
+      || readLegacySelection(values.flowerTypeId)
+      || values.flowerType
+      || values.flowerTypeName
+      || values.flowerGroup,
+  );
+  const componentGroupName = safeTrim(
+    componentGroup?.name
+      || readLegacySelection(values.categoryId)
+      || values.componentGroup
+      || values.componentGroupName,
+  );
+
   return {
     ...values,
     code,
     itemCode: code,
     name: safeTrim(values.name),
+    flowerTypeId: flowerType?.id || '',
+    flowerType: flowerTypeName,
+    flowerTypeName,
+    // Compatibility: grouped list dan data historis lama masih membaca flowerGroup.
+    flowerGroup: flowerTypeName,
+    categoryId: componentGroup?.id || '',
+    componentGroup: componentGroupName,
+    componentGroupName,
     isActive: values.isActive !== false,
   };
 };
 
-const buildGuardedUpdatePayload = (values = {}, expectedVersion = "") => ({
-  ...stripGuardedInventoryUpdateFields(normalizePayload(values), {
+const buildGuardedUpdatePayload = (
+  values = {},
+  flowerTypes = [],
+  componentGroups = [],
+  expectedVersion = '',
+) => ({
+  ...stripGuardedInventoryUpdateFields(normalizePayload(values, flowerTypes, componentGroups), {
     protectedFields: SEMI_FINISHED_PROTECTED_FIELDS,
   }),
   expectedVersion,
 });
 
-export const createSemiFinishedMaterial = async (values = {}) => sqliteSemiFinishedAdapter
-  .createSemiFinishedMaterial(normalizePayload(values));
+export const createSemiFinishedMaterial = async (
+  values = {},
+  flowerTypes = [],
+  componentGroups = [],
+) => sqliteSemiFinishedAdapter.createSemiFinishedMaterial(
+  normalizePayload(values, flowerTypes, componentGroups),
+);
 
 export const updateSemiFinishedMaterial = async (
   id,
   values = {},
-  { expectedVersion = "" } = {}
+  flowerTypes = [],
+  componentGroups = [],
+  { expectedVersion = '' } = {},
 ) => sqliteSemiFinishedAdapter.updateSemiFinishedMaterial(
   id,
-  buildGuardedUpdatePayload(values, expectedVersion)
+  buildGuardedUpdatePayload(values, flowerTypes, componentGroups, expectedVersion),
 );
 
 export const toggleSemiFinishedMaterialActive = async (id, isActive) => {

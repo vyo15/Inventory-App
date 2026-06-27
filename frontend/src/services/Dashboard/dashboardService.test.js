@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   getStockReadModelRows: vi.fn(),
   listFinanceExpenses: vi.fn(),
   listFinanceIncomes: vi.fn(),
+  getSqliteInitialSetupReadiness: vi.fn(),
   listenProducts: vi.fn(),
   listenRawMaterials: vi.fn(),
 }));
@@ -18,6 +19,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../Finance/financeService", () => ({
   listFinanceExpenses: mocks.listFinanceExpenses,
   listFinanceIncomes: mocks.listFinanceIncomes,
+}));
+
+vi.mock("../System/sqliteBackendStatusService", () => ({
+  getSqliteInitialSetupReadiness: mocks.getSqliteInitialSetupReadiness,
 }));
 
 vi.mock("../Inventory/inventoryService", () => ({
@@ -74,6 +79,7 @@ const resetResolvedData = () => {
   mocks.getStockReadModelRows.mockResolvedValue([]);
   mocks.listFinanceExpenses.mockResolvedValue([]);
   mocks.listFinanceIncomes.mockResolvedValue([]);
+  mocks.getSqliteInitialSetupReadiness.mockResolvedValue({ data: null });
   mocks.listenProducts.mockImplementation((onData) => {
     onData([]);
     return () => {};
@@ -173,6 +179,7 @@ describe("Dashboard service orchestration", () => {
     expect(mocks.listFinanceIncomes).not.toHaveBeenCalled();
     expect(mocks.listFinanceExpenses).not.toHaveBeenCalled();
     expect(mocks.getAllProductionPayrolls).not.toHaveBeenCalled();
+    expect(mocks.getSqliteInitialSetupReadiness).not.toHaveBeenCalled();
   });
 
   it("administrator tetap memuat finance/payroll tanpa listener master data yang tidak dipakai", async () => {
@@ -184,6 +191,7 @@ describe("Dashboard service orchestration", () => {
     expect(mocks.listFinanceIncomes).toHaveBeenCalledTimes(1);
     expect(mocks.listFinanceExpenses).toHaveBeenCalledTimes(1);
     expect(mocks.getAllProductionPayrolls).toHaveBeenCalledTimes(1);
+    expect(mocks.getSqliteInitialSetupReadiness).toHaveBeenCalledTimes(1);
     expect(mocks.listenProducts).not.toHaveBeenCalled();
     expect(mocks.listenRawMaterials).not.toHaveBeenCalled();
   });

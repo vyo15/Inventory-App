@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Button,
   Card,
@@ -37,11 +37,11 @@ import {
   toggleRawMaterialActive,
   updateRawMaterial,
 } from '../../services/MasterData/rawMaterialsService';
-import {
-  getSupplierDisplayName,
-  getSupplierOptionLabel,
-} from '../../services/MasterData/suppliersService';
+import { getSupplierDisplayName } from '../../services/MasterData/suppliersService';
 import { listSuppliers as listSupplierRepository } from '../../data/repositories/suppliersRepository';
+import { listCategories } from '../../data/repositories/categoriesRepository';
+import { CATEGORY_TYPES } from '../../constants/categoryOptions';
+import { buildCategorySelectOptions, resolveCategoryLabel } from '../../utils/categories/categoryHelpers';
 import {
   DEFAULT_RAW_MATERIAL_VARIANT,
   ensureAtLeastOneRawMaterialVariant,
@@ -55,6 +55,7 @@ import { isVariantStockEmpty } from '../../utils/variants/variantArchiveHelpers'
 
 import { listenPurchaseRecords } from '../../services/Transaksi/purchasesService';
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
+import { compareRecordsByNameAsc, upsertRecordById } from '../../utils/state/recordCollectionState';
 import { buildSinglePricingPreview, listPricingRulesByTargetType } from '../../services/Pricing/pricingService';
 import PricingModeSwitch from '../../components/Pricing/PricingModeSwitch';
 import {
@@ -68,11 +69,12 @@ import {
   getRawMaterialStatusMeta,
   getRawMaterialStockSummary,
   getRuleModeLabel,
-  getSupplierOptionSearchText,
-  getSupplierOptionsForMaterial,
+  getActiveSupplierOffersForMaterial,
+  getRawMaterialMinimumStockDisplay,
+  getSupplierCatalogSummaryForMaterial,
+  getVariantMinimumStock,
   hasSafeZeroMasterStock,
   integerParser,
-  resolvePrimarySupplierForMaterial,
   resolveRestockSupplierDisplay,
   unitOptions,
 } from './helpers/rawMaterialsPageHelpers';
@@ -87,6 +89,7 @@ const RawMaterials = () => {
   // ---------------------------------------------------------------------------
   const [materials, setMaterials] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [purchaseRecords, setPurchaseRecords] = useState([]);
   const [pricingRules, setPricingRules] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -104,6 +107,7 @@ const RawMaterials = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [variantModeFilter, setVariantModeFilter] = useState('all');
   const [supplierFilter, setSupplierFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
 
   const [form] = Form.useForm();
   const navigate = useNavigate();
@@ -178,8 +182,9 @@ const RawMaterials = () => {
 
     const loadSqliteCompanions = async () => {
       try {
-        const [supplierRows, pricingRuleRows] = await Promise.all([
+        const [supplierRows, categoryRows, pricingRuleRows] = await Promise.all([
           listSupplierRepository(),
+          listCategories({ type: CATEGORY_TYPES.RAW_MATERIAL_GROUP }),
           listPricingRulesByTargetType('raw_materials'),
         ]);
         if (disposed) return;
@@ -189,6 +194,7 @@ const RawMaterials = () => {
         // Histori purchase tetap lewat purchasesService agar tidak mismatch dengan data transaksi aktif.
         // -------------------------------------------------------------------
         setSuppliers(supplierRows);
+        setCategories(categoryRows);
         setPricingRules(pricingRuleRows);
       } catch (error) {
         console.error(error);
@@ -204,6 +210,17 @@ const RawMaterials = () => {
       unsubPurchases();
     };
   }, []);
+
+
+  const categorySelectOptions = useMemo(
+    () => buildCategorySelectOptions(categories, CATEGORY_TYPES.RAW_MATERIAL_GROUP),
+    [categories],
+  );
+  const resolveMaterialCategoryLabel = useCallback((record = {}) => resolveCategoryLabel({
+    categoryId: record.categoryId,
+    categories,
+    fallback: record.category || record.categoryName,
+  }), [categories]);
 
   const pricingRuleMap = useMemo(() => (pricingRules || []).reduce((acc, item) => {
     acc[item.id] = item.name;
@@ -269,22 +286,21 @@ const RawMaterials = () => {
   // Fokus pada metrik yang paling kepakai saat operasional harian.
   // ---------------------------------------------------------------------------
   const summary = useMemo(() => {
-    const total = materials.length;
-    const withVariants = materials.filter((item) => item.hasVariants).length;
-    const noVariants = materials.filter((item) => !item.hasVariants).length;
-    const lowStock = materials.filter((item) => {
-      const statusMeta = getRawMaterialStatusMeta(item);
-      return statusMeta.label === 'Kosong' || statusMeta.label === 'Stok Rendah';
-    }).length;
+    const active = materials.filter((item) => item.isActive !== false);
+    const empty = active.filter((item) => getRawMaterialStatusMeta(item).label === 'Kosong').length;
+    const lowStock = active.filter((item) => getRawMaterialStatusMeta(item).label === 'Stok Rendah').length;
+    const withoutRestockSource = active.filter(
+      (item) => getSupplierCatalogSummaryForMaterial(suppliers, item.id).offerCount === 0,
+    ).length;
 
-    return { total, withVariants, noVariants, lowStock };
-  }, [materials]);
+    return { active: active.length, empty, lowStock, withoutRestockSource };
+  }, [materials, suppliers]);
 
   const summaryItems = [
-    { key: 'raw-total', title: 'Total Bahan Baku', value: summary.total, subtitle: 'Semua master bahan baku yang tersimpan.', accent: 'primary' },
-    { key: 'raw-variants', title: 'Pakai Varian', value: summary.withVariants, subtitle: 'Bahan baku yang memakai stok per varian.', accent: 'success' },
-    { key: 'raw-single', title: 'Tanpa Varian', value: summary.noVariants, subtitle: 'Bahan baku yang cukup disimpan di stok master.', accent: 'warning' },
-    { key: 'raw-low', title: 'Perlu Dicek', value: summary.lowStock, subtitle: 'Bahan yang kosong atau mendekati batas minimum.', accent: 'default' },
+    { key: 'raw-active', title: 'Bahan Aktif', value: summary.active, subtitle: 'Master bahan baku yang siap dipakai.', accent: 'primary' },
+    { key: 'raw-low', title: 'Perlu Restock', value: summary.lowStock, subtitle: 'Bahan yang mendekati minimum stok.', accent: 'warning' },
+    { key: 'raw-empty', title: 'Stok Kosong', value: summary.empty, subtitle: 'Bahan aktif yang stoknya sudah habis.', accent: 'default' },
+    { key: 'raw-source', title: 'Belum Ada Sumber', value: summary.withoutRestockSource, subtitle: 'Belum terhubung ke katalog Supplier.', accent: 'success' },
   ];
 
   // ---------------------------------------------------------------------------
@@ -292,31 +308,18 @@ const RawMaterials = () => {
   // ---------------------------------------------------------------------------
   const variantStats = useMemo(() => {
     if (!Array.isArray(watchedVariants) || watchedVariants.length === 0) {
-      return { count: 0, stock: 0 };
+      return { count: 0, stock: 0, minimumStock: 0 };
     }
 
     return watchedVariants.reduce(
       (acc, item) => ({
         count: acc.count + (String(item?.name || '').trim() ? 1 : 0),
         stock: acc.stock + Number(item?.currentStock || 0),
+        minimumStock: acc.minimumStock + getVariantMinimumStock(item, 0),
       }),
-      { count: 0, stock: 0 },
+      { count: 0, stock: 0, minimumStock: 0 },
     );
   }, [watchedVariants]);
-
-  // ---------------------------------------------------------------------------
-  // Opsi supplier untuk drawer form.
-  // FUNGSI: create mode tetap menampilkan semua supplier, sedangkan edit mode
-  // hanya menampilkan supplier yang menyediakan bahan terkait atau supplier yang
-  // sudah tersimpan pada raw material tersebut.
-  // ALASAN: filter ini membantu user memilih supplier yang relevan tanpa menulis
-  // otomatis ke raw_materials dan tanpa mengubah flow supplier manual.
-  // STATUS: aktif dipakai oleh Select supplier pada form Raw Material.
-  // ---------------------------------------------------------------------------
-  const formSupplierOptions = useMemo(
-    () => getSupplierOptionsForMaterial(suppliers, editingRecord),
-    [suppliers, editingRecord],
-  );
 
   // ---------------------------------------------------------------------------
   // Restock inline untuk drawer detail.
@@ -327,11 +330,6 @@ const RawMaterials = () => {
   // STATUS: aktif dipakai; read-only dan tidak mengubah Raw Material, Supplier,
   // Purchases, stok, kas, saving, atau laporan.
   // ---------------------------------------------------------------------------
-  const detailPrimarySupplier = useMemo(
-    () => resolvePrimarySupplierForMaterial(suppliers, selectedMaterial),
-    [suppliers, selectedMaterial],
-  );
-
   const detailLatestPurchase = useMemo(
     () => getLatestPurchaseForMaterial(purchaseRecords, selectedMaterial?.id),
     [purchaseRecords, selectedMaterial?.id],
@@ -343,56 +341,52 @@ const RawMaterials = () => {
   );
 
   const detailRestockSupplier = useMemo(
-    () => resolveRestockSupplierDisplay(detailLatestPurchase, suppliers, detailPrimarySupplier),
-    [detailLatestPurchase, suppliers, detailPrimarySupplier],
+    () => resolveRestockSupplierDisplay(detailLatestPurchase, suppliers, {}),
+    [detailLatestPurchase, suppliers],
   );
 
   // ---------------------------------------------------------------------------
   // Filter list utama.
   // Search dibuat ringan supaya user cepat cari bahan, supplier, atau nama varian.
   // ---------------------------------------------------------------------------
-  const filteredMaterials = useMemo(() => {
-    const selectedSupplier = (suppliers || []).find((item) => String(item.id) === String(supplierFilter));
-    const selectedSupplierName = String(getSupplierDisplayName(selectedSupplier) || '').trim().toLowerCase();
+  const filteredMaterials = useMemo(() => materials.filter((item) => {
+    const keyword = search.trim().toLowerCase();
+    const statusMeta = getRawMaterialStatusMeta(item);
+    const variantNames = Array.isArray(item.variants)
+      ? item.variants.map((variant) => String(variant?.name || '').toLowerCase())
+      : [];
+    const supplierOffers = getActiveSupplierOffersForMaterial(suppliers, item.id);
 
-    return materials.filter((item) => {
-      const keyword = search.trim().toLowerCase();
-      const statusMeta = getRawMaterialStatusMeta(item);
-      const variantNames = Array.isArray(item.variants)
-        ? item.variants.map((variant) => String(variant?.name || '').toLowerCase())
-        : [];
+    const matchesSearch = !keyword
+      ? true
+      : [
+          item.name,
+          resolveMaterialCategoryLabel(item),
+          item.variantLabel,
+          item.specifications,
+          item.notes,
+          ...variantNames,
+          ...supplierOffers.flatMap((offer) => [offer.supplierName, offer.listingName, offer.channel]),
+        ]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(keyword));
 
-      const matchesSearch = !keyword
+    const matchesStatus = statusFilter === 'all' ? true : statusMeta.label === statusFilter;
+    const matchesVariantMode =
+      variantModeFilter === 'all'
         ? true
-        : [
-            item.name,
-            item.supplierName,
-            item.variantLabel,
-            ...variantNames,
-          ]
-            .filter(Boolean)
-            .some((value) => String(value).toLowerCase().includes(keyword));
+        : variantModeFilter === 'variant'
+          ? item.hasVariants === true
+          : item.hasVariants !== true;
+    const matchesCategory = categoryFilter === 'all'
+      ? true
+      : String(item.categoryId || '') === String(categoryFilter);
+    const matchesSupplier = supplierFilter === 'all'
+      ? true
+      : supplierOffers.some((offer) => String(offer.supplierId) === String(supplierFilter));
 
-      const matchesStatus = statusFilter === 'all' ? true : statusMeta.label === statusFilter;
-      const matchesVariantMode =
-        variantModeFilter === 'all'
-          ? true
-          : variantModeFilter === 'variant'
-            ? item.hasVariants === true
-            : item.hasVariants !== true;
-
-      const matchesSupplier =
-        supplierFilter === 'all'
-          ? true
-          : String(item.supplierId || '') === String(supplierFilter)
-            ? true
-            : selectedSupplierName
-              ? String(item.supplierName || '').trim().toLowerCase() === selectedSupplierName
-              : false;
-
-      return matchesSearch && matchesStatus && matchesVariantMode && matchesSupplier;
-    });
-  }, [materials, search, statusFilter, variantModeFilter, supplierFilter, suppliers]);
+    return matchesSearch && matchesStatus && matchesVariantMode && matchesCategory && matchesSupplier;
+  }), [materials, search, statusFilter, variantModeFilter, supplierFilter, categoryFilter, suppliers, resolveMaterialCategoryLabel]);
 
   // ---------------------------------------------------------------------------
   // Handler buka drawer form create.
@@ -438,8 +432,16 @@ const RawMaterials = () => {
   // Data master tidak dihapus agar histori stok dan log transaksi tetap aman.
   // ---------------------------------------------------------------------------
   const handleToggleActive = async (record) => {
+    if (record.isActive !== false && !hasSafeZeroMasterStock(record)) {
+      message.error('Bahan masih memiliki stok atau reserved stock. Selesaikan melalui flow stok resmi sebelum dinonaktifkan.');
+      return;
+    }
+
     try {
-      await toggleRawMaterialActive(record.id, record.isActive === false);
+      const savedMaterial = await toggleRawMaterialActive(record.id, record.isActive === false);
+      setMaterials((current) => upsertRecordById(current, savedMaterial, {
+        comparator: compareRecordsByNameAsc,
+      }));
       message.success(`Bahan baku berhasil ${record.isActive === false ? 'diaktifkan' : 'dinonaktifkan'}.`);
     } catch (error) {
       console.error(error);
@@ -449,23 +451,23 @@ const RawMaterials = () => {
 
   // ---------------------------------------------------------------------------
   // Submit create/update bahan baku.
-  // ACTIVE: jika user memilih supplier di form ini, raw material menyimpan snapshot manual supplierId/supplierName/supplierLink.
-  // Supplier page tidak boleh menulis snapshot ini secara otomatis.
+  // Supplier dan link restock dikelola melalui Supplier Catalog, bukan disimpan sebagai pilihan tunggal di master bahan.
   // ---------------------------------------------------------------------------
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
       setSubmitting(true);
 
-      if (editingRecord?.id) {
-        await updateRawMaterial(editingRecord.id, values, formSupplierOptions, {
+      const savedMaterial = editingRecord?.id
+        ? await updateRawMaterial(editingRecord.id, values, categories, {
           expectedVersion: editingRecord.versionToken || editingRecord.updatedAt || '',
-        });
-        message.success('Bahan baku berhasil diupdate.');
-      } else {
-        await createRawMaterial(values, formSupplierOptions);
-        message.success('Bahan baku berhasil ditambahkan.');
-      }
+        })
+        : await createRawMaterial(values, categories);
+
+      setMaterials((current) => upsertRecordById(current, savedMaterial, {
+        comparator: compareRecordsByNameAsc,
+      }));
+      message.success(editingRecord?.id ? 'Bahan baku berhasil diupdate.' : 'Bahan baku berhasil ditambahkan.');
 
       closeFormDrawer();
     } catch (error) {
@@ -500,23 +502,22 @@ const RawMaterials = () => {
       title: 'Bahan Baku',
       dataIndex: 'name',
       key: 'name',
-      width: 280,
+      width: 300,
       render: (value, record) => {
         const statusMeta = getRawMaterialStatusMeta(record);
-
         return (
           <div style={compactCellStyles.stack}>
             <Text strong>{value || '-'}</Text>
             <Text type="secondary" style={compactCellStyles.meta}>
-              {record.supplierName || '-'}
+              {resolveMaterialCategoryLabel(record)} · {record.stockUnit || '-'}
             </Text>
+            {record.specifications ? (
+              <Text type="secondary" ellipsis style={compactCellStyles.meta}>{record.specifications}</Text>
+            ) : null}
             <Space size={6} wrap>
               <Tag color={record.hasVariants ? 'blue' : 'default'}>
-                {record.hasVariants ? 'Pakai Varian' : 'Tanpa Varian'}
+                {record.hasVariants ? `${formatNumberId(record.variantCount || 0)} varian` : 'Tanpa Varian'}
               </Tag>
-              {record.hasVariants ? (
-                <Tag color="purple">{formatNumberId(record.variantCount || 0)} varian</Tag>
-              ) : null}
               <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
             </Space>
           </div>
@@ -526,12 +527,13 @@ const RawMaterials = () => {
     {
       title: 'Stok',
       key: 'stock',
-      width: 320,
+      width: 330,
       render: (_, record) => (
         <StockDisplayBlock
           record={record}
           unit={record.stockUnit || 'pcs'}
           getVariantLabel={(variant, index) => variant.name || `Varian ${index + 1}`}
+          getVariantMinStockThreshold={(variant) => getVariantMinimumStock(variant, record.minStock || 0)}
           className="ims-cell-stack ims-cell-stack-tight"
           metaClassName="ims-cell-meta"
           minStockThreshold={Number(record.minStock || 0)}
@@ -539,23 +541,28 @@ const RawMaterials = () => {
       ),
     },
     {
-      title: 'Harga',
-      key: 'priceInfo',
-      width: 220,
-      render: (_, record) => (
-        <div style={compactCellStyles.stack}>
-          <Text strong>{`Restock ${formatCurrencyId(record.restockReferencePrice || 0)} / ${record.stockUnit || '-'}`}</Text>
-          <Text type="secondary" style={compactCellStyles.meta}>
-            {`Modal ${record.averageActualUnitCost ? formatCurrencyId(record.averageActualUnitCost) : '-'} / ${record.stockUnit || '-'}`}
-          </Text>
-          <Text type="secondary" style={compactCellStyles.meta}>
-            {`Jual ${formatCurrencyId(record.sellingPrice || 0)} / ${record.stockUnit || '-'}`}
-          </Text>
-          <Text type="secondary" style={compactCellStyles.meta}>
-            {getRuleModeLabel(record.pricingMode, record.pricingRuleId, pricingRuleMap)}
-          </Text>
-        </div>
-      ),
+      title: 'Sumber Restock',
+      key: 'restockSources',
+      width: 210,
+      render: (_, record) => {
+        const catalogSummary = getSupplierCatalogSummaryForMaterial(suppliers, record.id);
+        return (
+          <div style={compactCellStyles.stack}>
+            <Text strong>{catalogSummary.label}</Text>
+            <Text type="secondary" style={compactCellStyles.meta}>
+              {catalogSummary.offerCount > 0 ? 'Katalog Supplier aktif' : 'Tambahkan link toko untuk restock'}
+            </Text>
+            <Button
+              type="link"
+              size="small"
+              style={{ paddingInline: 0, width: 'fit-content' }}
+              onClick={() => navigate(buildSupplierDetailRoute(record.id))}
+            >
+              {catalogSummary.offerCount > 0 ? 'Bandingkan Supplier' : 'Atur Sumber Restock'}
+            </Button>
+          </div>
+        );
+      },
     },
     {
       title: 'Aksi',
@@ -571,7 +578,7 @@ const RawMaterials = () => {
           toggleTitle={record.isActive === false ? 'Aktifkan kembali bahan baku?' : 'Nonaktifkan bahan baku?'}
           toggleDescription={record.isActive === false
             ? 'Bahan baku akan aktif kembali untuk dipakai pada transaksi baru.'
-            : 'Bahan baku tidak akan muncul sebagai pilihan data baru, tetapi histori tetap aman.'}
+            : 'Penonaktifan hanya dapat dilakukan jika stok, reserved stock, BOM aktif, dan proses produksi sudah aman.'}
         />
       ),
     },
@@ -580,18 +587,18 @@ const RawMaterials = () => {
   const rawMaterialMobileCardConfig = {
     density: 'compact',
     title: (record) => record.name || '-',
-    subtitle: (record) => [record.supplierName || 'Supplier belum tercatat'],
+    subtitle: (record) => [resolveMaterialCategoryLabel(record), record.stockUnit || '-'],
     primary: (record) => {
       const stockSummary = getRawMaterialStockSummary(record);
       return `${formatStockWithUnit(stockSummary.availableStock, record.stockUnit || 'pcs')} tersedia`;
     },
-    secondary: (record) => `Min ${formatStockWithUnit(record.minStock || 0, record.stockUnit || 'pcs')}`,
+    secondary: (record) => getSupplierCatalogSummaryForMaterial(suppliers, record.id).label,
     tags: (record) => {
       const statusMeta = getRawMaterialStatusMeta(record);
       return [<Tag key="status" color={statusMeta.color}>{statusMeta.label}</Tag>];
     },
     meta: [
-      { label: 'Jual', value: (record) => `${formatCurrencyId(record.sellingPrice || 0)} / ${record.stockUnit || '-'}` },
+      { label: 'Minimum', value: (record) => formatStockWithUnit(getRawMaterialMinimumStockDisplay(record), record.stockUnit || 'pcs') },
       { label: 'Varian', value: (record) => (record.hasVariants ? `${formatNumberId(record.variantCount || 0)} varian` : 'Tidak') },
     ],
     onCardClick: (record) => handleViewDetail(record),
@@ -617,7 +624,7 @@ const RawMaterials = () => {
       --------------------------------------------------------------------- */}
       <PageHeader
         title="Bahan Baku"
-        subtitle="Master bahan baku, supplier, dan status pemakaian."
+        subtitle="Master bahan baku, stok, sumber restock, dan status pemakaian."
         actions={[
           { key: 'create-raw-material', type: 'primary', icon: <PlusOutlined />, label: 'Tambah Bahan Baku', onClick: openCreateDrawer },
         ]}
@@ -633,15 +640,15 @@ const RawMaterials = () => {
           Filter bar utama.
       --------------------------------------------------------------------- */}
       <FilterBar>
-          <Col xs={24} md={8}>
+          <Col xs={24} md={6}>
             <Input
               allowClear
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Cari nama bahan, supplier, atau varian..."
+              placeholder="Cari bahan, kelompok, supplier, atau varian..."
             />
           </Col>
-          <Col xs={24} md={5}>
+          <Col xs={24} md={4}>
             <Select value={statusFilter} onChange={setStatusFilter} style={{ width: '100%' }}>
               <Option value="all">Semua Status</Option>
               <Option value="Aman">Aman</Option>
@@ -650,19 +657,27 @@ const RawMaterials = () => {
               <Option value="Nonaktif">Nonaktif</Option>
             </Select>
           </Col>
-          <Col xs={24} md={5}>
+          <Col xs={24} md={4}>
             <Select value={variantModeFilter} onChange={setVariantModeFilter} style={{ width: '100%' }}>
-              <Option value="all">Semua Mode Varian</Option>
+              <Option value="all">Semua Varian</Option>
               <Option value="variant">Pakai Varian</Option>
               <Option value="single">Tanpa Varian</Option>
             </Select>
           </Col>
-          <Col xs={24} md={6}>
+          <Col xs={24} md={5}>
+            <Select value={categoryFilter} onChange={setCategoryFilter} style={{ width: '100%' }}>
+              <Option value="all">Semua Kelompok Bahan</Option>
+              {categorySelectOptions.map((item) => (
+                <Option key={item.value} value={item.value} disabled={item.disabled}>{item.label}</Option>
+              ))}
+            </Select>
+          </Col>
+          <Col xs={24} md={5}>
             <Select value={supplierFilter} onChange={setSupplierFilter} style={{ width: '100%' }} showSearch optionFilterProp="children">
               <Option value="all">Semua Supplier</Option>
               {(suppliers || []).map((supplier) => (
                 <Option key={supplier.id} value={supplier.id}>
-                  {getSupplierOptionLabel(supplier)}
+                  {getSupplierDisplayName(supplier)}
                 </Option>
               ))}
             </Select>
@@ -679,7 +694,7 @@ const RawMaterials = () => {
       --------------------------------------------------------------------- */}
       <PageSection
         title="Daftar Bahan Baku"
-        subtitle="Stok, supplier, dan varian bahan."
+        subtitle="Stok, sumber restock, dan varian bahan."
         extra={(
           <InfoPopoverButton
             label="Aturan Varian"
@@ -729,325 +744,243 @@ const RawMaterials = () => {
         <Form form={form} layout="vertical" initialValues={buildFormValues(RAW_MATERIAL_DEFAULT_FORM)}>
           <ResponsiveFormSection
             title="Data Bahan Baku"
-            subtitle="Atur identitas, supplier, satuan, pricing, stok, dan varian dalam satu pola form mobile."
+            subtitle="Atur identitas, struktur stok, modal, harga, dan varian. Sumber restock dikelola dari katalog Supplier."
           >
-          {/* -----------------------------------------------------------------
-              Section identitas utama bahan baku.
-          ----------------------------------------------------------------- */}
-          <Divider orientation="left">Informasi Utama</Divider>
-          {/* =====================================================
-          SECTION: Raw Material internal code hidden from main UI — AKTIF
-          Fungsi:
-          - Form Raw Material tidak menampilkan input kode utama agar user fokus pada nama bahan, supplier, satuan, stok, harga, dan varian.
-
-          Dipakai oleh:
-          - Drawer form Raw Materials dan rawMaterialsService sebagai pembuat kode internal.
-
-          Alasan perubahan:
-          - Kode RAW tetap dibuat otomatis oleh service, tetapi tidak perlu menjadi input utama di UI master item.
-
-          Catatan cleanup:
-          - Kode internal tetap dipakai relasi/audit teknis tanpa ditampilkan di form operasional.
-
-          Risiko:
-          - Jangan menyentuh SKU/kode varian karena variant identity dipakai stok dan transaksi.
-          ===================================================== */}
-          <Row gutter={16}>
-            <Col xs={24} md={12}>
-              <Form.Item
-                name="name"
-                label="Nama Bahan Baku"
-                rules={[{ required: true, message: 'Nama bahan baku wajib diisi.' }]}
-              >
-                <Input placeholder="Contoh: Kain Flanel" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={12}>
-              <Form.Item name="supplierId" label="Supplier">
-                {/* ---------------------------------------------------------
-                    Supplier dropdown filter.
-                    FUNGSI: menampilkan supplier yang menyediakan bahan ini pada
-                    mode edit, tetap menampilkan semua supplier pada mode create,
-                    dan tetap menyertakan supplier tersimpan untuk data historis.
-                    ALASAN: kebutuhan bug hanya filter opsi read-only; blok ini
-                    tidak mengembalikan auto-sync Supplier ke Raw Material.
-                    STATUS: aktif dipakai oleh form Raw Material.
-                --------------------------------------------------------- */}
-                <Select
-                  allowClear
-                  placeholder="Pilih supplier"
-                  showSearch
-                  optionFilterProp="searchText"
-                  filterOption={(input, option) =>
-                    String(option?.searchText || '')
-                      .toLowerCase()
-                      .includes(String(input || '').toLowerCase())
-                  }
-                  notFoundContent={
-                    editingRecord?.id ? (
-                      <Empty
-                        image={Empty.PRESENTED_IMAGE_SIMPLE}
-                        description="Belum ada supplier yang terhubung dengan bahan ini"
-                      />
-                    ) : null
-                  }
+            <Divider orientation="left">Informasi Bahan</Divider>
+            <Row gutter={16}>
+              <Col xs={24} md={12}>
+                <Form.Item
+                  name="name"
+                  label="Nama Bahan Baku"
+                  rules={[{ required: true, message: 'Nama bahan baku wajib diisi.' }]}
                 >
-                  {(formSupplierOptions || []).map((supplier) => {
-                    const optionLabel = getSupplierOptionLabel(supplier);
+                  <Input placeholder="Contoh: Kain Flanel" />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item
+                  name="categoryId"
+                  label="Kelompok Bahan"
+                  rules={[{ required: true, message: 'Kelompok bahan wajib dipilih.' }]}
+                  extra="Kelompok bahan, bukan satuan beli atau warna varian."
+                >
+                  <Select
+                    placeholder="Pilih kelompok bahan"
+                    options={categorySelectOptions}
+                    notFoundContent="Tambahkan Kelompok Bahan dari menu Kategori & Kelompok."
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
 
-                    return (
-                      <Option
-                        key={supplier.id}
-                        value={supplier.id}
-                        label={optionLabel}
-                        searchText={getSupplierOptionSearchText(supplier)}
-                      >
-                        <Space size={6} wrap>
-                          <span>{optionLabel}</span>
-                          {supplier.isStoredSupplierSnapshot ? (
-                            <Tag color="default">Supplier tersimpan</Tag>
-                          ) : null}
-                        </Space>
-                      </Option>
-                    );
-                  })}
-                </Select>
-              </Form.Item>
-            </Col>
-          </Row>
+            <Row gutter={16}>
+              <Col xs={24} md={12}>
+                <Form.Item
+                  name="stockUnit"
+                  label="Satuan Stok"
+                  rules={[{ required: true, message: 'Satuan stok wajib dipilih.' }]}
+                >
+                  <Select placeholder="Pilih satuan">
+                    {unitOptions.map((unit) => (
+                      <Option key={unit} value={unit}>{unit}</Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item
+                  name="hasVariants"
+                  label="Pakai Varian"
+                  valuePropName="checked"
+                  extra={isEditingMaterial
+                    ? canActivateVariantsForEditing
+                      ? 'Bahan lama dengan stok 0 boleh mulai memakai varian. Stok varian baru tetap 0.'
+                      : 'Mode varian dikunci setelah bahan dibuat agar identitas stok tetap aman.'
+                    : 'Aktifkan untuk warna, ukuran, atau tipe yang stoknya perlu dipantau terpisah.'}
+                >
+                  <Switch
+                    checkedChildren="Ya"
+                    unCheckedChildren="Tidak"
+                    disabled={hasVariantModeSwitchLocked}
+                    onChange={(checked) => {
+                      if (hasVariantModeSwitchLocked) return;
+                      if (checked) {
+                        form.setFieldsValue({
+                          stock: 0,
+                          minStock: 0,
+                          variantLabel: form.getFieldValue('variantLabel') || 'Varian',
+                          variants: ensureAtLeastOneRawMaterialVariant(form.getFieldValue('variants') || []),
+                        });
+                      } else {
+                        form.setFieldsValue({ variants: [], variantLabel: 'Varian' });
+                      }
+                    }}
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
 
-          <Row gutter={16}>
-            <Col xs={24} md={8}>
-              <Form.Item
-                name="stockUnit"
-                label="Satuan Stok"
-                rules={[{ required: true, message: 'Satuan stok wajib dipilih.' }]}
-              >
-                <Select placeholder="Pilih satuan">
-                  {unitOptions.map((unit) => (
-                    <Option key={unit} value={unit}>
-                      {unit}
-                    </Option>
-                  ))}
-                </Select>
+            {hasVariantsValue ? (
+              <Form.Item name="variantLabel" label="Label Varian" extra="Contoh: Warna, Ukuran, atau Tipe.">
+                <Input placeholder="Contoh: Warna" />
               </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item
-                name="hasVariants"
-                label="Pakai Varian"
-                valuePropName="checked"
-                extra={isEditingMaterial
-                  ? canActivateVariantsForEditing
-                    ? 'Bahan lama dengan stok 0 boleh mulai memakai varian. Semua varian baru tetap stok 0.'
-                    : 'Mode varian dikunci setelah bahan baku dibuat agar struktur stok tidak berubah tanpa audit.'
-                  : undefined}
-              >
-                <Switch
-                  checkedChildren="Ya"
-                  unCheckedChildren="Tidak"
-                  disabled={hasVariantModeSwitchLocked}
-                  onChange={(checked) => {
-                    if (hasVariantModeSwitchLocked) return;
-                    if (checked) {
-                      form.setFieldsValue({
-                        stock: isEditingMaterial ? 0 : form.getFieldValue('stock'),
-                        variantLabel: form.getFieldValue('variantLabel') || 'Varian',
-                        variants: ensureAtLeastOneRawMaterialVariant(form.getFieldValue('variants') || []),
-                      });
-                    } else {
-                      form.setFieldsValue({
-                        variants: [],
-                        variantLabel: 'Varian',
-                      });
-                    }
-                  }}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item name="variantLabel" label="Label Varian" extra="Opsional. Contoh: Warna, Ukuran, Spesifikasi">
-                <Input disabled={!hasVariantsValue} placeholder="Contoh: Warna" />
-              </Form.Item>
-            </Col>
-          </Row>
+            ) : null}
 
-          <Card size="small" style={{ marginBottom: 16 }}>
+            <Row gutter={16}>
+              <Col xs={24} md={12}>
+                <Form.Item name="specifications" label="Spesifikasi" extra="Opsional. Contoh: ketebalan, lebar, merek, atau kualitas.">
+                  <Input.TextArea rows={3} placeholder="Tulis spesifikasi bahan" />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item name="notes" label="Catatan Internal" extra="Opsional dan hanya untuk kebutuhan operasional.">
+                  <Input.TextArea rows={3} placeholder="Tulis catatan bahan" />
+                </Form.Item>
+              </Col>
+            </Row>
+
             <ImsNotice
               variant="info"
               compact
-              title="Jika memakai varian, stok ada di varian; minimum stok dan harga tetap di master."
-            />
-          </Card>
-
-          {/* IMS NOTE [GUARDED | behavior-preserving]: section stok/pricing tetap satu UI,
-              tetapi field stock dikunci saat edit; minStock dan pricing tetap metadata editable.
-              -----------------------------------------------------------------
-              Section aturan stok dan pricing master.
-          ----------------------------------------------------------------- */}
-          <Divider orientation="left">Stok & Pricing Master</Divider>
-          <Row gutter={16}>
-            <Col xs={24} md={8}>
-              <Form.Item
-                name="stock"
-                label={hasVariantsValue ? 'Stok Master (Otomatis)' : 'Stok Awal'}
-                extra={
-                  isEditingMaterial
-                    ? stockEditHelpText
-                    : hasVariantsValue
-                      ? 'Kalau pakai varian, stok master dihitung otomatis dari total semua varian.'
-                      : 'Stok awal hanya dipakai untuk item tanpa varian.'
-                }
-              >
-                <InputNumber
-                  disabled={hasVariantsValue || isEditingMaterial}
-                  style={{ width: '100%' }}
-                  min={0}
-                  precision={0}
-                  formatter={(value) => formatNumberId(value)}
-                  parser={integerParser}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item
-                name="minStock"
-                label="Minimum Stok Master"
-                rules={[{ required: true, message: 'Minimum stok wajib diisi.' }]}
-                extra="Berlaku untuk bahan utama, bukan dipecah per varian."
-              >
-                <InputNumber
-                  style={{ width: '100%' }}
-                  min={0}
-                  precision={0}
-                  formatter={(value) => formatNumberId(value)}
-                  parser={integerParser}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              {/* =====================================================
-              SECTION: Raw Material pricing mode switch — AKTIF / GUARDED
-              Fungsi:
-              - Mengubah mode pricing Raw Material dari Select menjadi Switch: OFF manual, ON pricing rule.
-
-              Dipakai oleh:
-              - Form create/edit Raw Materials.
-
-              Alasan perubahan:
-              - User lebih mudah memahami pilihan Manual vs Pricing Rule dan UX konsisten dengan Products.
-
-              Catatan cleanup:
-              - Belum ada. Field payload tetap pricingMode dan pricingRuleId.
-
-              Risiko:
-              - Jangan ubah nilai domain pricingMode selain manual/rule karena service dan PricingRules bergantung pada nilai ini.
-              ===================================================== */}
-              <Form.Item name="pricingMode" hidden>
-                <Input type="hidden" />
-              </Form.Item>
-              <PricingModeSwitch
-                value={pricingModeValue || 'manual'}
-                extra={pricingModeValue === 'rule'
-                  ? 'Pricing Rule aktif: harga dihitung dari modal aktual rata-rata atau harga referensi restock.'
-                  : 'Manual: harga jual bahan diisi langsung.'}
-                onChange={(nextMode) => {
-                  form.setFieldsValue({ pricingMode: nextMode });
-                  if (nextMode !== 'rule') {
-                    form.setFieldsValue({ pricingRuleId: null });
-                    setPricingPreviewWarning('');
-                  }
-                }}
-              />
-            </Col>
-          </Row>
-
-          <Row gutter={16}>
-            <Col xs={24} md={12}>
-              <Form.Item
-                name="restockReferencePrice"
-                label="Harga Referensi Restock / Satuan"
-                rules={[{ required: true, message: 'Harga referensi restock wajib diisi.' }]}
-                extra="Tetap disimpan di master meskipun bahan memakai varian."
-              >
-                <InputNumber
-                  style={{ width: '100%' }}
-                  min={0}
-                  precision={0}
-                  formatter={(value) => formatNumberId(value)}
-                  parser={integerParser}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={12}>
-              <Form.Item
-                name="averageActualUnitCost"
-                label="Modal Aktual Rata-rata / Satuan"
-                rules={[{ required: true, message: 'Modal aktual rata-rata wajib diisi.' }]}
-                extra={isEditingMaterial
-                  ? 'Modal aktual dihitung dari transaksi Purchase dan dikunci saat edit master.'
-                  : 'Dipakai sebagai base cost utama untuk pricing raw materials.'}
-              >
-                <InputNumber
-                  style={{ width: '100%' }}
-                  min={0}
-                  precision={0}
-                  formatter={(value) => formatNumberId(value)}
-                  parser={integerParser}
-                  disabled={isEditingMaterial}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          {pricingPreviewWarning ? (
-            <ImsNotice
-              variant="guard"
-              compact
               className="ims-mb-16"
-              title={pricingPreviewWarning}
+              title="Supplier tidak dikunci di master bahan. Atur banyak toko dan link melalui Katalog Supplier setelah bahan tersimpan."
             />
-          ) : null}
 
-          <Row gutter={16}>
-            <Col xs={24} md={12}>
-              <Form.Item
-                name="pricingRuleId"
-                label="Pricing Rule"
-                rules={[
-                  {
-                    required: pricingModeValue === 'rule',
-                    message: 'Pricing rule wajib dipilih untuk mode rule.',
-                  },
-                ]}
-              >
-                <Select allowClear disabled={pricingModeValue !== 'rule'} placeholder="Pilih pricing rule">
-                  {(pricingRules || []).map((rule) => (
-                    <Option key={rule.id} value={rule.id}>
-                      {rule.name}
-                      {rule?.isActive ? '' : ' (Nonaktif)'}
-                    </Option>
-                  ))}
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={12}>
-              <Form.Item
-                name="sellingPrice"
-                label="Harga Jual / Satuan"
-                rules={[{ required: true, message: 'Harga jual wajib diisi.' }]}
-                extra="Master price tetap satu agar maintenance harga lebih rapi."
-              >
-                <InputNumber
-                  style={{ width: '100%' }}
-                  min={0}
-                  precision={0}
-                  formatter={(value) => formatNumberId(value)}
-                  parser={integerParser}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
+            <Divider orientation="left">Struktur Stok</Divider>
+            {!hasVariantsValue ? (
+              <Row gutter={16}>
+                <Col xs={24} md={12}>
+                  <Form.Item
+                    name="stock"
+                    label={isEditingMaterial ? 'Stok Saat Ini' : 'Stok Awal'}
+                    extra={isEditingMaterial ? stockEditHelpText : 'Isi hanya jika sudah ada stok saat master dibuat.'}
+                  >
+                    <InputNumber
+                      disabled={isEditingMaterial}
+                      style={{ width: '100%' }}
+                      min={0}
+                      precision={0}
+                      formatter={(value) => formatNumberId(value)}
+                      parser={integerParser}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Form.Item
+                    name="minStock"
+                    label="Minimum Stok"
+                    rules={[{ required: true, message: 'Minimum stok wajib diisi.' }]}
+                    extra="Batas peringatan restock untuk bahan tanpa varian."
+                  >
+                    <InputNumber
+                      style={{ width: '100%' }}
+                      min={0}
+                      precision={0}
+                      formatter={(value) => formatNumberId(value)}
+                      parser={integerParser}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+            ) : (
+              <ImsNotice
+                variant="info"
+                compact
+                className="ims-mb-16"
+                title="Stok awal dan minimum stok diatur pada masing-masing varian."
+              />
+            )}
+
+            <Divider orientation="left">Modal dan Harga</Divider>
+            <Row gutter={16}>
+              <Col xs={24} md={12}>
+                <Form.Item
+                  name="averageActualUnitCost"
+                  label={isEditingMaterial ? 'Modal Aktual Rata-rata / Satuan' : 'Modal Stok Awal / Satuan'}
+                  extra={isEditingMaterial
+                    ? 'Dihitung otomatis dari Pembelian dan tidak dapat diubah dari master.'
+                    : 'Wajib diisi jika stok awal atau stok varian awal lebih dari 0.'}
+                >
+                  <InputNumber
+                    style={{ width: '100%' }}
+                    min={0}
+                    precision={0}
+                    formatter={(value) => formatNumberId(value)}
+                    parser={integerParser}
+                    disabled={isEditingMaterial}
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item
+                  name="restockReferencePrice"
+                  label="Harga Acuan Restock / Satuan"
+                  rules={[{ required: true, message: 'Harga acuan restock wajib diisi.' }]}
+                  extra="Fallback internal; harga aktual tetap diverifikasi saat Pembelian."
+                >
+                  <InputNumber
+                    style={{ width: '100%' }}
+                    min={0}
+                    precision={0}
+                    formatter={(value) => formatNumberId(value)}
+                    parser={integerParser}
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Form.Item name="pricingMode" hidden><Input type="hidden" /></Form.Item>
+            <PricingModeSwitch
+              value={pricingModeValue || 'manual'}
+              extra={pricingModeValue === 'rule'
+                ? 'Pricing Rule aktif: harga dihitung dari modal aktual rata-rata atau harga acuan restock.'
+                : 'Manual: harga jual bahan diisi langsung.'}
+              onChange={(nextMode) => {
+                form.setFieldsValue({ pricingMode: nextMode });
+                if (nextMode !== 'rule') {
+                  form.setFieldsValue({ pricingRuleId: null });
+                  setPricingPreviewWarning('');
+                }
+              }}
+            />
+
+            {pricingPreviewWarning ? (
+              <ImsNotice variant="guard" compact className="ims-mb-16" title={pricingPreviewWarning} />
+            ) : null}
+
+            <Row gutter={16}>
+              <Col xs={24} md={12}>
+                <Form.Item
+                  name="pricingRuleId"
+                  label="Pricing Rule"
+                  rules={[{ required: pricingModeValue === 'rule', message: 'Pricing rule wajib dipilih untuk mode rule.' }]}
+                >
+                  <Select allowClear disabled={pricingModeValue !== 'rule'} placeholder="Pilih pricing rule">
+                    {(pricingRules || []).map((rule) => (
+                      <Option key={rule.id} value={rule.id}>
+                        {rule.name}{rule?.isActive ? '' : ' (Nonaktif)'}
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item
+                  name="sellingPrice"
+                  label="Harga Jual / Satuan"
+                  rules={[{ required: true, message: 'Harga jual wajib diisi.' }]}
+                  extra="Tetap tersedia karena Bahan Baku saat ini dapat dipilih pada flow Penjualan."
+                >
+                  <InputNumber
+                    style={{ width: '100%' }}
+                    min={0}
+                    precision={0}
+                    formatter={(value) => formatNumberId(value)}
+                    parser={integerParser}
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
 
           {/* -----------------------------------------------------------------
               Section varian bahan baku.
@@ -1107,15 +1040,31 @@ const RawMaterials = () => {
                           <Form.Item {...field} name={[field.name, 'sku']} hidden>
                             <Input />
                           </Form.Item>
-                          <Col xs={24} md={6}>
+                          <Col xs={24} md={5}>
                             <Form.Item
                               {...field}
                               name={[field.name, 'currentStock']}
-                              label="Stok Varian"
+                              label={isEditingMaterial ? 'Stok Saat Ini' : 'Stok Awal'}
                               extra={isEditingMaterial ? stockEditHelpText : undefined}
                             >
                               <InputNumber
                                 disabled={isEditingMaterial}
+                                style={{ width: '100%' }}
+                                min={0}
+                                precision={0}
+                                formatter={(value) => formatNumberId(value)}
+                                parser={integerParser}
+                              />
+                            </Form.Item>
+                          </Col>
+                          <Col xs={24} md={6}>
+                            <Form.Item
+                              {...field}
+                              name={[field.name, 'minStockAlert']}
+                              label="Minimum Stok"
+                              rules={[{ required: true, message: 'Minimum stok varian wajib diisi.' }]}
+                            >
+                              <InputNumber
                                 style={{ width: '100%' }}
                                 min={0}
                                 precision={0}
@@ -1185,6 +1134,12 @@ const RawMaterials = () => {
                       {formatNumberId(variantStats.stock)}
                     </div>
                   </div>
+                  <div className="ims-readonly-stat-field">
+                    <div className="ims-readonly-stat-label">Total Minimum</div>
+                    <div className="ims-readonly-stat-value">
+                      {formatNumberId(variantStats.minimumStock)}
+                    </div>
+                  </div>
                 </div>
               </div>
             </>
@@ -1194,7 +1149,7 @@ const RawMaterials = () => {
             variant="guard"
             compact
             style={{ marginTop: 16 }}
-            title="Pakai varian hanya jika bahan punya turunan stok nyata."
+            title="Pakai varian hanya jika bahan punya turunan stok nyata. Minimum stok disimpan per varian."
           />
           </ResponsiveFormSection>
         </Form>
@@ -1239,6 +1194,7 @@ const RawMaterials = () => {
                       {selectedMaterial.hasVariants ? 'Pakai Varian' : 'Tanpa Varian'}
                     </Tag>
                   </Space>
+                  <Text type="secondary">{resolveMaterialCategoryLabel(selectedMaterial)}</Text>
                   <Text type="secondary">Satuan stok: {selectedMaterial.stockUnit || '-'}</Text>
                 </Space>
               </Card>
@@ -1266,22 +1222,30 @@ const RawMaterials = () => {
 
               <Card size="small" title="Ringkasan">
                 <Descriptions bordered column={1} size="small">
-                  <Descriptions.Item label="Supplier">
+                  <Descriptions.Item label="Kelompok Bahan">
+                    {resolveMaterialCategoryLabel(selectedMaterial)}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={selectedMaterial.hasVariants ? 'Minimum Stok Total Varian' : 'Minimum Stok'}>
+                    {formatStockWithUnit(
+                      getRawMaterialMinimumStockDisplay(selectedMaterial),
+                      selectedMaterial.stockUnit || 'pcs',
+                    )}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Sumber Restock">
                     <Space size={8} wrap>
-                      <Text strong>{detailRestockSupplier.name}</Text>
-                      {detailRestockSupplier.source === 'purchase' ? <Tag color="green">Terakhir dibeli</Tag> : null}
-                      {detailRestockSupplier.source === 'manual' ? <Tag color="blue">Supplier manual</Tag> : null}
-                      {detailPrimarySupplier.id && !detailPrimarySupplier.isActiveMaster ? <Tag color="orange">Snapshot lama</Tag> : null}
+                      <Text strong>{getSupplierCatalogSummaryForMaterial(suppliers, selectedMaterial.id).label}</Text>
                       <Button
                         size="small"
-                        onClick={() => navigate(buildSupplierDetailRoute(selectedMaterial.id, detailRestockSupplier.id))}
+                        onClick={() => navigate(buildSupplierDetailRoute(selectedMaterial.id))}
                       >
-                        Lihat Supplier Lain
+                        {getSupplierCatalogSummaryForMaterial(suppliers, selectedMaterial.id).offerCount > 0
+                          ? 'Bandingkan Supplier'
+                          : 'Atur Sumber Restock'}
                       </Button>
                     </Space>
                   </Descriptions.Item>
-                  <Descriptions.Item label="Minimum Stok">
-                    {formatStockWithUnit(selectedMaterial.minStock || 0, selectedMaterial.stockUnit || 'pcs')}
+                  <Descriptions.Item label="Supplier Pembelian Terakhir">
+                    {detailLatestPurchase ? detailRestockSupplier.name : '-'}
                   </Descriptions.Item>
                   <Descriptions.Item label="Harga Jual">
                     {`${formatCurrencyId(selectedMaterial.sellingPrice || 0)} / ${selectedMaterial.stockUnit || '-'}`}
@@ -1289,6 +1253,12 @@ const RawMaterials = () => {
                   <Descriptions.Item label="Mode Pricing">
                     {getRuleModeLabel(selectedMaterial.pricingMode, selectedMaterial.pricingRuleId, pricingRuleMap)}
                   </Descriptions.Item>
+                  {selectedMaterial.specifications ? (
+                    <Descriptions.Item label="Spesifikasi">{selectedMaterial.specifications}</Descriptions.Item>
+                  ) : null}
+                  {selectedMaterial.notes ? (
+                    <Descriptions.Item label="Catatan Internal">{selectedMaterial.notes}</Descriptions.Item>
+                  ) : null}
                   <Descriptions.Item label="Update Terakhir">
                     {formatDateId(selectedMaterial.updatedAt, true)}
                   </Descriptions.Item>
@@ -1336,6 +1306,7 @@ const RawMaterials = () => {
                       meta: [
                         { label: 'Stok', value: (variant) => formatStockWithUnit(variant.currentStock || 0, selectedMaterial.stockUnit || 'pcs') },
                         { label: 'Reserved', value: (variant) => formatStockWithUnit(variant.reservedStock || 0, selectedMaterial.stockUnit || 'pcs') },
+                        { label: 'Minimum', value: (variant) => formatStockWithUnit(getVariantMinimumStock(variant, 0), selectedMaterial.stockUnit || 'pcs') },
                         {
                           label: 'Tersedia',
                           value: (variant) => formatStockWithUnit(
@@ -1363,6 +1334,14 @@ const RawMaterials = () => {
                         dataIndex: 'reservedStock',
                         key: 'reservedStock',
                         render: (value) => formatStockWithUnit(value || 0, selectedMaterial.stockUnit || 'pcs'),
+                      },
+                      {
+                        title: 'Minimum',
+                        key: 'minStockAlert',
+                        render: (_, variant) => formatStockWithUnit(
+                          getVariantMinimumStock(variant, 0),
+                          selectedMaterial.stockUnit || 'pcs',
+                        ),
                       },
                       {
                         title: 'Tersedia',
@@ -1394,6 +1373,9 @@ const RawMaterials = () => {
                     </Descriptions.Item>
                     <Descriptions.Item label="Stok Tersedia">
                       {formatStockWithUnit(stockSummary.availableStock, selectedMaterial.stockUnit || 'pcs')}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Minimum Stok">
+                      {formatStockWithUnit(getRawMaterialMinimumStockDisplay(selectedMaterial), selectedMaterial.stockUnit || 'pcs')}
                     </Descriptions.Item>
                   </Descriptions>
                 )}

@@ -126,6 +126,7 @@ const RouteFallback = (
 // - GUARDED: jangan mengubah business page di sini; hanya route access wrapper.
 // Compatibility / cleanup:
 // - exact hub lama /stock dan /produksi sudah dipensiunkan;
+// - /inventory menjadi redirect role-guarded karena Kontrol Stok hanya memiliki satu halaman;
 // - legacy child route diisolasi lewat LEGACY_ROUTE_REDIRECTS.
 // =========================
 const AppRoutes = ({ darkTheme }) => {
@@ -158,7 +159,10 @@ const AppRoutes = ({ darkTheme }) => {
           path={APP_ROUTES.INVENTORY.HUB}
           element={guardRoute(
             ROUTE_ACCESS_KEYS.INVENTORY_HUB,
-            <ModuleHub moduleKey="inventory" />,
+            <Navigate
+              to={APP_ROUTES.INVENTORY.STOCK_MANAGEMENT}
+              replace
+            />,
           )}
         />
         <Route

@@ -10,7 +10,7 @@ import { getMasterStockSummary } from '../../../utils/variants/variantStockNorma
 // Opsi satuan bahan baku.
 // Tetap disimpan lokal di halaman agar form edit/create mudah dibaca dan dirawat.
 // -----------------------------------------------------------------------------
-export const unitOptions = ['pcs', 'meter', 'yard', 'kg', 'gram', 'liter', 'ml', 'roll', 'pack', 'batang'];
+export const unitOptions = ['pcs', 'meter', 'yard', 'kg', 'gram', 'liter', 'ml', 'roll', 'pack', 'batang', 'tangkai', 'lembar', 'biji', 'set'];
 
 // -----------------------------------------------------------------------------
 // AKTIF + GUARDED: batas lookup purchase terakhir Raw Material.
@@ -32,11 +32,18 @@ export const RAW_MATERIAL_PURCHASE_LOOKUP_LIMIT = 500;
 export const buildFormValues = (record = {}) => ({
   ...RAW_MATERIAL_DEFAULT_FORM,
   ...record,
-  hasVariants: record.hasVariants === true,
+  hasVariants: record.hasVariants === true || record.hasVariantOptions === true,
   variantLabel: record.variantLabel || 'Varian',
   variants:
-    record.hasVariants === true
-      ? ensureAtLeastOneRawMaterialVariant(record.variants || [])
+    record.hasVariants === true || record.hasVariantOptions === true
+      ? ensureAtLeastOneRawMaterialVariant(
+          Array.isArray(record.variants) && record.variants.length > 0
+            ? record.variants
+            : record.variantOptions || [],
+        ).map((variant) => ({
+          ...variant,
+          minStockAlert: Number(variant.minStockAlert ?? variant.minStock ?? record.minStock ?? 0),
+        }))
       : [],
 });
 
@@ -208,8 +215,17 @@ export const getPurchaseSortMillis = (purchase = {}) => (
 );
 
 export const getSafeRestockLink = (...values) => {
-  const validValue = values.find((value) => String(value || '').trim());
-  return validValue ? String(validValue).trim() : null;
+  for (const value of values) {
+    const normalized = String(value || '').trim();
+    if (!normalized) continue;
+    try {
+      const parsed = new URL(normalized);
+      if (['http:', 'https:'].includes(parsed.protocol)) return normalized;
+    } catch {
+      // Link legacy yang tidak valid sengaja tidak dibuka dari UI.
+    }
+  }
+  return null;
 };
 
 export const getPurchaseLineItems = (purchase = null) => {
@@ -270,7 +286,7 @@ export const getLatestPurchaseForMaterial = (purchaseList = [], materialId = nul
         purchase?.itemId || purchase?.materialId || purchase?.rawMaterialId,
       );
 
-      return purchaseType === 'material' && purchaseMaterialId === normalizedMaterialId;
+      return ['material', 'raw_material', 'raw_materials'].includes(purchaseType) && purchaseMaterialId === normalizedMaterialId;
     })
     .sort((leftItem, rightItem) => getPurchaseSortMillis(rightItem) - getPurchaseSortMillis(leftItem))[0] || null;
 };
@@ -341,6 +357,66 @@ export const buildSupplierDetailRoute = (materialId, supplierId) => {
   return `/suppliers?${params.toString()}`;
 };
 
+export const getActiveSupplierOffersForMaterial = (supplierList = [], materialId = null) => {
+  const normalizedMaterialId = normalizeRecordId(materialId);
+  if (!normalizedMaterialId) return [];
+
+  return (Array.isArray(supplierList) ? supplierList : []).flatMap((supplier) => {
+    const offers = Array.isArray(supplier.catalogOffers)
+      ? supplier.catalogOffers
+      : Array.isArray(supplier.materialDetails)
+        ? supplier.materialDetails
+        : [];
+
+    return offers
+      .filter((offer) => {
+        const itemType = String(offer.itemType || offer.type || 'raw_material').toLowerCase();
+        const itemId = normalizeRecordId(offer.itemId || offer.materialId || offer.rawMaterialId);
+        const status = String(offer.status || (offer.isActive === false ? 'inactive' : 'active')).toLowerCase();
+        return ['material', 'raw_material', 'raw_materials'].includes(itemType)
+          && itemId === normalizedMaterialId
+          && status === 'active';
+      })
+      .map((offer) => ({
+        ...offer,
+        supplierId: supplier.id,
+        supplierName: getSupplierDisplayName(supplier),
+      }));
+  });
+};
+
+export const getSupplierCatalogSummaryForMaterial = (supplierList = [], materialId = null) => {
+  const offers = getActiveSupplierOffersForMaterial(supplierList, materialId);
+  const supplierIds = new Set(offers.map((offer) => normalizeRecordId(offer.supplierId)).filter(Boolean));
+  return {
+    supplierCount: supplierIds.size,
+    offerCount: offers.length,
+    offers,
+    label: offers.length > 0
+      ? `${supplierIds.size} toko · ${offers.length} link`
+      : 'Belum diatur',
+  };
+};
+
+export const getVariantMinimumStock = (variant = {}, fallback = 0) => {
+  const value = Number(variant.minStockAlert ?? variant.minStock ?? fallback ?? 0);
+  return Number.isFinite(value) && value > 0 ? value : 0;
+};
+
+export const getRawMaterialMinimumStockDisplay = (record = {}) => {
+  const variants = Array.isArray(record.variants) && record.variants.length > 0
+    ? record.variants
+    : Array.isArray(record.variantOptions)
+      ? record.variantOptions
+      : [];
+  if ((record.hasVariants === true || record.hasVariantOptions === true) && variants.length > 0) {
+    return variants
+      .filter((variant) => variant.isActive !== false)
+      .reduce((sum, variant) => sum + getVariantMinimumStock(variant, 0), 0);
+  }
+  return Number(record.minStock || record.minStockAlert || 0);
+};
+
 /* =====================================================
 SECTION: Raw Material Minimum Stock Status — AKTIF
 Fungsi:
@@ -371,7 +447,7 @@ export const getRawMaterialStatusMeta = (record = {}) => {
 
   const variantStatusMeta = getVariantAwareStockStatusMeta(record, {
     sourceType: 'material',
-    threshold: minStock,
+    threshold: record.hasVariants || record.hasVariantOptions ? undefined : minStock,
   });
 
   if (variantStatusMeta) return variantStatusMeta;

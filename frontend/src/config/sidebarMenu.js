@@ -4,7 +4,6 @@ import {
   ShoppingCartOutlined,
   AppstoreOutlined,
   WalletOutlined,
-  PrinterOutlined,
   BuildOutlined,
   TagsOutlined,
   ApartmentOutlined,
@@ -91,6 +90,24 @@ export const sidebarMenuItems = [
     hubDescription:
       "Kelola data referensi utama yang digunakan pada transaksi, stok, harga, dan produksi.",
     allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
+    hubSections: [
+      {
+        key: "product-material",
+        label: "Produk & Material",
+        description:
+          "Kelola produk, bahan, serta klasifikasi master yang dipakai operasional.",
+        icon: DatabaseOutlined,
+        itemKeys: ["products", "raw-materials", "categories"],
+      },
+      {
+        key: "partner-pricing",
+        label: "Mitra & Harga",
+        description:
+          "Kelola supplier, customer, dan aturan harga dalam satu kelompok referensi.",
+        icon: ShopOutlined,
+        itemKeys: ["suppliers", "customers", "pricing-rules"],
+      },
+    ],
     children: [
       {
         key: "products",
@@ -103,8 +120,7 @@ export const sidebarMenuItems = [
       },
       {
         key: "raw-materials",
-        label: "Raw Materials",
-        hubLabel: "Bahan Baku",
+        label: "Bahan Baku",
         hubIcon: InboxOutlined,
         hubDescription:
           "Kelola bahan baku, satuan, harga beli, minimum stok, dan status penggunaan.",
@@ -113,10 +129,10 @@ export const sidebarMenuItems = [
       },
       {
         key: "categories",
-        label: "Kategori",
+        label: "Kategori & Kelompok",
         hubIcon: TagsOutlined,
         hubDescription:
-          "Kelola kategori untuk pengelompokan produk dan bahan baku.",
+          "Kelola bentuk produk, jenis bunga, kelompok bahan, dan kelompok komponen produksi.",
         path: "/categories",
         allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
@@ -141,8 +157,7 @@ export const sidebarMenuItems = [
       {
         key: "pricing-rules",
         icon: TagsOutlined,
-        label: "Pricing Rules",
-        hubLabel: "Aturan Harga",
+        label: "Aturan Harga",
         hubIcon: CalculatorOutlined,
         hubDescription:
           "Kelola aturan harga otomatis dan lakukan preview sebelum diterapkan.",
@@ -161,27 +176,12 @@ export const sidebarMenuItems = [
   // =========================
   {
     key: "inventory",
-    icon: AppstoreOutlined,
-    label: "Stock Control",
-    hubPath: APP_ROUTES.INVENTORY.HUB,
-    hubIcon: InboxOutlined,
-    hubEyebrow: "Workspace Stok",
-    hubTitle: "Kontrol Stok",
-    hubDescription:
-      "Pantau persediaan dan audit pergerakan stok, lalu lakukan penyesuaian manual melalui flow resmi.",
+    icon: InboxOutlined,
+    label: "Kontrol Stok",
+    path: APP_ROUTES.INVENTORY.STOCK_MANAGEMENT,
+    description:
+      "Tinjau stok tersedia, batas minimum, riwayat pergerakan, dan adjustment ber-audit.",
     allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
-    children: [
-      {
-        key: "stock-management",
-        label: "Stock Management",
-        hubLabel: "Manajemen Stok",
-        hubIcon: InboxOutlined,
-        hubDescription:
-          "Tinjau stok tersedia, stok dipesan, batas minimum, riwayat pergerakan, dan adjustment ber-audit.",
-        path: APP_ROUTES.INVENTORY.STOCK_MANAGEMENT,
-        allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
-      },
-    ],
   },
 
   // =========================
@@ -207,16 +207,14 @@ export const sidebarMenuItems = [
         key: "production-operation",
         icon: CalendarOutlined,
         hubIcon: PlayCircleOutlined,
-        label: "Production Operation",
-        hubLabel: "Operasional Produksi",
+        label: "Operasional Produksi",
         hubDescription:
           "Alur kerja harian: susun planning, buat order, lalu catat hasil produksi.",
         allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
         children: [
           {
             key: "production-planning",
-            label: "Production Planning",
-            hubLabel: "Planning Produksi",
+            label: "Planning Produksi",
             hubDescription:
               "Susun kebutuhan, target, dan jadwal produksi sebelum order dibuat.",
             path: APP_ROUTES.PRODUCTION.PLANNING,
@@ -250,8 +248,7 @@ export const sidebarMenuItems = [
         key: "production-setup",
         icon: ToolOutlined,
         hubIcon: SettingOutlined,
-        label: "Production Setup",
-        hubLabel: "Pengaturan Produksi",
+        label: "Pengaturan Produksi",
         hubDescription:
           "Siapkan tahapan, pekerja, template, semi product, dan resep produksi.",
         allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
@@ -278,8 +275,7 @@ export const sidebarMenuItems = [
           },
           {
             key: "production-profiles",
-            label: "Production Profile / Template",
-            hubLabel: "Template Produksi",
+            label: "Template Produksi",
             hubDescription:
               "Buat template tahapan dan standar kerja untuk proses berulang.",
             path: APP_ROUTES.PRODUCTION.PROFILES,
@@ -289,8 +285,7 @@ export const sidebarMenuItems = [
           },
           {
             key: "semi-finished-materials",
-            label: "Semi Product",
-            hubLabel: "Produk Setengah Jadi",
+            label: "Produk Setengah Jadi",
             hubDescription:
               "Kelola produk setengah jadi yang dipakai pada proses berikutnya.",
             path: APP_ROUTES.PRODUCTION.SEMI_FINISHED_MATERIALS,
@@ -314,8 +309,7 @@ export const sidebarMenuItems = [
         key: "production-cost-analysis",
         icon: MoneyCollectOutlined,
         hubIcon: LineChartOutlined,
-        label: "Cost & Analysis",
-        hubLabel: "Biaya & Analisis",
+        label: "Biaya & Analisis",
         hubDescription:
           "Tinjau payroll final dan HPP berdasarkan data produksi aktual.",
         allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
@@ -354,7 +348,7 @@ export const sidebarMenuItems = [
   // =========================
   {
     key: "transactions",
-    icon: ShoppingCartOutlined,
+    icon: SwapOutlined,
     label: "Transaksi",
     hubPath: "/transactions",
     hubIcon: SwapOutlined,
@@ -362,6 +356,16 @@ export const sidebarMenuItems = [
     hubDescription:
       "Kelola pembelian, penjualan, dan retur operasional melalui flow transaksi resmi.",
     allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
+    hubSections: [
+      {
+        key: "transaction-operation",
+        label: "Operasional Transaksi",
+        description:
+          "Jalankan pembelian, penjualan, dan retur melalui flow transaksi resmi.",
+        icon: SwapOutlined,
+        itemKeys: ["purchases", "sales", "returns"],
+      },
+    ],
     children: [
       {
         key: "purchases",
@@ -410,6 +414,16 @@ export const sidebarMenuItems = [
     hubDescription:
       "Kelola pemasukan dan pengeluaran resmi serta audit pergerakan kas dalam satu workspace.",
     allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
+    hubSections: [
+      {
+        key: "cash-audit",
+        label: "Arus Kas & Audit",
+        description:
+          "Catat arus kas dan telusuri seluruh pergerakan melalui buku besar.",
+        icon: WalletOutlined,
+        itemKeys: ["cash-in", "cash-out", "money-movement-ledger"],
+      },
+    ],
     children: [
       {
         key: "cash-in",
@@ -453,7 +467,7 @@ export const sidebarMenuItems = [
   // =========================
   {
     key: "utilities",
-    icon: ToolOutlined,
+    icon: SettingOutlined,
     label: "Sistem",
     hubPath: "/system",
     hubIcon: SettingOutlined,
@@ -461,6 +475,16 @@ export const sidebarMenuItems = [
     hubDescription:
       "Kelola pengguna serta jalankan backup, audit, dan maintenance data dengan guard keamanan.",
     allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
+    hubSections: [
+      {
+        key: "system-administration",
+        label: "Administrasi Sistem",
+        description:
+          "Kelola akses pengguna dan maintenance sistem melalui area Administrator.",
+        icon: SettingOutlined,
+        itemKeys: ["user-management", "reset-maintenance-data"],
+      },
+    ],
     children: [
       {
         key: "user-management",
@@ -493,7 +517,7 @@ export const sidebarMenuItems = [
   // =========================
   {
     key: "reports",
-    icon: PrinterOutlined,
+    icon: BarChartOutlined,
     label: "Laporan",
     hubPath: "/reports",
     hubIcon: BarChartOutlined,
@@ -501,6 +525,24 @@ export const sidebarMenuItems = [
     hubDescription:
       "Tinjau rekap stok, transaksi, payroll, dan hasil keuangan untuk audit serta analisis.",
     allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
+    hubSections: [
+      {
+        key: "operational-reports",
+        label: "Laporan Operasional",
+        description:
+          "Tinjau posisi stok serta rekap transaksi pembelian dan penjualan.",
+        icon: BarChartOutlined,
+        itemKeys: ["report-stock", "purchases-report", "sales-report"],
+      },
+      {
+        key: "finance-production-reports",
+        label: "Keuangan & Produksi",
+        description:
+          "Tinjau payroll produksi dan hasil laba rugi dari transaksi resmi.",
+        icon: LineChartOutlined,
+        itemKeys: ["payroll-report", "profit-loss"],
+      },
+    ],
     children: [
       {
         key: "report-stock",

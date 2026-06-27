@@ -30,12 +30,12 @@ const collectWorkspaceLeafItems = (moduleItem) => {
 };
 
 describe("responsive sidebar navigation", () => {
-  it("memakai canonical hub route untuk navigation baru", () => {
+  it("membuka modul satu halaman secara langsung dan modul lain melalui hub", () => {
     const inventory = findMenuItemByKey(sidebarMenuItems, "inventory");
     const production = findMenuItemByKey(sidebarMenuItems, "productions");
 
     expect(getTopLevelNavigationTarget(inventory)).toBe(
-      APP_ROUTES.INVENTORY.HUB,
+      APP_ROUTES.INVENTORY.STOCK_MANAGEMENT,
     );
     expect(getTopLevelNavigationTarget(production)).toBe(
       APP_ROUTES.PRODUCTION.HUB,
@@ -93,6 +93,33 @@ describe("responsive sidebar navigation", () => {
     });
   });
 
+  it("menyediakan section workspace terurut tanpa mengubah hierarchy sidebar", () => {
+    const expectedSections = {
+      "master-data": [
+        ["products", "raw-materials", "categories"],
+        ["suppliers", "customers", "pricing-rules"],
+      ],
+      transactions: [["purchases", "sales", "returns"]],
+      finance: [["cash-in", "cash-out", "money-movement-ledger"]],
+      utilities: [["user-management", "reset-maintenance-data"]],
+      reports: [
+        ["report-stock", "purchases-report", "sales-report"],
+        ["payroll-report", "profit-loss"],
+      ],
+    };
+
+    Object.entries(expectedSections).forEach(([moduleKey, itemKeyGroups]) => {
+      const moduleItem = findMenuItemByKey(sidebarMenuItems, moduleKey);
+
+      expect(moduleItem?.hubSections?.map((section) => section.itemKeys)).toEqual(
+        itemKeyGroups,
+      );
+      expect(moduleItem?.children?.every((childItem) => childItem.path)).toBe(
+        true,
+      );
+    });
+  });
+
   it("metadata Workspace tidak mengubah target route existing", () => {
     const pathByKey = Object.fromEntries(
       collectNavigableItems(sidebarMenuItems).map((item) => [
@@ -110,8 +137,7 @@ describe("responsive sidebar navigation", () => {
       suppliers: "/suppliers",
       customers: "/customers",
       "pricing-rules": "/pricing-rules",
-      inventory: APP_ROUTES.INVENTORY.HUB,
-      "stock-management": APP_ROUTES.INVENTORY.STOCK_MANAGEMENT,
+      inventory: APP_ROUTES.INVENTORY.STOCK_MANAGEMENT,
       productions: APP_ROUTES.PRODUCTION.HUB,
       "production-planning": APP_ROUTES.PRODUCTION.PLANNING,
       "production-orders": APP_ROUTES.PRODUCTION.ORDERS,

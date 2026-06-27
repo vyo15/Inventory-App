@@ -11,6 +11,8 @@ const RESET_TABLES = [
   "business_code_counters",
   "customers",
   "categories",
+  "supplier_catalog_history",
+  "supplier_catalog_offers",
   "suppliers",
   "stock_read_models",
   "stock_adjustments",
@@ -60,7 +62,7 @@ const configureTestDatabase = (name = "backend") => {
         await db.run(`DELETE FROM ${tableName}`);
       }
       await db.run(
-        "DELETE FROM sqlite_sequence WHERE name IN ('users', 'local_user_sessions', 'audit_logs')"
+        "DELETE FROM sqlite_sequence WHERE name IN ('users', 'local_user_sessions', 'audit_logs', 'suppliers', 'supplier_catalog_offers', 'supplier_catalog_history')"
       );
     } finally {
       await db.exec("PRAGMA foreign_keys = ON;");

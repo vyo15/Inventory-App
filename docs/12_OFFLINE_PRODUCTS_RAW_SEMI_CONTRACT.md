@@ -69,9 +69,10 @@ Source utama: `src/services/MasterData/productsService.js`.
 | `id` | identity | Data baru memakai document ID = kode `PRD-xxx`; data historis random ID tetap historical-compatible. |
 | `code`, `productCode` | identity internal | Service auto-generate dan menjaga immutable saat update. UI utama tidak boleh bergantung pada input manual. |
 | `name` | wajib | Duplicate name dicek di service. |
-| `categoryId`, `category` | metadata | `category` disnapshot dari selected category, fallback `Produk Jadi`. |
+| `categoryId`, `category`, `categoryName` | metadata | `categoryId` adalah relasi utama Bentuk Produk; nama disnapshot untuk compatibility. Fallback baca legacy: `category` → `categoryName` → `Belum Dikategorikan`. |
 | `price`, `hppPerUnit` | finance/valuation | Tidak boleh negatif; HPP product output bisa dipengaruhi flow produksi, bukan snapshot local. |
 | `pricingMode`, `pricingRuleId`, `lastPricingUpdatedAt` | pricing | Mode default manual. Rule wajib hanya saat mode `rule`. |
+| `flowerTypeId`, `flowerType`, `flowerTypeName` | metadata | Relasi dan snapshot Jenis Bunga. Tidak dicampur dengan Bentuk Produk atau jumlah tangkai. |
 | `description`, `isActive` | metadata | `isActive` default true kecuali false eksplisit. |
 | `hasVariants`, `variantLabel`, `variants`, `archivedVariants`, `variantModeHistory` | variant | Variant aktif dihitung lewat helper; archive/history dipertahankan untuk guard data historis. |
 | `currentStock`, `stock`, `reservedStock`, `availableStock` | stock guarded | `stock` masih alias lama `currentStock`. Tidak boleh diubah dari offline snapshot. |
@@ -98,10 +99,10 @@ Source utama: `src/services/MasterData/rawMaterialsService.js`.
 | `id` | identity | Data baru memakai document ID = kode `RAW-xxx`; data historis `RM`/random ID tetap historical-compatible. |
 | `code`, `materialCode` | identity internal | Auto-generated, immutable saat update. |
 | `name` | wajib | Duplicate name dicek di service. |
-| `supplierId`, `supplierName`, `supplierLink` | supplier snapshot | Di-resolve dari supplier aktif lewat helper supplier. Inilah alasan supplier tidak boleh offline write dulu. |
+| `supplierId`, `supplierName`, `supplierLink` | legacy compatibility | Snapshot lama boleh tetap terbaca, tetapi flow baru tidak mengikat Raw Material ke satu supplier. Sumber restock aktif berasal dari `supplier_catalog_offers`. |
 | `stockUnit` | unit | Wajib; default `pcs`. Dipakai purchase dan production usage. |
 | `stock`, `currentStock`, `reservedStock`, `availableStock` | stock guarded | `stock` alias lama `currentStock`. Tidak boleh dimutasi dari snapshot local. |
-| `minStock` | alert master | Tidak boleh negatif. |
+| `minStock`, `minStockAlert` | alert | Untuk non-varian menjadi threshold master. Untuk item bervarian, threshold operasional berasal dari `variants[].minStockAlert` dan top-level dinormalisasi ke 0 pada data baru. |
 | `restockReferencePrice`, `averageActualUnitCost`, `sellingPrice` | cost/pricing | Terkait purchase/restock/HPP. Tidak boleh dihitung ulang dari local snapshot. |
 | `pricingMode`, `pricingRuleId`, `lastPricingUpdatedAt` | pricing | Default manual. Rule wajib hanya saat mode `rule`. |
 | `hasVariants`, `hasVariantOptions`, `variantLabel`, `variants`, `variantOptions`, `archivedVariants`, `variantModeHistory` | variant | `variantOptions` dipertahankan sebagai alias lama. |
@@ -112,10 +113,12 @@ Guard penting Raw Material:
 
 - Create/update memakai transaction backend dan menyinkronkan `stock_read_models`.
 - Purchase stock-in memakai raw material, variant key, dan `stockUnit`.
+- Pembelian Raw Material menghitung `averageActualUnitCost` secara weighted dari stok/cost lama dan total biaya aktual per satuan stok masuk; update valuation berada dalam transaction yang sama dengan stock-in/finance/audit.
 - Production BOM/work log memakai bahan dan bisa memotong stock.
-- Remove raw material masih ada di service dan menyentuh read model; offline write/delete raw material belum aman.
-- Runtime SQLite aktual memblokir delete Raw Material yang masih memiliki stock/reserved dan memindahkan sinkronisasi read model ke transaction backend.
-- `averageActualUnitCost` adalah transaction-derived dan tidak boleh ditulis ulang dari snapshot edit; `restockReferencePrice` tetap reference/manual sesuai business rule.
+- Runtime SQLite memblokir delete atau deaktivasi Raw Material yang masih memiliki stock/reserved; deaktivasi juga ditolak bila bahan masih dipakai BOM/proses produksi aktif.
+- `averageActualUnitCost` adalah transaction-derived/read-only dan tidak boleh ditulis ulang dari snapshot edit; `restockReferencePrice` tetap reference/manual sesuai business rule.
+- Stok awal > 0 wajib mempunyai modal stok awal > 0; nama/kategori/unit dan semua angka domain divalidasi kembali di backend.
+- Untuk Raw Material bervarian, setiap varian menyimpan minimum stok sendiri; read model aggregate hanya ringkasan total minimum varian aktif.
 
 ## Kontrak field Semi Finished
 
@@ -127,8 +130,10 @@ Source utama: `src/services/Produksi/semiFinishedMaterialsService.js` dan `src/c
 | `code`, `itemCode` | identity internal | Service membuat kode final saat create; update menjaga kode existing. |
 | `name` | wajib | Nama semi finished wajib ada. |
 | `description` | metadata | Teks bebas. |
-| `category` | production category | Default form `pola`; pilihan: `pola`, `kelopak`, `daun`, `kawat`, `lainnya`. |
-| `flowerGroup` | wajib eksplisit | Tidak ada fallback diam-diam ke `mawar`. Ini guard penting untuk ekspansi jenis bunga. |
+| `category` | jenis komponen guarded | Default form `pola`; pilihan: `pola`, `kelopak`, `daun`, `kawat`, `lainnya`. Tetap dipakai logic produksi/resep. |
+| `flowerTypeId`, `flowerType`, `flowerTypeName` | relasi master | Relasi utama ke Jenis Bunga dan snapshot compatibility. |
+| `flowerGroup` | snapshot legacy | Tetap dibaca/ditulis sebagai alias nama Jenis Bunga agar data lama dan grouped list kompatibel. |
+| `categoryId`, `componentGroup`, `componentGroupName` | metadata | Kelompok Komponen untuk pencarian/laporan; tidak mengganti `category` sebagai Jenis Komponen. |
 | `type` | fixed | `semi_finished`. |
 | `unit` | unit | Default `pcs`. |
 | `relatedProductIds`, `relatedProductNames` | relation snapshot | Snapshot relasi ke product. |
@@ -142,27 +147,22 @@ Source utama: `src/services/Produksi/semiFinishedMaterialsService.js` dan `src/c
 
 Guard penting Semi Finished:
 
-- `flowerGroup` wajib eksplisit; hardcoded/silent default `mawar` tidak boleh kembali.
+- Jenis Bunga wajib eksplisit melalui `flowerTypeId`; data lama tanpa ID tetap boleh dibaca dari `flowerGroup`. Hardcoded/silent default `mawar` tidak boleh kembali.
 - Create/update memakai transaction backend dan menyinkronkan `stock_read_models`.
 - Production Work Log dapat memengaruhi `averageCostPerUnit` dan HPP output.
 - Semi Finished terkait BOM bertingkat dan output produksi, sehingga offline write belum aman.
 - Runtime SQLite aktual mempreserve `averageCostPerUnit`, `lastProductionCostPerUnit`, dan cost alias dari record terbaru saat edit metadata.
 - Delete Semi Finished yang masih memiliki stock/reserved, termasuk snapshot legacy di `archivedVariants[]`, ditolak dan read model disinkronkan backend secara atomic.
 
-## Variant dan hardcoded mawar
+## Jenis Bunga dan compatibility `flowerGroup`
 
-Source: `src/constants/variantOptions.js` dan `src/constants/semiFinishedMaterialOptions.js`.
+Source: `src/constants/categoryOptions.js`, `src/pages/MasterData/Categories.jsx`, dan `src/services/Produksi/semiFinishedMaterialsService.js`.
 
-- `FLOWER_GROUP_OPTIONS` masih menyediakan opsi `mawar`, `tulip`, `lily`, `daisy`, `universal`, dan `lainnya`.
-- `DEFAULT_SEMI_FINISHED_FORM.flowerGroup` sudah kosong, bukan `mawar`.
-- `semiFinishedMaterialsService` memvalidasi `flowerGroup` wajib dan memberi catatan `no-silent-mawar-default`.
-- Batch ini tidak mengubah opsi bunga dan tidak membuat migrasi data historis.
-
-Keputusan:
-
-- `mawar` sebagai opsi valid tetap boleh ada.
-- `mawar` sebagai default otomatis tidak boleh ada.
-- Perlu batch terpisah jika nanti ingin product family/flower group dinamis dari master data, karena itu menyentuh schema/route/UI dan relasi produksi.
+- Jenis Bunga sekarang dikelola dari master kategori scope `flower_type`.
+- `DEFAULT_SEMI_FINISHED_FORM.flowerTypeId` dan `flowerGroup` kosong; data baru tidak boleh otomatis masuk Mawar.
+- Service menyimpan `flowerTypeId` sebagai relasi utama dan menyalin nama ke `flowerType`, `flowerTypeName`, serta `flowerGroup` untuk compatibility.
+- Data historis yang hanya mempunyai `flowerGroup` tetap dapat dibaca dan diedit tanpa migrasi destructive.
+- `mawar` sebagai data master valid tetap boleh ada; `mawar` sebagai default otomatis tidak boleh ada.
 
 ## Unit conversion dan stock relation
 
@@ -176,8 +176,8 @@ Hal yang terdeteksi dari source:
 
 Keputusan:
 
-- Tidak ada unit conversion baru di Batch 30.
-- Snapshot local menyimpan data sebagaimana runtime arsip, tidak melakukan konversi unit.
+- Kategori tidak menyimpan unit beli atau konversi. Purchase tetap menyimpan snapshot Qty Beli, Satuan Beli, nilai konversi, dan total Stok Masuk.
+- Inventory/BOM memakai satuan stok dasar; snapshot data tidak melakukan konversi ulang.
 - Semua konversi/normalisasi stock harus tetap lewat service aktif sampai ada kontrak stock offline.
 
 ## Local DB Batch 30
@@ -209,7 +209,7 @@ Batasan runtime:
 1. Data historis mungkin punya shape field berbeda (`stock`, `currentStock`, `variantOptions`, random ID). Snapshot harus tetap compatibility.
 2. Product/raw/semi menyentuh `stock_item_read_models`; offline write tanpa kontrak read model akan berisiko beda stok.
 3. Purchase/Production/HPP bisa memakai cost/stock terbaru; snapshot local bisa stale jika runtime arsip berubah setelah pull.
-4. Supplier linkage di raw material memakai snapshot supplier. Karena itu supplier tetap read-only.
+4. Sumber restock Raw Material memakai katalog Supplier terstruktur. Snapshot supplier lama hanya compatibility dan tidak boleh mengunci master pada satu toko.
 5. Semi Finished `averageCostPerUnit` terkait HPP produksi; local snapshot tidak boleh menjadi sumber final valuation.
 
 ## Test checklist Batch 29–30

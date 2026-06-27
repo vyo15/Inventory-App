@@ -76,6 +76,11 @@ export const getSqliteBackendStatus = async () => fetchSqliteJson("/api/maintena
   headers: getStoredSqliteAuthHeaders(),
 });
 
+export const getSqliteInitialSetupReadiness = async () => fetchSqliteJson(
+  "/api/maintenance/initial-setup-readiness",
+  { headers: getStoredSqliteAuthHeaders() },
+);
+
 export const createSqliteBackendBackup = async (values = {}) => fetchSqliteJson("/api/maintenance/backup", {
   method: "POST",
   headers: getStoredSqliteAuthHeaders(),

@@ -20,6 +20,7 @@ import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { createCashInTransaction, listenCashInRecords } from "../../services/Finance/financeService";
+import { compareRecordsByDateDesc, upsertRecordById } from "../../utils/state/recordCollectionState";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import CashTransactionFormFields from "./components/CashTransactionFormFields";
 import {
@@ -171,7 +172,10 @@ const CashIn = () => {
 
   const handleAddTransaction = async (values) => {
     try {
-      await createCashInTransaction(values);
+      const savedTransaction = await createCashInTransaction(values);
+      setCashIns((current) => upsertRecordById(current, savedTransaction, {
+        comparator: compareRecordsByDateDesc,
+      }));
       message.success("Transaksi pemasukan berhasil ditambahkan!");
       closeCreateModal();
     } catch (error) {

@@ -3,6 +3,12 @@ import * as sqliteRawMaterialsAdapter from "../../data/adapters/sqlite/sqliteRaw
 import * as sqliteSemiFinishedMaterialsAdapter from "../../data/adapters/sqlite/sqliteSemiFinishedMaterialsAdapter";
 import { buildStockReadModelRow } from "../../utils/stock/stockHelpers";
 import { getStockReadModelRows } from "../Inventory/stockReadModelService";
+import { listCategories } from "../../data/repositories/categoriesRepository";
+import { CATEGORY_TYPES } from "../../constants/categoryOptions";
+import {
+  filterCategoriesByType,
+  resolveCategoryLabel,
+} from "../../utils/categories/categoryHelpers";
 
 const STOCK_REPORT_DEFAULT_PAGE_SIZE = 500;
 const STOCK_REPORT_DEFAULT_EXPORT_LIMIT = 20000;
@@ -142,10 +148,44 @@ const readStockReportRows = async ({
   }
 };
 
-const readStockReportCategories = async () => ({
-  categories: [],
-  failedReads: [],
-});
+const readStockReportCategories = async () => {
+  try {
+    return {
+      categories: await listCategories(),
+      failedReads: [],
+    };
+  } catch (error) {
+    console.warn("Gagal memuat kategori Stock Report:", error);
+    return { categories: [], failedReads: ["categories"] };
+  }
+};
+
+const resolveStockReportCategory = (item = {}, categories = []) => {
+  const sourceType = String(item.sourceType || item.type || "").toLowerCase();
+  const categoryType = sourceType.includes("raw")
+    ? CATEGORY_TYPES.RAW_MATERIAL_GROUP
+    : sourceType.includes("semi")
+      ? CATEGORY_TYPES.SEMI_FINISHED_GROUP
+      : CATEGORY_TYPES.PRODUCT_FORM;
+  const scopedCategories = filterCategoriesByType(categories, categoryType);
+  const fallback = sourceType.includes("semi")
+    ? item.componentGroup || item.componentGroupName || item.category || item.categoryName
+    : item.category || item.categoryName;
+
+  return resolveCategoryLabel({
+    categoryId: item.categoryId,
+    categories: scopedCategories,
+    fallback,
+    emptyLabel: "Belum Dikategorikan",
+  });
+};
+
+const applyStockReportCategoryLabels = (inventory = [], categories = []) => (
+  (inventory || []).map((item) => ({
+    ...item,
+    category: resolveStockReportCategory(item, categories),
+  }))
+);
 
 // =====================================================
 // SECTION: Stock Report data loader — AKTIF / DATA STOK UTAMA + PAGING
@@ -165,15 +205,16 @@ export const fetchStockReportData = async ({
     includeCategories ? readStockReportCategories() : Promise.resolve({ categories: [], failedReads: [] }),
   ]);
 
-  const categories = Array.from(new Set([
-    ...categoryResult.categories,
-    ...stockRowsResult.inventory
-      .map((item) => item.category || item.categoryName || "")
-      .filter(Boolean),
-  ]));
+  const inventory = applyStockReportCategoryLabels(
+    stockRowsResult.inventory,
+    categoryResult.categories,
+  );
+  const categories = Array.from(new Set(
+    inventory.map((item) => item.category || "").filter(Boolean),
+  ));
 
   return {
-    inventory: stockRowsResult.inventory,
+    inventory,
     categories,
     failedReads: [...stockRowsResult.failedReads, ...categoryResult.failedReads],
     dataSource: stockRowsResult.dataSource,
@@ -197,6 +238,7 @@ export const fetchFullStockReportExportData = async ({
   let failedReads = [];
   let inventory = [];
   let lastMeta = null;
+  const categoryResult = await readStockReportCategories();
 
   while (hasMore && inventory.length < normalizedMaxResults) {
     const remainingRows = normalizedMaxResults - inventory.length;
@@ -210,13 +252,19 @@ export const fetchFullStockReportExportData = async ({
     failedReads = [...failedReads, ...result.failedReads];
 
     if (result.dataSource !== "stock_item_read_models") {
+      const fallbackInventory = applyStockReportCategoryLabels(
+        result.inventory,
+        categoryResult.categories,
+      );
       return {
         ...result,
+        inventory: fallbackInventory,
+        failedReads: [...result.failedReads, ...categoryResult.failedReads],
         reportMeta: buildStockReportMeta({
           ...result.reportMeta,
           dataSource: result.dataSource,
-          loadedRows: result.inventory.length,
-          activeRows: result.inventory.length,
+          loadedRows: fallbackInventory.length,
+          activeRows: fallbackInventory.length,
           exportMode: "fallback_master_export",
           exportLimit: normalizedMaxResults,
         }),
@@ -232,15 +280,20 @@ export const fetchFullStockReportExportData = async ({
 
   const exportLimited = Boolean(lastMeta?.hasMore && inventory.length >= normalizedMaxResults);
 
-  return {
+  const resolvedInventory = applyStockReportCategoryLabels(
     inventory,
-    failedReads,
+    categoryResult.categories,
+  );
+
+  return {
+    inventory: resolvedInventory,
+    failedReads: [...failedReads, ...categoryResult.failedReads],
     dataSource: "stock_item_read_models",
     reportMeta: buildStockReportMeta({
       ...lastMeta,
       dataSource: "stock_item_read_models",
-      loadedRows: inventory.length,
-      activeRows: inventory.length,
+      loadedRows: resolvedInventory.length,
+      activeRows: resolvedInventory.length,
       maxResults: normalizedMaxResults,
       pageSize: normalizedPageSize,
       hasMore: exportLimited || Boolean(lastMeta?.hasMore),

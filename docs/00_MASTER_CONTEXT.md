@@ -2,6 +2,14 @@
 
 Dokumen ini dibuat berdasarkan audit langsung terhadap source code aplikasi. Update terbaru 2026-06-22 memakai ZIP `Inventory-App-20260622-202512318-main-a99017ed-dirty.zip` sebagai sumber kebenaran utama, bukan template umum atau docs lama.
 
+Update setup database awal — 2026-06-27:
+- source tervalidasi: `Inventory-App-20260627-235506481-main-06635c58-dirty.zip`;
+- Dashboard Administrator memiliki launcher compact **Setup Awal** yang membuka panel mengambang read-only;
+- panel mengurutkan setup dalam fase Fondasi, Master Operasional, dan Go-Live, dapat disembunyikan sementara, serta otomatis hilang saat seluruh langkah selesai;
+- checklist membaca kategori, master item, supplier+katalog, Tahapan Produksi, Karyawan Produksi, BOM, histori stok awal, dan backup baseline;
+- sistem tidak melakukan auto-seed kategori, stok, transaksi, atau backup;
+- SOP resmi berada di `docs/22_INITIAL_DATABASE_SETUP_SOP.md`.
+
 Update verifikasi source aktual — 2026-06-22:
 - source yang divalidasi: ZIP `Inventory-App-20260622-202512318-main-a99017ed-dirty.zip` dengan root project source pada arsip;
 - runtime utama source aktual adalah React/Vite frontend + Node.js Express backend + SQLite file lokal/LAN;
@@ -46,6 +54,8 @@ Risiko:
 ## Ringkasan Aplikasi
 IMS Bunga Flanel adalah aplikasi inventory dan operasional usaha yang mencakup:
 - master data bahan baku, produk jadi, supplier, pelanggan, kategori, dan pricing rules
+- **Aktif:** menu `Kategori & Kelompok` mengelola empat scope terpisah: Bentuk Produk, Jenis Bunga, Kelompok Bahan, dan Kelompok Komponen. Hierarchy dibatasi dua tingkat; kategori yang dipakai/masih memiliki child tidak dapat dinonaktifkan.
+- **Guarded:** `category` pada Semi Finished tetap berarti Jenis Komponen produksi dan tidak boleh diganti oleh Kelompok Komponen master.
 - transaksi pembelian, penjualan, retur, pemasukan, dan pengeluaran
 - inventaris dan audit log stok
 - modul produksi modern berbasis BOM → Production Order → Work Log → Payroll → Analisis HPP
@@ -394,7 +404,7 @@ Status: **AKTIF / SOURCE-ALIGNED / GUARDED**.
 - Source aktual memakai floating module dock untuk desktop, Drawer kiri untuk tablet, serta bottom navigation + bottom sheet role-aware untuk telepon.
 - Matrix aktif: desktop lebar `>= 1200px`, desktop compact `993-1199px`, tablet `768-992px`, telepon `<= 767px`, dan penyesuaian telepon kecil `<= 374px`.
 - Viewport desktop dengan tinggi `<= 720px` memakai dock low-height agar seluruh icon tetap berada di dalam rail.
-- Module Hub menjadi landing child menu; child route bisnis, compatibility path, role guard, dan service existing tetap dipertahankan.
+- Modul dengan beberapa halaman memakai Module Hub yang dikelompokkan berdasarkan fungsi; modul satu halaman langsung membuka halaman tujuan. Child route bisnis, compatibility path, role guard, dan service existing tetap dipertahankan.
 - Source menu lintas desktop/tablet/mobile tetap `sidebarMenuItems + filterSidebarMenuItemsByRole`; hidden menu bukan security control.
 - Rundown lintas perangkat, visual density, safe area, overlay, test matrix, dan Definition of Done resmi berada di `docs/21_RESPONSIVE_UI_UX_STANDARD.md`.
 - Perubahan responsive tetap UI-only kecuali ada approval eksplisit; jangan mengubah schema, stock, transaksi, production, payroll, HPP, finance, reset, atau audit log hanya untuk layout.

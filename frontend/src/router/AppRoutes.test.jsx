@@ -46,13 +46,16 @@ const expectGuard = (routeKey) => {
 };
 
 describe("AppRoutes canonical navigation", () => {
-  it("membuka canonical Inventory Hub melalui guard inventory", async () => {
+  it("mengarahkan Inventory Hub ke satu-satunya halaman melalui guard yang sama", async () => {
     renderRoute(APP_ROUTES.INVENTORY.HUB);
 
-    expect((await screen.findByTestId("module-hub")).textContent).toBe(
-      "inventory",
-    );
-    expectGuard(ROUTE_ACCESS_KEYS.INVENTORY_HUB);
+    await waitFor(() => {
+      expect(screen.getByTestId("location-path").textContent).toBe(
+        APP_ROUTES.INVENTORY.STOCK_MANAGEMENT,
+      );
+    });
+    expect(await screen.findByTestId("stock-management-page")).toBeTruthy();
+    expectGuard(ROUTE_ACCESS_KEYS.STOCK_MANAGEMENT);
   });
 
   it("membuka canonical Production Hub melalui guard production", async () => {

@@ -14,7 +14,7 @@ const semiFinishedRoutes = require("../src/modules/semiFinishedMaterials/semiFin
 const stockReadModelsRoutes = require("../src/modules/stockReadModels/stockReadModels.routes");
 const { errorHandler } = require("../src/middlewares/errorHandler");
 const { getBootstrapCodeForConsole } = require("../src/modules/auth/authBootstrapGuard");
-const { commitStockMutation } = require("../src/utils/sqliteStockEngine");
+const { commitStockMutation, upsertJsonRecord } = require("../src/utils/sqliteStockEngine");
 
 const ADMIN_PASSWORD = "Admin1234";
 let server;
@@ -64,6 +64,17 @@ const updateRecord = async (endpoint, id, payload) => request(`${endpoint}/${id}
 });
 
 const getRecord = async (endpoint, id) => request(`${endpoint}/${id}`);
+
+
+const seedRawMaterialCategory = async ({ id = 1, name = "Kelompok Bahan Test" } = {}) => {
+  const db = await testDatabase.getDb();
+  await db.run(
+    `INSERT INTO categories (id, code, name, type, status, notes)
+     VALUES (?, ?, ?, 'raw_material_group', 'active', '')`,
+    [id, `BAHAN-TEST-${id}`, name],
+  );
+  return id;
+};
 
 const loginAdministrator = async () => {
   await authService.bootstrapAdmin({
@@ -237,10 +248,13 @@ test("variant guard memblokir hapus/nonaktif berstok, mengarsipkan zero-stock, d
 });
 
 test("Raw Material dan Semi Finished mempertahankan valuation transaksi serta invariant stok", async () => {
+  const categoryId = await seedRawMaterialCategory();
   const rawCreated = await createRecord("/api/raw-materials", {
     id: "raw-guard-1",
     code: "RAW-GUARD-1",
     name: "Raw Guard",
+    categoryId,
+    stockUnit: "pcs",
     averageActualUnitCost: 450,
     restockReferencePrice: 500,
     currentStock: 4,
@@ -323,4 +337,132 @@ test("update tanpa version, delete master berstok, dan direct write read model d
   });
   assert.equal(directReadModelWrite.response.status, 405);
   assert.equal(directReadModelWrite.payload.errorCode, "DIRECT_WRITE_BLOCKED");
+});
+
+
+test("Raw Material memvalidasi kategori, satuan, nama unik, dan modal stok awal", async () => {
+  const categoryId = await seedRawMaterialCategory();
+
+  const invalidCategory = await createRecord("/api/raw-materials", {
+    id: "raw-invalid-category",
+    name: "Bahan Invalid",
+    categoryId: 999,
+    stockUnit: "pcs",
+  });
+  assert.equal(invalidCategory.response.status, 400);
+  assert.equal(invalidCategory.payload.errorCode, "RAW_MATERIAL_CATEGORY_NOT_FOUND");
+
+  const invalidUnit = await createRecord("/api/raw-materials", {
+    id: "raw-invalid-unit",
+    name: "Bahan Unit Invalid",
+    categoryId,
+    stockUnit: "box-besar",
+  });
+  assert.equal(invalidUnit.response.status, 400);
+  assert.equal(invalidUnit.payload.errorCode, "RAW_MATERIAL_UNIT_INVALID");
+
+  const missingOpeningCost = await createRecord("/api/raw-materials", {
+    id: "raw-opening-cost",
+    name: "Bahan Modal Awal",
+    categoryId,
+    stockUnit: "meter",
+    currentStock: 5,
+    averageActualUnitCost: 0,
+  });
+  assert.equal(missingOpeningCost.response.status, 400);
+  assert.equal(missingOpeningCost.payload.errorCode, "RAW_MATERIAL_OPENING_COST_REQUIRED");
+
+  const created = await createRecord("/api/raw-materials", {
+    id: "raw-unique-name",
+    name: "Kain Flanel",
+    categoryId,
+    stockUnit: "meter",
+    currentStock: 0,
+    averageActualUnitCost: 0,
+  });
+  assert.equal(created.response.status, 201);
+
+  const duplicate = await createRecord("/api/raw-materials", {
+    id: "raw-unique-name-2",
+    name: "  kain flanel  ",
+    categoryId,
+    stockUnit: "meter",
+  });
+  assert.equal(duplicate.response.status, 409);
+  assert.equal(duplicate.payload.errorCode, "RAW_MATERIAL_DUPLICATE_NAME");
+});
+
+test("Raw Material tidak dapat dinonaktifkan saat masih berstok atau dipakai BOM aktif", async () => {
+  const categoryId = await seedRawMaterialCategory();
+  const stocked = await createRecord("/api/raw-materials", {
+    id: "raw-deactivate-stock",
+    name: "Bahan Berstok",
+    categoryId,
+    stockUnit: "pcs",
+    currentStock: 3,
+    averageActualUnitCost: 1000,
+  });
+  assert.equal(stocked.response.status, 201);
+
+  const blockedByStock = await updateRecord("/api/raw-materials", "raw-deactivate-stock", {
+    expectedVersion: stocked.payload.data.versionToken,
+    isActive: false,
+  });
+  assert.equal(blockedByStock.response.status, 409);
+  assert.equal(blockedByStock.payload.errorCode, "RAW_MATERIAL_DEACTIVATE_STOCK_BLOCKED");
+
+  const zeroStock = await createRecord("/api/raw-materials", {
+    id: "raw-deactivate-bom",
+    name: "Bahan BOM",
+    categoryId,
+    stockUnit: "pcs",
+    currentStock: 0,
+  });
+  assert.equal(zeroStock.response.status, 201);
+
+  const db = await testDatabase.getDb();
+  await upsertJsonRecord(db, "production_boms", {
+    id: "bom-active-raw",
+    code: "BOM-ACTIVE-RAW",
+    name: "BOM Aktif Raw",
+    status: "active",
+    isActive: true,
+    materialLines: [{ itemType: "raw_material", itemId: "raw-deactivate-bom", quantity: 1 }],
+  });
+
+  const blockedByBom = await updateRecord("/api/raw-materials", "raw-deactivate-bom", {
+    expectedVersion: zeroStock.payload.data.versionToken,
+    isActive: false,
+  });
+  assert.equal(blockedByBom.response.status, 409);
+  assert.equal(blockedByBom.payload.errorCode, "RAW_MATERIAL_ACTIVE_BOM_DEPENDENCY");
+});
+
+test("minimum stok Raw Material varian tersimpan per varian dan read model memakai totalnya", async () => {
+  const categoryId = await seedRawMaterialCategory();
+  const created = await createRecord("/api/raw-materials", {
+    id: "raw-variant-minimum",
+    name: "Bahan Minimum Varian",
+    categoryId,
+    stockUnit: "pcs",
+    hasVariants: true,
+    variantLabel: "Warna",
+    averageActualUnitCost: 500,
+    variants: [
+      { name: "Merah", variantKey: "red", currentStock: 5, minStockAlert: 3, isActive: true },
+      { name: "Kuning", variantKey: "yellow", currentStock: 2, minStockAlert: 4, isActive: true },
+    ],
+  });
+  assert.equal(created.response.status, 201);
+  assert.equal(created.payload.data.minStock, 0);
+  assert.equal(created.payload.data.variants[0].minStockAlert, 3);
+  assert.equal(created.payload.data.variants[1].minStockAlert, 4);
+
+  const db = await testDatabase.getDb();
+  const readModel = await db.get(
+    "SELECT min_stock_alert, payload_json FROM stock_read_models WHERE id = ?",
+    ["raw_material__raw-variant-minimum"],
+  );
+  assert.equal(readModel.min_stock_alert, 7);
+  assert.equal(JSON.parse(readModel.payload_json).minimumStockMode, "variant");
 });

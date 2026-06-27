@@ -1,4 +1,5 @@
 import * as sqliteStockReadModelsAdapter from "../../data/adapters/sqlite/sqliteStockReadModelsAdapter";
+import { getLowStockVariantEntries, resolveVariantMinimumStockTotal } from "../../utils/stock/stockHelpers";
 
 export const STOCK_ITEM_READ_MODELS_COLLECTION = "stock_read_models";
 const safeTrim = (value) => String(value || "").trim();
@@ -31,6 +32,14 @@ export const buildStockItemReadModelDocument = (record = {}, options = {}) => {
   const currentStock = toNumber(record.currentStock ?? record.stock ?? 0);
   const reservedStock = toNumber(record.reservedStock ?? 0);
 
+  const usesVariantMinimumStock = sourceType === "raw_material"
+    && record.hasVariants === true
+    && Array.isArray(record.variants)
+    && record.variants.length > 0;
+  const minStockAlert = usesVariantMinimumStock
+    ? resolveVariantMinimumStockTotal(record, 0)
+    : toNumber(record.minStockAlert ?? record.minStock ?? 0);
+
   return {
     ...record,
     id: buildStockItemReadModelDocumentId({ sourceType, sourceId }),
@@ -45,7 +54,8 @@ export const buildStockItemReadModelDocument = (record = {}, options = {}) => {
     stock: currentStock,
     reservedStock,
     availableStock: toNumber(record.availableStock ?? Math.max(currentStock - reservedStock, 0)),
-    minStockAlert: toNumber(record.minStockAlert ?? record.minStock ?? 0),
+    minStockAlert,
+    minimumStockMode: usesVariantMinimumStock ? "variant" : "master",
     syncedAt: new Date().toISOString(),
   };
 };
@@ -81,9 +91,12 @@ export const getStockReadModelRows = async (options = {}) => sqliteStockReadMode
 
 export const getStockIssueReadModels = async ({ maxResults = 50, includeMeta = false } = {}) => {
   const rows = await getStockReadModelRows({ limit: maxResults });
-  const issues = rows.filter(
-    (row) => Number(row.availableStock ?? row.currentStock ?? 0) <= Number(row.minStockAlert || 0)
-  );
+  const issues = rows.filter((row) => {
+    if (row.minimumStockMode === "variant" || (row.sourceType === "raw_material" && row.hasVariants === true)) {
+      return getLowStockVariantEntries(row, { sourceType: "material", threshold: undefined }).length > 0;
+    }
+    return Number(row.availableStock ?? row.currentStock ?? 0) <= Number(row.minStockAlert || 0);
+  });
   return includeMeta ? { rows: issues, meta: { total: issues.length } } : issues;
 };
 

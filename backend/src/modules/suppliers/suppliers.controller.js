@@ -3,9 +3,11 @@ const {
   createSupplier,
   generateSupplierCode,
   getSupplierById,
+  listSupplierCatalogHistory,
   listSuppliers,
   softDeleteSupplier,
   updateSupplier,
+  verifySupplierCatalogOffer,
 } = require("./suppliers.service");
 
 const getActor = (req) => req.localAuth?.user?.username || "system";
@@ -54,6 +56,40 @@ const getSupplierController = async (req, res, next) => {
   }
 };
 
+
+const listSupplierCatalogHistoryController = async (req, res, next) => {
+  try {
+    const history = await listSupplierCatalogHistory(req.params.id, {
+      limit: req.query.limit,
+      offset: req.query.offset,
+      eventType: req.query.eventType,
+    });
+    return success(res, "Histori toko berhasil dimuat", history);
+  } catch (error) {
+    const handled = handleSupplierError(res, error);
+    if (handled) return handled;
+    return next(error);
+  }
+};
+
+const verifySupplierCatalogOfferController = async (req, res, next) => {
+  try {
+    const result = await verifySupplierCatalogOffer({
+      supplierId: req.params.id,
+      offerId: req.params.offerId,
+      actualPrice: req.body?.actualPrice,
+      resultStatus: req.body?.resultStatus,
+      note: req.body?.note,
+      actor: getActor(req),
+    });
+    return success(res, "Pengecekan harga katalog Supplier berhasil disimpan", result);
+  } catch (error) {
+    const handled = handleSupplierError(res, error);
+    if (handled) return handled;
+    return next(error);
+  }
+};
+
 const createSupplierController = async (req, res, next) => {
   try {
     const supplier = await createSupplier(req.body, getActor(req));
@@ -92,6 +128,8 @@ module.exports = {
   deleteSupplierController,
   generateSupplierCodeController,
   getSupplierController,
+  listSupplierCatalogHistoryController,
   listSuppliersController,
   updateSupplierController,
+  verifySupplierCatalogOfferController,
 };

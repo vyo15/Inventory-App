@@ -8,3 +8,6 @@ export const generateSupplierCode = (options = {}) => getSuppliersAdapter().gene
 export const createSupplier = (values = {}, options = {}) => getSuppliersAdapter().createSupplier(values, options);
 export const updateSupplier = (supplierId, values = {}, options = {}) => getSuppliersAdapter().updateSupplier(supplierId, values, options);
 export const deleteSupplier = (supplierId, options = {}) => getSuppliersAdapter().deleteSupplier(supplierId, options);
+
+export const listSupplierHistory = (supplierId, options = {}) => getSuppliersAdapter().listSupplierHistory(supplierId, options);
+export const verifySupplierCatalogOffer = (supplierId, offerId, payload = {}, options = {}) => getSuppliersAdapter().verifySupplierCatalogOffer(supplierId, offerId, payload, options);

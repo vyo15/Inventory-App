@@ -1,5 +1,6 @@
 const { getDb } = require("./connection");
 const { SCHEMA_VERSION } = require("./schema");
+const { safeJsonParse } = require("../utils/jsonUtils");
 
 const OLD_REMOTE_STATUS_PREFIX = `${["fire", "base"].join("")}_`;
 const OLD_REMOTE_SOURCE = ["fire", "store"].join("");
@@ -45,6 +46,23 @@ async function ensureColumn(db, tableName, columnName, columnDefinition) {
   }
 }
 
+
+
+async function ensureCategorySchema(db) {
+  await ensureColumn(db, "categories", "parent_id", "parent_id INTEGER");
+  await ensureColumn(db, "categories", "sort_order", "sort_order INTEGER NOT NULL DEFAULT 0");
+
+  // Compatibility: kategori lama bertipe general berasal dari menu kategori produk lama.
+  await db.run(
+    "UPDATE categories SET type = 'product_form' WHERE type IS NULL OR type = '' OR type = 'general'"
+  );
+  await db.run("UPDATE categories SET sort_order = 0 WHERE sort_order IS NULL");
+
+  await db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_categories_scope_parent_status
+      ON categories (type, parent_id, status, sort_order, name);
+  `);
+}
 
 async function ensureJsonRecordTable(db, tableName) {
   await db.exec(`
@@ -153,6 +171,133 @@ async function ensurePricingRulesSchema(db) {
   `);
 }
 
+
+async function ensureSupplierCatalogSchema(db) {
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS supplier_catalog_offers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      supplier_id INTEGER NOT NULL,
+      item_type TEXT NOT NULL,
+      item_id TEXT NOT NULL,
+      item_name TEXT NOT NULL,
+      variant_key TEXT NOT NULL DEFAULT '',
+      variant_label TEXT,
+      listing_name TEXT,
+      channel TEXT,
+      product_link TEXT,
+      purchase_type TEXT NOT NULL DEFAULT 'online',
+      purchase_unit TEXT,
+      purchase_qty INTEGER NOT NULL DEFAULT 1,
+      conversion_value INTEGER NOT NULL DEFAULT 1,
+      stock_unit TEXT,
+      supplier_item_price INTEGER NOT NULL DEFAULT 0,
+      estimated_shipping_cost INTEGER NOT NULL DEFAULT 0,
+      service_fee INTEGER NOT NULL DEFAULT 0,
+      discount INTEGER NOT NULL DEFAULT 0,
+      is_primary INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'active',
+      availability_status TEXT NOT NULL DEFAULT 'available',
+      notes TEXT,
+      last_checked_at TEXT,
+      last_checked_by TEXT,
+      price_updated_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_supplier_catalog_supplier_status
+      ON supplier_catalog_offers (supplier_id, status, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_supplier_catalog_item
+      ON supplier_catalog_offers (item_type, item_id, variant_key, status);
+
+    CREATE TABLE IF NOT EXISTS supplier_catalog_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      supplier_id INTEGER NOT NULL,
+      offer_id INTEGER,
+      event_type TEXT NOT NULL,
+      item_type TEXT,
+      item_id TEXT,
+      item_name TEXT,
+      previous_price INTEGER,
+      new_price INTEGER,
+      result_status TEXT,
+      description TEXT,
+      metadata_json TEXT,
+      actor TEXT NOT NULL DEFAULT 'system',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE,
+      FOREIGN KEY (offer_id) REFERENCES supplier_catalog_offers(id) ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_supplier_catalog_history_supplier_created
+      ON supplier_catalog_history (supplier_id, created_at DESC, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_supplier_catalog_history_offer_created
+      ON supplier_catalog_history (offer_id, created_at DESC, id DESC);
+  `);
+  await ensureColumn(
+    db,
+    "supplier_catalog_offers",
+    "availability_status",
+    "availability_status TEXT NOT NULL DEFAULT 'available'",
+  );
+}
+
+async function migrateLegacySupplierCatalog(db) {
+  const suppliers = await db.all(
+    "SELECT id, payload_json FROM suppliers WHERE status != 'deleted' ORDER BY id ASC"
+  );
+
+  for (const supplier of suppliers) {
+    const existing = await db.get(
+      "SELECT COUNT(*) AS count FROM supplier_catalog_offers WHERE supplier_id = ?",
+      [supplier.id]
+    );
+    if (Number(existing?.count || 0) > 0) continue;
+
+    const payload = safeJsonParse(supplier.payload_json, {});
+    const legacyDetails = Array.isArray(payload.materialDetails) ? payload.materialDetails : [];
+
+    for (const detail of legacyDetails) {
+      const itemId = String(detail.materialId || detail.rawMaterialId || '').trim();
+      if (!itemId) continue;
+
+      await db.run(
+        `
+          INSERT INTO supplier_catalog_offers (
+            supplier_id, item_type, item_id, item_name, variant_key, variant_label,
+            listing_name, channel, product_link, purchase_type, purchase_unit,
+            purchase_qty, conversion_value, stock_unit, supplier_item_price,
+            estimated_shipping_cost, service_fee, discount, status, notes,
+            created_at, updated_at
+          )
+          VALUES (?, 'raw_material', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `,
+        [
+          supplier.id,
+          itemId,
+          String(detail.materialName || '').trim() || itemId,
+          String(detail.variantKey || '').trim(),
+          String(detail.variantLabel || '').trim(),
+          String(detail.listingName || '').trim(),
+          String(detail.channel || '').trim(),
+          String(detail.productLink || '').trim(),
+          detail.purchaseType === 'offline' ? 'offline' : 'online',
+          String(detail.purchaseUnit || '').trim(),
+          Math.max(1, Math.round(Number(detail.purchaseQty || 1))),
+          Math.max(1, Math.round(Number(detail.conversionValue || 1))),
+          String(detail.stockUnit || '').trim(),
+          Math.max(0, Math.round(Number(detail.supplierItemPrice || 0))),
+          Math.max(0, Math.round(Number(detail.estimatedShippingCost || 0))),
+          Math.max(0, Math.round(Number(detail.serviceFee || 0))),
+          Math.max(0, Math.round(Number(detail.discount || 0))),
+          String(detail.note || '').trim(),
+        ]
+      );
+    }
+  }
+}
+
 async function seedModuleMigrationStatus(db, moduleKey, status, { label, scope, notes } = {}) {
   await db.run(
     `
@@ -202,7 +347,7 @@ async function seedMigrationStatus(db) {
   const rows = [
     ["customers", "Customers", "sqlite_active", "read_write", "Customers aktif memakai layanan database lokal."],
     ["categories", "Categories", "sqlite_active", "read_write", "Categories aktif memakai layanan database lokal."],
-    ["suppliers", "Suppliers", "sqlite_active", "read_write_master_payload", "Supplier master aktif; katalog restock pasif disimpan aman. Riwayat pembelian/bahan tetap lewat layanan resmi."],
+    ["suppliers", "Suppliers", "sqlite_active", "read_write_master_payload", "Supplier master dan katalog restock terstruktur aktif; histori toko terpisah per supplier dan Pembelian tetap lewat layanan guarded."],
     ["pricing_rules", "Pricing Rules", "sqlite_active", "read_write_master", "Aturan harga aktif di database lokal; apply harga massal tetap melalui layanan resmi agar aman."],
     ["products", "Products", "sqlite_active", "read_write_master", "Master produk aktif; perubahan stok final wajib lewat stock engine."],
     ["raw_materials", "Raw Materials", "sqlite_active", "read_write_master", "Master bahan baku aktif; perubahan stok dari pembelian/produksi wajib lewat stock engine."],
@@ -398,7 +543,10 @@ async function runMigrations() {
   `);
 
   await ensurePricingRulesSchema(db);
+  await ensureCategorySchema(db);
   await ensureColumn(db, "suppliers", "payload_json", "payload_json TEXT NOT NULL DEFAULT '{}'");
+  await ensureSupplierCatalogSchema(db);
+  await migrateLegacySupplierCatalog(db);
   await ensureFoundationJsonTables(db);
 
   await db.run(

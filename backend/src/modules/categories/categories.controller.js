@@ -23,9 +23,14 @@ const handleCategoryError = (res, error) => {
 
 const listCategoriesController = async (req, res, next) => {
   try {
-    const categories = await listCategories();
+    const categories = await listCategories({
+      type: req.query.type,
+      status: req.query.status,
+    });
     return success(res, "Data kategori database lokal berhasil dimuat", categories);
   } catch (error) {
+    const handled = handleCategoryError(res, error);
+    if (handled) return handled;
     return next(error);
   }
 };

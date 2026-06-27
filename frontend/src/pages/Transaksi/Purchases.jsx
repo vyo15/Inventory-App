@@ -4,13 +4,9 @@ import { EyeOutlined, PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useSearchParams } from "react-router-dom";
 import {
-  doesSupplierProvideMaterial,
-  getSupplierMaterialDetail,
-  getSupplierPurchaseUnitForMaterial,
-  getSupplierConversionValueForMaterial,
-  getSupplierStockUnitForMaterial,
-  getSupplierProductLinkForMaterial,
-  getSupplierReferencePriceForMaterial,
+  calculateSupplierMaterialRestockMetrics,
+  doesSupplierProvideItem,
+  getSupplierCatalogOffers,
   listenSupplierCatalog,
 } from "../../services/MasterData/suppliersService";
 import PageHeader from "../../components/Layout/Page/PageHeader";
@@ -36,6 +32,7 @@ import {
   listenPurchaseRecords,
 } from "../../services/Transaksi/purchasesService";
 import { parseShopeePurchaseOcrText } from "../../utils/purchases/shopeePurchaseOcrParser";
+import { compareRecordsByDateDesc, compareRecordsByNameAsc, upsertRecordById, upsertRecordsById } from "../../utils/state/recordCollectionState";
 import {
   buildShopeeOcrDetailRows,
   normalizePurchaseNoteText,
@@ -62,6 +59,7 @@ const Purchases = () => {
   const [searchParams] = useSearchParams();
   const restockPrefillAppliedRef = useRef(false);
   const restockPrefillMaterialIdRef = useRef("");
+  const restockPrefillOfferIdRef = useRef("");
   const itemChangeContextRef = useRef("");
   const subtotalManualOverrideRef = useRef(false);
   const supplierSubtotalBaselineRef = useRef({
@@ -70,6 +68,7 @@ const Purchases = () => {
     supplierItemPrice: 0,
     subtotalItems: 0,
   });
+  const priceVerificationSignatureRef = useRef("");
 
   // =========================
   // SECTION: State utama
@@ -103,6 +102,8 @@ const Purchases = () => {
   const materialVariantId = Form.useWatch("materialVariantId", form);
   const productVariantKey = Form.useWatch("productVariantKey", form);
   const supplierId = Form.useWatch("supplierId", form);
+  const catalogOfferId = Form.useWatch("catalogOfferId", form);
+  const priceVerified = Form.useWatch("priceVerified", form);
   const purchaseType = Form.useWatch("purchaseType", form);
 
   const subtotalItems = Form.useWatch("subtotalItems", form);
@@ -296,9 +297,9 @@ const Purchases = () => {
   // =========================
   // SECTION: Supplier dan detail katalog supplier terpilih
   // Fungsi blok:
-  // - membaca supplier terpilih dan materialDetails yang cocok dengan bahan baku.
+  // - membaca supplier terpilih dan penawaran katalog yang cocok dengan item/varian.
   // Hubungan flow Purchases:
-  // - data ini hanya dipakai untuk prefill Link Produk dan Harga Supplier Tercatat;
+  // - data ini dipakai untuk memilih link/paket, prefill biaya, dan verifikasi harga aktual;
   // - tidak menulis ke raw_materials dan tidak mengembalikan auto-sync Supplier.
   // Status: aktif dipakai oleh form Pembelian.
   // =========================
@@ -306,67 +307,53 @@ const Purchases = () => {
     return suppliers.find((supplier) => String(supplier.id) === String(supplierId)) || null;
   }, [suppliers, supplierId]);
 
-  const selectedSupplierMaterialDetail = useMemo(() => {
-    if (itemType !== "material" || !itemId || !selectedSupplier) return null;
-    return getSupplierMaterialDetail(selectedSupplier, itemId);
-  }, [itemId, itemType, selectedSupplier]);
+  const selectedCatalogVariantKey = itemType === "product"
+    ? productVariantKey || ""
+    : materialVariantId || "";
+  const selectedCatalogItemType = itemType === "product" ? "product" : "raw_material";
 
-  // =========================
-  // SECTION: Snapshot biaya katalog Supplier untuk default Purchases
-  // Fungsi blok:
-  // - membaca harga barang, ongkir, admin, voucher/koin, dan harga estimasi supplier dari materialDetails yang cocok.
-  // Hubungan flow aplikasi:
-  // - Supplier hanya sumber default transaksi; nilai ini tidak menulis balik ke Supplier/Raw Material dan tidak membuat purchase otomatis.
-  // Status: aktif dipakai untuk prefill form Pembelian; bukan data historis dan bukan auto-sync supplier.
-  // =========================
+  const selectedSupplierOffers = useMemo(() => {
+    if (!selectedSupplier || !itemId) return [];
+    return getSupplierCatalogOffers(selectedSupplier, {
+      itemType: selectedCatalogItemType,
+      itemId,
+      variantKey: selectedCatalogVariantKey,
+      availableOnly: true,
+    });
+  }, [itemId, selectedCatalogItemType, selectedCatalogVariantKey, selectedSupplier]);
+
+  const selectedCatalogOffer = useMemo(() => selectedSupplierOffers.find(
+    (offer) => String(offer.id || offer.catalogOfferId) === String(catalogOfferId || ""),
+  ) || null, [catalogOfferId, selectedSupplierOffers]);
+
   const selectedSupplierCatalogCost = useMemo(() => {
-    const detail = selectedSupplierMaterialDetail || {};
-    const purchaseTypeFromSupplier = detail.purchaseType === "offline" ? "offline" : "online";
-    const isOfflineSupplier = purchaseTypeFromSupplier === "offline";
-
+    const metrics = calculateSupplierMaterialRestockMetrics(selectedCatalogOffer || {});
     return {
-      purchaseType: purchaseTypeFromSupplier,
-      supplierItemPrice: Math.round(Number(detail.supplierItemPrice || 0)),
-      estimatedShippingCost: isOfflineSupplier ? 0 : Math.round(Number(detail.estimatedShippingCost || 0)),
-      serviceFee: isOfflineSupplier ? 0 : Math.round(Number(detail.serviceFee || 0)),
-      discount: isOfflineSupplier ? 0 : Math.round(Number(detail.discount || 0)),
-      estimatedUnitPrice: Math.round(Number(detail.estimatedUnitPrice || detail.referencePrice || 0)),
+      ...metrics,
+      purchaseType: selectedCatalogOffer?.purchaseType === "offline" ? "offline" : "online",
     };
-  }, [selectedSupplierMaterialDetail]);
+  }, [selectedCatalogOffer]);
 
-  // =========================
-  // SECTION: Snapshot katalog Supplier untuk prefill Pembelian
-  // Fungsi blok:
-  // - mengambil default Satuan Beli, Konversi Supplier, tipe online/offline, dan harga pembanding
-  //   dari materialDetails supplier yang cocok dengan bahan baku terpilih.
-  // Hubungan flow aplikasi:
-  // - Supplier hanya menjadi sumber default; Purchases tetap transaksi aktual dan user tetap harus Simpan sendiri.
-  // Status: AKTIF + GUARDED; bukan auto-sync dan tidak menulis balik ke Supplier/Raw Material.
-  // =========================
-  // =========================
-  // SECTION: Supplier difilter ketat berdasarkan bahan baku yang dipilih
-  // Fungsi blok:
-  // - hanya menampilkan supplier yang memang menyediakan bahan ini di katalog Supplier.
-  // Alasan perubahan:
-  // - mencegah user salah pilih supplier saat data supplier banyak; fallback semua supplier
-  //   tidak dipakai lagi secara default agar flow restock lebih jelas.
-  // Status: AKTIF + GUARDED; filtering ini read-only dan tidak mengubah data Supplier/Raw Material.
-  // =========================
   const filteredSuppliers = useMemo(() => {
-    if (itemType !== "material" || !itemId) {
-      return suppliers;
-    }
+    if (!itemId) return suppliers;
 
-    const matchedSuppliers = suppliers.filter((supplier) =>
-      doesSupplierProvideMaterial(supplier, itemId),
-    );
+    const matchedSuppliers = suppliers.filter((supplier) => doesSupplierProvideItem(
+      supplier,
+      selectedCatalogItemType,
+      itemId,
+      selectedCatalogVariantKey,
+    ));
 
-    if (supplierId && selectedSupplier && !matchedSuppliers.some((supplier) => String(supplier.id) === String(supplierId))) {
+    if (
+      supplierId
+      && selectedSupplier
+      && !matchedSuppliers.some((supplier) => String(supplier.id) === String(supplierId))
+    ) {
       return [selectedSupplier, ...matchedSuppliers];
     }
 
     return matchedSuppliers;
-  }, [suppliers, itemId, itemType, supplierId, selectedSupplier]);
+  }, [itemId, selectedCatalogItemType, selectedCatalogVariantKey, selectedSupplier, supplierId, suppliers]);
 
   // =========================
   // SECTION: Sinkron data utama pembelian
@@ -470,8 +457,13 @@ const Purchases = () => {
       restockPrefillMaterialIdRef.current = "";
       form.setFieldsValue({
         supplierId: undefined,
+        catalogOfferId: undefined,
         productLink: "",
+        priceVerified: false,
+        priceVerifiedAt: undefined,
+        verifiedCatalogPrice: 0,
       });
+      priceVerificationSignatureRef.current = "";
     }
 
     if (itemType === "product") {
@@ -514,7 +506,7 @@ const Purchases = () => {
           stockUnit: enrichedMaterial.stockUnit || enrichedMaterial.unit || "",
           purchaseType: "online",
           // ACTIVE: harga pembanding supplier diisi setelah user memilih supplier.
-          // ALASAN: referensi restock sekarang datang dari katalog Supplier materialDetails,
+          // ALASAN: referensi restock sekarang datang dari penawaran katalog Supplier terstruktur,
           // bukan input manual/master bahan baku di form pembelian.
           restockReferencePrice: 0,
         });
@@ -547,20 +539,39 @@ const Purchases = () => {
   }, [itemType, selectedMaterial, selectedMaterialVariant, form]);
 
   // =========================
-  // SECTION: Auto-fill Link Produk dan Harga Supplier Tercatat
-  // Fungsi blok:
-  // - saat user memilih supplier untuk bahan baku, form membaca katalog Supplier
-  //   yang cocok dengan itemId lalu mengisi Link Produk, Harga Supplier Tercatat,
-  //   dan catatan sebagai referensi restock.
-  // Hubungan flow Purchases:
-  // - ini hanya prefill/read-only reference; stok, kas, expense, saving, dan
-  //   actualUnitCost tetap dihitung dari transaksi aktual ketika user klik Simpan.
-  // Status: aktif dipakai; bukan auto-sync Supplier ke Raw Material.
+  // SECTION: Pilihan katalog Supplier untuk item dan varian terpilih
   // =========================
   useEffect(() => {
-    if (itemType !== "material") return;
+    const currentOfferId = form.getFieldValue("catalogOfferId");
+    const currentStillAvailable = selectedSupplierOffers.some(
+      (offer) => String(offer.id || offer.catalogOfferId) === String(currentOfferId || ""),
+    );
+    const prefilledOffer = selectedSupplierOffers.find(
+      (offer) => String(offer.id || offer.catalogOfferId) === String(restockPrefillOfferIdRef.current || ""),
+    );
+    const nextOfferId = currentStillAvailable
+      ? currentOfferId
+      : prefilledOffer
+        ? prefilledOffer.id || prefilledOffer.catalogOfferId
+        : selectedSupplierOffers.length === 1
+          ? selectedSupplierOffers[0].id || selectedSupplierOffers[0].catalogOfferId
+          : undefined;
+    if (prefilledOffer) restockPrefillOfferIdRef.current = "";
 
-    if (!itemId || !supplierId) {
+    form.setFieldsValue({
+      catalogOfferId: nextOfferId,
+      priceVerified: false,
+      priceVerifiedAt: undefined,
+      verifiedCatalogPrice: 0,
+    });
+    priceVerificationSignatureRef.current = "";
+  }, [form, itemId, selectedCatalogVariantKey, selectedSupplierOffers, supplierId]);
+
+  // =========================
+  // SECTION: Prefill penawaran/link katalog ke transaksi aktual
+  // =========================
+  useEffect(() => {
+    if (!selectedCatalogOffer) {
       form.setFieldsValue({
         productLink: "",
         restockReferencePrice: 0,
@@ -568,69 +579,49 @@ const Purchases = () => {
       return;
     }
 
-    const supplierProductLink = getSupplierProductLinkForMaterial(selectedSupplier || {}, itemId);
-    const supplierReferencePrice = getSupplierReferencePriceForMaterial(selectedSupplier || {}, itemId);
-    const supplierPurchaseUnit = getSupplierPurchaseUnitForMaterial(selectedSupplier || {}, itemId);
-    const supplierConversionValue = getSupplierConversionValueForMaterial(selectedSupplier || {}, itemId);
-    const supplierStockUnit = getSupplierStockUnitForMaterial(selectedSupplier || {}, itemId);
-    const supplierPurchaseType = selectedSupplierCatalogCost.purchaseType;
-    const isSupplierOffline = supplierPurchaseType === "offline";
-
-    // =========================
-    // SECTION: Prefill katalog Supplier ke form Purchases
-    // Fungsi blok:
-    // - mengisi Link Produk, satuan/konversi, tipe online/offline, Harga Supplier Tercatat,
-    //   Subtotal Barang, dan biaya online dari materialDetails supplier yang cocok.
-    // Hubungan flow:
-    // - prefill ini hanya mempercepat input restock; user tetap bisa menyesuaikan
-    //   harga aktual dan klik Simpan sendiri. Tidak ada stok/kas/expense yang berubah di sini.
-    // Status: aktif dipakai; bukan auto-sync Supplier ke Raw Material dan bukan auto-purchase.
-    // =========================
-    subtotalManualOverrideRef.current = false;
-
-    const supplierItemPrice = selectedSupplierCatalogCost.supplierItemPrice;
+    const metrics = calculateSupplierMaterialRestockMetrics(selectedCatalogOffer);
+    const supplierPurchaseType = selectedCatalogOffer.purchaseType === "offline" ? "offline" : "online";
+    const supplierItemPrice = metrics.supplierItemPrice;
     const nextSubtotal = calculateSupplierSubtotal(form.getFieldValue("quantity"), supplierItemPrice);
-
     const nextValues = {
-      productLink: supplierProductLink || "",
-      restockReferencePrice: selectedSupplierCatalogCost.estimatedUnitPrice || supplierReferencePrice || 0,
+      productLink: selectedCatalogOffer.productLink || "",
+      purchaseUnit: selectedCatalogOffer.purchaseUnit || "",
+      stockUnit: selectedCatalogOffer.stockUnit || getPurchaseStockUnit(
+        itemType === "product" ? selectedProduct || {} : selectedMaterial || {},
+      ),
+      conversionValue: itemType === "product"
+        ? 1
+        : Math.max(1, Number(selectedCatalogOffer.conversionValue || 1)),
+      restockReferencePrice: metrics.estimatedUnitPrice || 0,
       purchaseType: supplierPurchaseType,
       subtotalItems: supplierItemPrice > 0 ? nextSubtotal : 0,
+      shippingCost: supplierPurchaseType === "offline" ? 0 : metrics.estimatedShippingCost || 0,
+      shippingDiscount: 0,
+      voucherDiscount: supplierPurchaseType === "offline" ? 0 : metrics.discount || 0,
+      serviceFee: supplierPurchaseType === "offline" ? 0 : metrics.serviceFee || 0,
+      priceVerified: false,
+      priceVerifiedAt: undefined,
+      verifiedCatalogPrice: 0,
     };
 
+    subtotalManualOverrideRef.current = false;
     supplierSubtotalBaselineRef.current = {
       itemId: String(itemId || ""),
       supplierId: String(supplierId || ""),
       supplierItemPrice,
       subtotalItems: supplierItemPrice > 0 ? nextSubtotal : 0,
     };
-
-    if (supplierPurchaseUnit) {
-      nextValues.purchaseUnit = supplierPurchaseUnit;
-    }
-
-    if (supplierConversionValue > 0) {
-      nextValues.conversionValue = supplierConversionValue;
-    }
-
-    if (supplierStockUnit) {
-      nextValues.stockUnit = supplierStockUnit;
-    }
-
-    if (isSupplierOffline) {
-      nextValues.shippingCost = 0;
-      nextValues.shippingDiscount = 0;
-      nextValues.voucherDiscount = 0;
-      nextValues.serviceFee = 0;
-    } else {
-      nextValues.shippingCost = selectedSupplierCatalogCost.estimatedShippingCost || 0;
-      nextValues.shippingDiscount = 0;
-      nextValues.voucherDiscount = selectedSupplierCatalogCost.discount || 0;
-      nextValues.serviceFee = selectedSupplierCatalogCost.serviceFee || 0;
-    }
-
+    priceVerificationSignatureRef.current = "";
     form.setFieldsValue(nextValues);
-  }, [form, itemId, itemType, selectedSupplier, selectedSupplierCatalogCost, supplierId]);
+  }, [
+    form,
+    itemId,
+    itemType,
+    selectedCatalogOffer,
+    selectedMaterial,
+    selectedProduct,
+    supplierId,
+  ]);
 
   // =========================
   // SECTION: Hitung stok masuk otomatis
@@ -651,14 +642,12 @@ const Purchases = () => {
   // Fungsi blok:
   // - menjaga Subtotal Barang mengikuti default katalog Supplier saat Qty Beli berubah.
   // Alasan perubahan:
-  // - harga barang supplier sudah tersedia di materialDetails, sehingga user tidak perlu menghitung ulang manual.
+  // - harga barang supplier tersedia pada penawaran katalog, sehingga subtotal dapat mengikuti Qty Beli.
   // Batasan aktif:
   // - jika user sudah mengubah Subtotal Barang manual, effect ini tidak menimpa nilai tersebut diam-diam;
   // - tombol reset harga supplier sengaja tidak ditampilkan agar default Supplier tidak terasa seperti mode tambahan.
   // =========================
   useEffect(() => {
-    if (itemType !== "material") return;
-
     const supplierItemPrice = selectedSupplierCatalogCost.supplierItemPrice;
     if (!supplierId || !supplierItemPrice) return;
 
@@ -681,6 +670,18 @@ const Purchases = () => {
 
     form.setFieldsValue({ subtotalItems: nextSubtotal });
   }, [form, itemId, itemType, quantity, selectedSupplierCatalogCost.supplierItemPrice, supplierId]);
+
+  useEffect(() => {
+    const signature = `${String(catalogOfferId || "")}::${Math.round(Number(quantity || 0))}::${Math.round(Number(subtotalItems || 0))}`;
+    if (priceVerificationSignatureRef.current && priceVerificationSignatureRef.current !== signature) {
+      form.setFieldsValue({
+        priceVerified: false,
+        priceVerifiedAt: undefined,
+        verifiedCatalogPrice: 0,
+      });
+      priceVerificationSignatureRef.current = "";
+    }
+  }, [catalogOfferId, form, quantity, subtotalItems]);
 
   // =========================
   // SECTION: Guard biaya online saat Pembelian Offline
@@ -826,40 +827,39 @@ const Purchases = () => {
   ]);
 
   // =========================
-  // SECTION: Restock Assistant query prefill
-  // Fungsi blok:
-  // - membaca query dari Dashboard/Raw Material agar form Purchases terbuka dengan bahan, supplier, dan Link Produk terisi awal;
-  // - user tetap wajib input qty/harga aktual dan klik Simpan sendiri.
-  // Hubungan flow:
-  // - ini hanya navigasi/prefill, bukan transaksi otomatis; stok/kas/expense baru berubah setelah handleSubmitPurchase selesai.
-  // Status: aktif dipakai oleh Restock Assistant; kandidat cleanup hanya jika route prefill tidak dipakai lagi.
+  // SECTION: Prefill Pembelian dari Dashboard atau Katalog Supplier
   // =========================
   useEffect(() => {
     if (restockPrefillAppliedRef.current) return;
 
-    const source = searchParams.get("source");
+    const queryType = searchParams.get("type");
     const materialId = searchParams.get("materialId");
+    const itemIdFromQuery = searchParams.get("itemId") || materialId;
+    if (!itemIdFromQuery) return;
 
-    if (source !== "dashboard-restock" || !materialId) return;
-
-    const supplierId = searchParams.get("supplierId") || undefined;
+    const nextType = queryType === "product" ? "product" : "material";
+    const supplierIdFromQuery = searchParams.get("supplierId") || undefined;
+    const offerIdFromQuery = searchParams.get("offerId") || undefined;
     const productLink = searchParams.get("productLink") || "";
 
     restockPrefillAppliedRef.current = true;
-    restockPrefillMaterialIdRef.current = String(materialId);
+    restockPrefillMaterialIdRef.current = String(itemIdFromQuery);
+    restockPrefillOfferIdRef.current = String(offerIdFromQuery || "");
     subtotalManualOverrideRef.current = false;
+    priceVerificationSignatureRef.current = "";
     setShopeeOcrState(SHOPEE_OCR_IDLE_STATE);
     setShopeeOcrApplyFeedback(null);
     supplierSubtotalBaselineRef.current = { itemId: "", supplierId: "", supplierItemPrice: 0, subtotalItems: 0 };
 
     form.resetFields();
     form.setFieldsValue({
-      type: "material",
-      itemId: materialId,
-      supplierId,
+      type: nextType,
+      itemId: itemIdFromQuery,
+      supplierId: supplierIdFromQuery,
+      catalogOfferId: offerIdFromQuery,
       productLink,
-      materialVariantId: undefined,
-      productVariantKey: undefined,
+      materialVariantId: searchParams.get("variantKey") || undefined,
+      productVariantKey: searchParams.get("variantKey") || undefined,
       quantity: 1,
       subtotalItems: 0,
       shippingCost: 0,
@@ -872,6 +872,9 @@ const Purchases = () => {
       restockReferencePrice: 0,
       totalReferencePurchase: 0,
       purchaseSaving: 0,
+      priceVerified: false,
+      priceVerifiedAt: undefined,
+      verifiedCatalogPrice: 0,
     });
     setIsModalOpen(true);
   }, [form, searchParams]);
@@ -887,9 +890,11 @@ const Purchases = () => {
     // Status: aktif dipakai oleh tombol Tambah Pembelian; bukan data historis.
     // =========================
     restockPrefillMaterialIdRef.current = "";
+    restockPrefillOfferIdRef.current = "";
     itemChangeContextRef.current = "";
     subtotalManualOverrideRef.current = false;
     supplierSubtotalBaselineRef.current = { itemId: "", supplierId: "", supplierItemPrice: 0, subtotalItems: 0 };
+    priceVerificationSignatureRef.current = "";
     setShopeeOcrState(SHOPEE_OCR_IDLE_STATE);
     setShopeeOcrApplyFeedback(null);
     form.resetFields();
@@ -910,6 +915,10 @@ const Purchases = () => {
       totalReferencePurchase: 0,
       purchaseSaving: 0,
       productLink: '',
+      catalogOfferId: undefined,
+      priceVerified: false,
+      priceVerifiedAt: undefined,
+      verifiedCatalogPrice: 0,
     });
     setIsModalOpen(true);
   };
@@ -1096,6 +1105,36 @@ const Purchases = () => {
     applyShopeeOcrParsedToForm(parsed);
   };
 
+  const handleVerifyPurchasePrice = () => {
+    if (!selectedCatalogOffer) {
+      message.warning("Pilih link atau paket katalog Supplier terlebih dahulu.");
+      return;
+    }
+
+    const qty = Math.round(Number(form.getFieldValue("quantity") || 0));
+    const subtotal = Math.round(Number(form.getFieldValue("subtotalItems") || 0));
+    const actualPackagePrice = qty > 0 ? Math.round(subtotal / qty) : 0;
+    if (qty <= 0 || actualPackagePrice <= 0) {
+      message.warning("Isi Qty dan Subtotal Barang aktual sebelum verifikasi harga.");
+      return;
+    }
+
+    const referencePrice = Math.round(Number(selectedCatalogOffer.supplierItemPrice || 0));
+    const signature = `${String(selectedCatalogOffer.id || selectedCatalogOffer.catalogOfferId)}::${qty}::${subtotal}`;
+    priceVerificationSignatureRef.current = signature;
+    form.setFieldsValue({
+      priceVerified: true,
+      priceVerifiedAt: new Date().toISOString(),
+      verifiedCatalogPrice: actualPackagePrice,
+    });
+
+    if (actualPackagePrice === referencePrice) {
+      message.success("Harga aktual sudah sesuai dengan katalog Supplier.");
+    } else {
+      message.success("Harga aktual sudah diverifikasi. Katalog akan diperbarui saat Pembelian disimpan.");
+    }
+  };
+
   // =========================
   // SECTION: Submit pembelian atomik + sinkron ke stok + sinkron ke pengeluaran
   // Fungsi blok:
@@ -1115,15 +1154,55 @@ const Purchases = () => {
 
     try {
       setIsSubmittingPurchase(true);
-      await createPurchaseTransaction({
+      const result = await createPurchaseTransaction({
         values,
         products,
         materials,
         suppliers,
       });
 
+      setPurchaseRecords((current) => upsertRecordById(current, result, {
+        comparator: compareRecordsByDateDesc,
+      }));
+      const mutationResults = Array.isArray(result?.mutationResults) ? result.mutationResults : [];
+      setProducts((current) => upsertRecordsById(
+        current,
+        mutationResults
+          .filter((item) => item?.stockReadModel?.sourceType === "product")
+          .map((item) => item.item),
+        { comparator: compareRecordsByNameAsc },
+      ));
+      setMaterials((current) => upsertRecordsById(
+        current,
+        mutationResults
+          .filter((item) => item?.stockReadModel?.sourceType === "raw_material")
+          .map((item) => item.item),
+        { comparator: compareRecordsByNameAsc },
+      ));
+      if (result?.catalogVerification?.catalogOfferId) {
+        setSuppliers((current) => current.map((supplier) => {
+          if (String(supplier.id) !== String(result.catalogVerification.supplierId)) return supplier;
+          return {
+            ...supplier,
+            catalogOffers: (supplier.catalogOffers || []).map((offer) => (
+              String(offer.id || offer.catalogOfferId) === String(result.catalogVerification.catalogOfferId)
+                ? {
+                    ...offer,
+                    supplierItemPrice: result.catalogVerification.verifiedCatalogPrice,
+                    lastCheckedAt: result.catalogVerification.priceVerifiedAt,
+                    priceUpdatedAt: result.catalogVerification.priceVerificationResult === "price_same"
+                      ? offer.priceUpdatedAt
+                      : result.catalogVerification.priceVerifiedAt,
+                  }
+                : offer
+            )),
+          };
+        }));
+      }
+
       message.success("Pembelian berhasil ditambahkan!");
       form.resetFields();
+      priceVerificationSignatureRef.current = "";
       setShopeeOcrState(SHOPEE_OCR_IDLE_STATE);
       setShopeeOcrApplyFeedback(null);
       setIsModalOpen(false);
@@ -1342,7 +1421,10 @@ const Purchases = () => {
         filteredSuppliers={filteredSuppliers}
         itemId={itemId}
         supplierId={supplierId}
-        selectedSupplier={selectedSupplier}
+        selectedSupplierOffers={selectedSupplierOffers}
+        selectedCatalogOffer={selectedCatalogOffer}
+        priceVerified={priceVerified === true}
+        onVerifyPrice={handleVerifyPurchasePrice}
         shopeeOcrState={shopeeOcrState}
         shopeeOcrApplyFeedback={shopeeOcrApplyFeedback}
         handleShopeeScreenshotUpload={handleShopeeScreenshotUpload}
