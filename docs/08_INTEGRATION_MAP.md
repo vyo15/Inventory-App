@@ -385,19 +385,22 @@ Client A POST/PUT/DELETE
 → COMMIT berhasil
 → connection.js mengumpulkan tabel yang berubah
 → realtime.service broadcast data_changed via SSE
-→ Client B LiveRouteRefresh mencocokkan scope route
-→ refetch/remount page saat aman
+→ Client A, tab lain, dan Client B menerima event scope yang sama
+→ LiveRouteRefresh refetch/remount page saat aman
 ```
 
 Kontrak aktif:
 - Endpoint: `GET /api/realtime/events`, protected oleh cookie session dan origin guard existing.
 - Transport: native Server-Sent Events, satu koneksi per tab melalui `SqliteRealtimeProvider`.
 - Payload hanya metadata: `revision`, `tables`, `scopes`, `originClientId`, dan timestamp.
-- Client identity: browser ID persisten + page-instance ID in-memory. Identitas legacy `sessionStorage ims.sqlite.clientId` dibersihkan agar duplicate tab tidak berbagi origin ID.
+- `fetchSqliteJson()` menyuntikkan `X-IMS-Client-ID` secara terpusat ke seluruh request JSON, termasuk semua adapter yang memakai `requestSqliteApi()`. Jalur binary import/download menambahkan header yang sama secara eksplisit.
+- Event dari tab pengirim tidak dibuang. Frontend menandainya sebagai `isLocalOrigin` agar same-tab save tetap mendapat reconciliation setelah commit.
+- Client identity: browser ID persisten + page-instance ID in-memory. Identitas browser juga dicache selama tab hidup agar tidak berubah ketika `localStorage` dibersihkan/tidak tersedia. Identitas legacy `sessionStorage ims.sqlite.clientId` dibersihkan agar duplicate tab tidak berbagi origin ID.
+- Backend mutation hanya mempercayai header `X-IMS-Client-ID`; query `clientId` dikhususkan untuk registrasi EventSource. Request context, queue mutation, dan koneksi SSE memakai normalisasi ID yang sama.
 - `database_replaced` dari restore memaksa reload seluruh client; event normal hanya me-refresh route terkait.
-- Event scope `auth` dari perubahan `users/roles` diproses global sebelum route filtering dan memicu validasi ulang session. Mutation `local_user_sessions` memakai scope terpisah `auth_session` agar login/logout biasa tidak mereload client lain.
+- Event scope `auth` dari perubahan `users/roles` memicu reload `/api/auth/me` dan reconnect SSE agar nama, avatar, status, serta role profile aktif selalu terbaru. Reload browser penuh hanya untuk `session_expired` dan `database_replaced`. Mutation `local_user_sessions` memakai scope terpisah `auth_session` agar login/logout biasa tidak mereload client lain.
 - Session expiry: `registerRealtimeClient` memakai `req.localAuth.expiresAt`, mengirim event `session_expired`, lalu menutup stream. Frontend memperlakukan event ini sebagai global reload untuk kembali ke auth gate.
-- Jika editor/modal/input sedang aktif, refresh ditunda dan user diberi tombol `Muat Ulang Data`.
+- Jika editor/modal/input sedang aktif, refresh ditunda dan user diberi tombol `Muat Ulang Data`. Pending refresh juga dipantau ringan di DOM dan dijalankan otomatis segera setelah overlay/form aman.
 - Fallback: satu polling revision global 60 detik hanya saat SSE disconnected dan tab terlihat, memakai in-flight guard serta catch-up saat visibility kembali aktif. Subscription adapter lama hanya melakukan initial load dan tidak membuat `setInterval` masing-masing.
 - Revision fallback dikembalikan sesuai role. Administrator melihat revision global; user operasional hanya melihat revision event yang lolos filter scope user.
 - Resource guard: maksimal 100 koneksi total, 12 per user, dan 30 per IP. Backpressure menutup stream agar native reconnect/fallback melakukan resync.
@@ -442,3 +445,10 @@ Backend testingLab.service
 ```
 
 Guard backend wajib memverifikasi purpose sandbox, database terpisah, dan backup storage terpisah. Middleware write guard melacak request mutation aktif; reset tidak dimulai bila masih ada write berjalan dan mutation baru ditolak selama restore. Lab tidak membuat seed dengan direct SQL dari frontend. Purchase, Sales, Return, Produksi, Payroll, HPP, dan Finance tetap diuji melalui route/service resmi masing-masing.
+
+
+## Lab Pengujian — Clone Operasional Read-only
+
+- `GET /api/testing-lab/operational-source/preview` membaca database operasional melalui koneksi SQLite read-only dan hanya mengembalikan ringkasan aman.
+- `POST /api/testing-lab/operational-source/clone` memakai global testing write lock, snapshot `VACUUM INTO`, sanitasi session/log, backup `pre-import`, staged restore existing, baseline `test`, audit, dan broadcast `database_replaced`.
+- Sumber clone diberikan runner melalui `IMS_OPERATIONAL_SOURCE_DB_PATH`; database operasional tidak pernah menjadi database aktif pada mode Lab.

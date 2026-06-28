@@ -223,6 +223,7 @@ export const canAccessUserManagement = (role) => {
 // Fungsi:
 // - menjaga batas pengelolaan user internal di sisi UI/service;
 // - role yang boleh dibuat hanya administrator dan user;
+// - administrator boleh mengedit detail profilnya sendiri;
 // - tidak ada role yang boleh mengubah role/status dirinya sendiri lewat halaman Manajemen User.
 // Hubungan flow aplikasi:
 // - dipakai UserManagement dan userService sebelum menulis `system_users`;
@@ -245,6 +246,13 @@ export const canAssignUserRole = (actorRole, targetRole) => {
 
 export const canViewUserProfile = (actorRole, targetRole) => {
   return actorRole === ROLES.ADMINISTRATOR && isKnownRole(targetRole);
+};
+
+export const canEditUserProfile = ({
+  actorRole,
+  targetRole,
+}) => {
+  return canAccessUserManagement(actorRole) && isKnownRole(targetRole);
 };
 
 export const canManageUserProfile = ({

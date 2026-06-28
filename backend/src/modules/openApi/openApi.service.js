@@ -118,6 +118,12 @@ const buildOpenApiDocument = ({ baseUrl = "http://localhost:3001" } = {}) => ({
     "/api/testing-lab/baseline": {
       post: { tags: ["Testing Lab"], summary: "Buat baseline verified pada sandbox terpisah", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Baseline test backup dibuat" }, 409: { description: "Sandbox guard tidak terpenuhi" } } },
     },
+    "/api/testing-lab/operational-source/preview": {
+      get: { tags: ["Testing Lab"], summary: "Preview read-only database operasional sebelum clone ke sandbox", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Ringkasan source, integrity, akun, dan jumlah data" }, 404: { description: "Database operasional tidak ditemukan" } } },
+    },
+    "/api/testing-lab/operational-source/clone": {
+      post: { tags: ["Testing Lab"], summary: "Clone snapshot read-only operasional menjadi baseline sandbox dengan sanitasi session/log", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Sandbox diganti dan baseline verified aktif" }, 409: { description: "Source tidak aman, sesi aktif, atau schema tidak kompatibel" }, 423: { description: "Masih ada operasi tulis" } } },
+    },
     "/api/testing-lab/reset": {
       post: { tags: ["Testing Lab"], summary: "Kembalikan sandbox ke baseline dengan pre-reset backup dan write lock", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Sandbox kembali ke baseline" }, 423: { description: "Masih ada operasi tulis atau reset lain" } } },
     },

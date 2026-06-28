@@ -94,7 +94,7 @@ export const DEFAULT_PRODUCTION_BOM_FORM = {
   overheadCostEstimate: 0,
   totalCostEstimate: 0,
 
-  routingMode: "multi_step",
+  routingMode: "single_step",
   materialLines: [],
   stepLines: [],
 

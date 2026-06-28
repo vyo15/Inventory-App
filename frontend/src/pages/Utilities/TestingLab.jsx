@@ -25,6 +25,7 @@ import {
 } from "antd";
 import {
   CheckCircleOutlined,
+  CloudDownloadOutlined,
   CloudSyncOutlined,
   DatabaseOutlined,
   DownloadOutlined,
@@ -36,8 +37,10 @@ import {
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import {
   cancelTestingSession,
+  cloneTestingLabOperationalSource,
   completeTestingSession,
   createTestingBaseline,
+  getTestingLabOperationalSourcePreview,
   getTestingLabStatus,
   getTestingResultExport,
   resetTestingSandbox,
@@ -90,6 +93,7 @@ const TestingLab = () => {
   const [confirmText, setConfirmText] = useState("");
   const [selectedBaseline, setSelectedBaseline] = useState("");
   const [sessionNotes, setSessionNotes] = useState("");
+  const [operationalPreview, setOperationalPreview] = useState(null);
 
   const loadStatus = useCallback(async ({ quiet = false } = {}) => {
     if (!quiet) setLoading(true);
@@ -108,12 +112,12 @@ const TestingLab = () => {
     loadStatus();
   }, [loadStatus]);
 
-  const runAction = async (key, action, successMessage) => {
+  const runAction = async (key, action, successMessage, { refresh = true } = {}) => {
     setBusyAction(key);
     try {
       const result = await action();
       if (successMessage) message.success(successMessage);
-      await loadStatus({ quiet: true });
+      if (refresh) await loadStatus({ quiet: true });
       return result;
     } catch (error) {
       message.error(error?.message || "Operasi Lab Pengujian gagal.");
@@ -125,7 +129,9 @@ const TestingLab = () => {
 
   const confirmKeyword = confirmMode === "baseline"
     ? status?.confirmKeywords?.createBaseline
-    : status?.confirmKeywords?.resetSandbox;
+    : confirmMode === "clone"
+      ? status?.confirmKeywords?.cloneOperationalSource
+      : status?.confirmKeywords?.resetSandbox;
 
   const handleConfirm = async () => {
     if (confirmText !== confirmKeyword) {
@@ -134,16 +140,39 @@ const TestingLab = () => {
     }
     const action = confirmMode === "baseline"
       ? () => createTestingBaseline(confirmText)
-      : () => resetTestingSandbox(confirmText);
+      : confirmMode === "clone"
+        ? () => cloneTestingLabOperationalSource(confirmText)
+        : () => resetTestingSandbox(confirmText);
+    const successMessage = confirmMode === "baseline"
+      ? "Baseline testing berhasil dibuat."
+      : confirmMode === "clone"
+        ? "Data operasional berhasil disalin menjadi baseline sandbox. Login ulang diperlukan."
+        : "Sandbox berhasil dikembalikan ke baseline.";
     const result = await runAction(
       confirmMode,
       action,
-      confirmMode === "baseline" ? "Baseline testing berhasil dibuat." : "Sandbox berhasil dikembalikan ke baseline.",
+      successMessage,
+      { refresh: confirmMode !== "clone" },
     );
     if (result) {
       setConfirmMode("");
       setConfirmText("");
-      if (result.reloadRequired) window.setTimeout(() => window.location.reload(), 600);
+      setOperationalPreview(null);
+      if (result.reloadRequired) window.setTimeout(() => window.location.reload(), 700);
+    }
+  };
+
+  const openOperationalClonePreview = async () => {
+    setBusyAction("clone-preview");
+    try {
+      const preview = await getTestingLabOperationalSourcePreview();
+      setOperationalPreview(preview);
+      setConfirmText("");
+      setConfirmMode("clone");
+    } catch (error) {
+      message.error(error?.message || "Database operasional sumber gagal diperiksa.");
+    } finally {
+      setBusyAction("");
     }
   };
 
@@ -239,7 +268,13 @@ const TestingLab = () => {
             </Col>
           </Row>
 
-          <Card title="Baseline Sandbox" className="testing-lab-section" extra={<Tag color={status.activeBaseline ? "green" : "gold"}>{status.activeBaseline ? "Verified" : "Belum siap"}</Tag>}>
+          <Card
+            title="Baseline Sandbox"
+            className="testing-lab-section"
+            extra={status.activeBaseline?.validationStatus === "failed"
+              ? <Tag color="red">Perlu perbaikan</Tag>
+              : <Tag color={status.activeBaseline ? "green" : "gold"}>{status.activeBaseline ? "Verified" : "Belum siap"}</Tag>}
+          >
             <Row gutter={[16, 16]} align="middle">
               <Col xs={24} lg={14}>
                 <Descriptions size="small" column={1}>
@@ -247,6 +282,11 @@ const TestingLab = () => {
                   <Descriptions.Item label="Dibuat">{formatDateTime(status.activeBaseline?.createdAt)}</Descriptions.Item>
                   <Descriptions.Item label="Database">{status.guard.databaseFilename}</Descriptions.Item>
                   <Descriptions.Item label="Folder backup">{status.guard.backupDirectoryName}</Descriptions.Item>
+                  {status.activeBaseline?.sourceType === "operational_clone" && (
+                    <Descriptions.Item label="Sumber baseline">
+                      Salinan operasional · {status.activeBaseline?.source?.filename || "database operasional"}
+                    </Descriptions.Item>
+                  )}
                 </Descriptions>
               </Col>
               <Col xs={24} lg={10}>
@@ -266,7 +306,16 @@ const TestingLab = () => {
                     >
                       Gunakan Baseline
                     </Button>
-                    <Button type="primary" onClick={() => setConfirmMode("baseline")}>Buat Baseline Baru</Button>
+                    <Button
+                      type="primary"
+                      icon={<CloudDownloadOutlined />}
+                      loading={busyAction === "clone-preview"}
+                      disabled={Boolean(activeSession)}
+                      onClick={openOperationalClonePreview}
+                    >
+                      Ambil Data Operasional
+                    </Button>
+                    <Button onClick={() => setConfirmMode("baseline")}>Buat dari Sandbox Saat Ini</Button>
                     <Button danger disabled={!status.activeBaseline} onClick={() => setConfirmMode("reset")}>Reset ke Baseline</Button>
                   </Space>
                 </Space>
@@ -350,7 +399,7 @@ const TestingLab = () => {
                         )}
                         <Button
                           type="primary"
-                          disabled={!scenario.ready || !status.activeBaseline}
+                          disabled={!scenario.ready || !status.activeBaseline || status.activeBaseline?.validationStatus === "failed"}
                           loading={busyAction === scenario.key}
                           onClick={() => runAction(scenario.key, () => startTestingSession(scenario.key), "Sesi testing dimulai.")}
                         >
@@ -463,23 +512,54 @@ const TestingLab = () => {
 
       <Modal
         open={Boolean(confirmMode)}
-        title={confirmMode === "baseline" ? "Buat Baseline Testing" : "Reset Sandbox ke Baseline"}
-        okText={confirmMode === "baseline" ? "Buat Baseline" : "Reset Sandbox"}
+        title={confirmMode === "baseline"
+          ? "Buat Baseline Testing"
+          : confirmMode === "clone"
+            ? "Ambil Data Operasional"
+            : "Reset Sandbox ke Baseline"}
+        okText={confirmMode === "baseline"
+          ? "Buat Baseline"
+          : confirmMode === "clone"
+            ? "Salin ke Sandbox"
+            : "Reset Sandbox"}
         okButtonProps={{ danger: confirmMode === "reset", loading: busyAction === confirmMode }}
+        width={confirmMode === "clone" ? 720 : 520}
         onOk={handleConfirm}
         onCancel={() => {
           if (busyAction) return;
           setConfirmMode("");
           setConfirmText("");
+          setOperationalPreview(null);
         }}
       >
         <Alert
-          type={confirmMode === "reset" ? "warning" : "info"}
+          type={confirmMode === "reset" || confirmMode === "clone" ? "warning" : "info"}
           showIcon
           message={confirmMode === "reset"
             ? "Seluruh perubahan testing setelah baseline akan diganti. Backup pre-reset dibuat otomatis."
-            : "Baseline menyimpan kondisi master, stok, modal/HPP, katalog, counter, user, dan konfigurasi sandbox saat ini."}
+            : confirmMode === "clone"
+              ? "Sandbox akan diganti oleh snapshot read-only database operasional. Database asli tidak ditulis, backup sandbox dibuat otomatis, dan seluruh session login hasil clone dicabut."
+              : "Baseline menyimpan kondisi master, stok, modal/HPP, katalog, counter, user, dan konfigurasi sandbox saat ini."}
         />
+        {confirmMode === "clone" && operationalPreview && (
+          <>
+            <Descriptions size="small" column={{ xs: 1, sm: 2 }} bordered style={{ marginTop: 16 }}>
+              <Descriptions.Item label="Sumber">{operationalPreview.filename}</Descriptions.Item>
+              <Descriptions.Item label="Terakhir diubah">{formatDateTime(operationalPreview.modifiedAt)}</Descriptions.Item>
+              <Descriptions.Item label="Ukuran">{new Intl.NumberFormat("id-ID").format(Number(operationalPreview.sizeBytes || 0))} byte</Descriptions.Item>
+              <Descriptions.Item label="Schema">{operationalPreview.schemaVersion}</Descriptions.Item>
+              <Descriptions.Item label="Produk">{operationalPreview.businessSummary?.products || 0}</Descriptions.Item>
+              <Descriptions.Item label="Bahan baku">{operationalPreview.businessSummary?.rawMaterials || 0}</Descriptions.Item>
+              <Descriptions.Item label="Customer">{operationalPreview.businessSummary?.customers || 0}</Descriptions.Item>
+              <Descriptions.Item label="Supplier">{operationalPreview.businessSummary?.suppliers || 0}</Descriptions.Item>
+              <Descriptions.Item label="Penjualan">{operationalPreview.businessSummary?.sales || 0}</Descriptions.Item>
+              <Descriptions.Item label="Pembelian">{operationalPreview.businessSummary?.purchases || 0}</Descriptions.Item>
+            </Descriptions>
+            <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+              Salinan ini membawa data internal operasional ke sandbox. Perubahan di Lab tidak dikirim kembali ke database asli. Setelah selesai, aplikasi akan meminta login ulang.
+            </Paragraph>
+          </>
+        )}
         <Paragraph style={{ marginTop: 16 }}>Ketik <Text code>{confirmKeyword}</Text></Paragraph>
         <Input value={confirmText} onChange={(event) => setConfirmText(event.target.value)} />
       </Modal>

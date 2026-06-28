@@ -3,8 +3,6 @@ import {
   Button,
   Form,
   Input,
-  Popconfirm,
-  Space,
   message,
 } from "antd";
 import { EditOutlined, PlusOutlined } from "@ant-design/icons";
@@ -12,6 +10,7 @@ import PageFormModal from "../../components/Layout/Forms/PageFormModal";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
+import TableActionMenu from "../../components/Layout/Table/TableActionMenu";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import {
   createCustomer,
@@ -141,29 +140,32 @@ const Customers = () => {
     {
       title: "Aksi",
       key: "actions",
-      width: 170,
+      width: 126,
       className: "app-table-action-column",
       render: (_, record) => (
-        <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-          <Button
-            className="ims-action-button"
-            icon={<EditOutlined />}
-            size="small"
-            onClick={() => handleEdit(record)}
-          >
-            Edit
-          </Button>
-          <Popconfirm
-            title="Nonaktifkan customer ini?"
-            onConfirm={() => handleDeactivate(record.id)}
-            okText="Ya"
-            cancelText="Batal"
-          >
-            <Button className="ims-action-button" danger size="small">
-              Nonaktifkan
-            </Button>
-          </Popconfirm>
-        </Space>
+        <TableActionMenu
+          visibleActions={[
+            {
+              key: "edit",
+              label: "Edit",
+              icon: <EditOutlined />,
+              onClick: () => handleEdit(record),
+            },
+          ]}
+          moreActions={[
+            {
+              key: "deactivate",
+              label: "Nonaktifkan",
+              danger: true,
+              confirm: {
+                title: "Nonaktifkan customer ini?",
+                okText: "Ya",
+                cancelText: "Batal",
+              },
+              onClick: () => handleDeactivate(record.id),
+            },
+          ]}
+        />
       ),
     },
   ];
@@ -179,28 +181,27 @@ const Customers = () => {
       record.address ? <span key="address">Alamat: {record.address}</span> : null,
       record.note ? <span key="note">Catatan: {record.note}</span> : null,
     ].filter(Boolean),
-    actions: (record) => (
-      <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-        <Button
-          className="ims-action-button"
-          icon={<EditOutlined />}
-          size="small"
-          onClick={() => handleEdit(record)}
-        >
-          Edit
-        </Button>
-        <Popconfirm
-          title="Nonaktifkan customer ini?"
-          onConfirm={() => handleDeactivate(record.id)}
-          okText="Ya"
-          cancelText="Batal"
-        >
-          <Button className="ims-action-button" danger size="small">
-            Nonaktifkan
-          </Button>
-        </Popconfirm>
-      </Space>
-    ),
+    primaryActions: (record) => [
+      {
+        key: "edit",
+        label: "Edit",
+        icon: <EditOutlined />,
+        onClick: () => handleEdit(record),
+      },
+    ],
+    moreActions: (record) => [
+      {
+        key: "deactivate",
+        label: "Nonaktifkan",
+        danger: true,
+        confirm: {
+          title: "Nonaktifkan customer ini?",
+          okText: "Ya",
+          cancelText: "Batal",
+        },
+        onClick: () => handleDeactivate(record.id),
+      },
+    ],
   };
 
   return (

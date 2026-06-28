@@ -108,7 +108,7 @@ Batasan aman:
 .summary-stat-card-content {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 5px;
   min-height: 100%;
 }
 
@@ -152,13 +152,13 @@ Batasan aman:
 }
 
 .summary-stat-card--featured.ant-card {
-  min-height: 104px;
+  min-height: 88px;
   border-color: var(--summary-card-tone-muted) !important;
   background: var(--ims-bg-card) !important;
 }
 
 .summary-stat-card--featured .ant-card-body {
-  padding: 15px 16px !important;
+  padding: 12px 14px !important;
 }
 
 .summary-stat-card--featured .summary-stat-card-content {

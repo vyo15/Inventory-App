@@ -9,7 +9,11 @@ const { getBootstrapCodeForConsole } = require("../src/modules/auth/authBootstra
 const ADMIN_PASSWORD = "Admin1234";
 
 before(testDatabase.initialize);
-beforeEach(testDatabase.reset);
+beforeEach(async () => {
+  await testDatabase.reset();
+  const db = await testDatabase.getDb();
+  await db.run("DELETE FROM app_settings WHERE key LIKE 'user_avatar:%'");
+});
 after(testDatabase.cleanup);
 
 const bootstrapAdministrator = () => authService.bootstrapAdmin({
@@ -101,4 +105,61 @@ test("delete user compatibility hanya menonaktifkan akun dan mempertahankan hist
   );
   assert.deepEqual(storedUser, { username: "operator-soft-delete", status: "inactive" });
   assert.equal(audit.action, "user_deactivate");
+});
+
+
+test("foto user tersimpan tanpa schema baru, ikut list, dapat dihapus, dan payload invalid ditolak", async () => {
+  const administrator = await bootstrapAdministrator();
+  const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+  const avatarDataUrl = `data:image/png;base64,${pngBytes.toString("base64")}`;
+
+  const user = await authService.createUser({
+    username: "operator-avatar",
+    displayName: "Operator Avatar",
+    password: "Operator123",
+    role: "user",
+    status: "active",
+    avatarDataUrl,
+  }, administrator);
+
+  assert.equal(user.avatarDataUrl, avatarDataUrl);
+
+  const listedUser = (await authService.listUsers()).find((item) => item.id === user.id);
+  assert.equal(listedUser.avatarDataUrl, avatarDataUrl);
+  assert.equal((await authService.getUserProfile(user.id)).avatarDataUrl, avatarDataUrl);
+
+  const loginResult = await authService.login({
+    username: "operator-avatar",
+    password: "Operator123",
+  });
+  assert.equal(loginResult.user.avatarDataUrl, avatarDataUrl);
+
+  const db = await testDatabase.getDb();
+  const setting = await db.get("SELECT value FROM app_settings WHERE key = ?", [`user_avatar:${user.id}`]);
+  assert.equal(setting.value, avatarDataUrl);
+
+  const updated = await authService.updateUser(user.id, { avatarDataUrl: null }, administrator);
+  assert.equal(updated.avatarDataUrl, null);
+  assert.equal(
+    await db.get("SELECT value FROM app_settings WHERE key = ?", [`user_avatar:${user.id}`]),
+    undefined,
+  );
+
+  await assert.rejects(
+    authService.updateUser(user.id, {
+      avatarDataUrl: "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=",
+    }, administrator),
+    (error) => error.code === "USER_AVATAR_INVALID",
+  );
+
+  const oversized = Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    Buffer.alloc((200 * 1024) + 1),
+  ]);
+  await assert.rejects(
+    authService.updateUser(user.id, {
+      avatarDataUrl: `data:image/png;base64,${oversized.toString("base64")}`,
+    }, administrator),
+    (error) => error.code === "USER_AVATAR_TOO_LARGE",
+  );
 });

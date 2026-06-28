@@ -10,26 +10,39 @@ export const buildMasterRecordMobileActions = ({
   onDetail,
   onEdit,
   onToggle,
-}) => ({
-  primaryActions: [
-    {
-      key: "detail",
-      label: "Detail",
-      icon: createElement(EyeOutlined),
-      onClick: () => onDetail(record),
-    },
-  ],
-  moreActions: [
-    {
-      key: "edit",
-      label: "Edit",
-      icon: createElement(EditOutlined),
-      onClick: () => onEdit(record),
-    },
-    {
-      key: "toggle",
-      label: getMasterRecordToggleLabel(record),
-      onClick: () => onToggle(record),
-    },
-  ],
-});
+  toggleTitle,
+  toggleDescription,
+}) => {
+  const toggleLabel = getMasterRecordToggleLabel(record);
+
+  return {
+    primaryActions: [
+      {
+        key: "detail",
+        label: "Detail",
+        icon: createElement(EyeOutlined),
+        onClick: () => onDetail(record),
+      },
+    ],
+    moreActions: [
+      {
+        key: "edit",
+        label: "Edit",
+        icon: createElement(EditOutlined),
+        onClick: () => onEdit(record),
+      },
+      {
+        key: "toggle",
+        label: toggleLabel,
+        danger: record.isActive !== false,
+        confirm: {
+          title: toggleTitle || `${toggleLabel} data ini?`,
+          description: toggleDescription,
+          okText: "Ya",
+          cancelText: "Batal",
+        },
+        onClick: () => onToggle(record),
+      },
+    ],
+  };
+};

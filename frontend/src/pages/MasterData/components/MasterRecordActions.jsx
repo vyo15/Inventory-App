@@ -1,5 +1,5 @@
-import { Button, Popconfirm, Space } from "antd";
 import { EditOutlined, EyeOutlined } from "@ant-design/icons";
+import TableActionMenu from "../../../components/Layout/Table/TableActionMenu";
 import { getMasterRecordToggleLabel } from "./masterRecordActionHelpers";
 
 const MasterRecordActions = ({
@@ -10,35 +10,36 @@ const MasterRecordActions = ({
   toggleDescription,
   toggleTitle,
 }) => (
-  <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-    <Button
-      className="ims-action-button ims-action-button--block"
-      size="small"
-      icon={<EyeOutlined />}
-      onClick={() => onDetail(record)}
-    >
-      Detail
-    </Button>
-    <Button
-      className="ims-action-button ims-action-button--block"
-      size="small"
-      icon={<EditOutlined />}
-      onClick={() => onEdit(record)}
-    >
-      Edit
-    </Button>
-    <Popconfirm
-      title={toggleTitle}
-      description={toggleDescription}
-      okText="Ya"
-      cancelText="Batal"
-      onConfirm={() => onToggle(record)}
-    >
-      <Button className="ims-action-button ims-action-button--block" size="small">
-        {getMasterRecordToggleLabel(record)}
-      </Button>
-    </Popconfirm>
-  </Space>
+  <TableActionMenu
+    visibleActions={[
+      {
+        key: "detail",
+        label: "Detail",
+        icon: <EyeOutlined />,
+        onClick: () => onDetail(record),
+      },
+    ]}
+    moreActions={[
+      {
+        key: "edit",
+        label: "Edit",
+        icon: <EditOutlined />,
+        onClick: () => onEdit(record),
+      },
+      {
+        key: "toggle",
+        label: getMasterRecordToggleLabel(record),
+        danger: record.isActive !== false,
+        confirm: {
+          title: toggleTitle,
+          description: toggleDescription,
+          okText: "Ya",
+          cancelText: "Batal",
+        },
+        onClick: () => onToggle(record),
+      },
+    ]}
+  />
 );
 
 export default MasterRecordActions;

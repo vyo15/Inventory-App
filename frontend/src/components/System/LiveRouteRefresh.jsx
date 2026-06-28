@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Button, Space, Typography } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import useSqliteRealtime from "../../hooks/useSqliteRealtime";
@@ -45,10 +45,10 @@ const LiveRouteRefresh = ({ children, scopes = [] }) => {
   const handledRevisionRef = useRef(null);
   const stableScopes = useMemo(() => [...new Set(scopes.filter(Boolean))], [scopes]);
 
-  const applyRefresh = () => {
+  const applyRefresh = useCallback(() => {
     setPendingEvent(null);
     setRefreshKey((value) => value + 1);
-  };
+  }, []);
 
   useEffect(() => {
     if (!realtimeEventMatchesScopes(lastEvent, stableScopes)) return;
@@ -68,7 +68,7 @@ const LiveRouteRefresh = ({ children, scopes = [] }) => {
 
     const timer = window.setTimeout(applyRefresh, 180);
     return () => window.clearTimeout(timer);
-  }, [lastEvent, stableScopes]);
+  }, [applyRefresh, lastEvent, stableScopes]);
 
   useEffect(() => {
     if (!pendingEvent) return undefined;
@@ -76,13 +76,15 @@ const LiveRouteRefresh = ({ children, scopes = [] }) => {
       if (document.visibilityState === "hidden" || isRefreshUnsafe()) return;
       applyRefresh();
     };
+    const safetyTimer = window.setInterval(refreshWhenSafe, 250);
     window.addEventListener("focus", refreshWhenSafe);
     document.addEventListener("visibilitychange", refreshWhenSafe);
     return () => {
+      window.clearInterval(safetyTimer);
       window.removeEventListener("focus", refreshWhenSafe);
       document.removeEventListener("visibilitychange", refreshWhenSafe);
     };
-  }, [pendingEvent]);
+  }, [applyRefresh, pendingEvent]);
 
   return (
     <div className="ims-live-route-refresh">
@@ -94,7 +96,7 @@ const LiveRouteRefresh = ({ children, scopes = [] }) => {
           message="Data baru tersedia"
           description={(
             <Space size={8} wrap>
-              <Text>Perubahan dari perangkat lain ditahan agar form yang sedang diisi tidak hilang.</Text>
+              <Text>Perubahan terbaru ditahan agar form yang sedang diisi tidak hilang.</Text>
               <Button size="small" icon={<ReloadOutlined />} onClick={applyRefresh}>
                 Muat Ulang Data
               </Button>

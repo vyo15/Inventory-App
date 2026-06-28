@@ -603,12 +603,20 @@ const RawMaterials = () => {
       onDetail: handleViewDetail,
       onEdit: handleEdit,
       onToggle: handleToggleActive,
+      toggleTitle: record.isActive === false ? 'Aktifkan kembali bahan baku?' : 'Nonaktifkan bahan baku?',
+      toggleDescription: record.isActive === false
+        ? 'Bahan baku akan aktif kembali untuk dipakai pada transaksi baru.'
+        : 'Penonaktifan hanya dapat dilakukan jika stok, reserved stock, BOM aktif, dan proses produksi sudah aman.',
     }).primaryActions,
     moreActions: (record) => buildMasterRecordMobileActions({
       record,
       onDetail: handleViewDetail,
       onEdit: handleEdit,
       onToggle: handleToggleActive,
+      toggleTitle: record.isActive === false ? 'Aktifkan kembali bahan baku?' : 'Nonaktifkan bahan baku?',
+      toggleDescription: record.isActive === false
+        ? 'Bahan baku akan aktif kembali untuk dipakai pada transaksi baru.'
+        : 'Penonaktifan hanya dapat dilakukan jika stok, reserved stock, BOM aktif, dan proses produksi sudah aman.',
     }).moreActions,
   };
 
@@ -758,7 +766,7 @@ const RawMaterials = () => {
                   name="categoryId"
                   label="Kelompok Bahan"
                   rules={[{ required: true, message: 'Kelompok bahan wajib dipilih.' }]}
-                  extra="Kelompok bahan, bukan satuan beli atau warna varian."
+                  tooltip="Kelompok bahan, bukan satuan beli atau warna varian."
                 >
                   <Select
                     placeholder="Pilih kelompok bahan"
@@ -817,19 +825,19 @@ const RawMaterials = () => {
             </Row>
 
             {hasVariantsValue ? (
-              <Form.Item name="variantLabel" label="Label Varian" extra="Contoh: Warna, Ukuran, atau Tipe.">
+              <Form.Item name="variantLabel" label="Label Varian" tooltip="Contoh: Warna, Ukuran, atau Tipe.">
                 <Input placeholder="Contoh: Warna" />
               </Form.Item>
             ) : null}
 
             <Row gutter={16}>
               <Col xs={24} md={12}>
-                <Form.Item name="specifications" label="Spesifikasi" extra="Opsional. Contoh: ketebalan, lebar, merek, atau kualitas.">
+                <Form.Item name="specifications" label="Spesifikasi" tooltip="Opsional. Contoh: ketebalan, lebar, merek, atau kualitas.">
                   <Input.TextArea rows={3} placeholder="Tulis spesifikasi bahan" />
                 </Form.Item>
               </Col>
               <Col xs={24} md={12}>
-                <Form.Item name="notes" label="Catatan Internal" extra="Opsional dan hanya untuk kebutuhan operasional.">
+                <Form.Item name="notes" label="Catatan Internal" tooltip="Opsional dan hanya untuk kebutuhan operasional.">
                   <Input.TextArea rows={3} placeholder="Tulis catatan bahan" />
                 </Form.Item>
               </Col>
@@ -866,7 +874,7 @@ const RawMaterials = () => {
                     name="minStock"
                     label="Minimum Stok"
                     rules={[{ required: true, message: 'Minimum stok wajib diisi.' }]}
-                    extra="Batas peringatan restock untuk bahan tanpa varian."
+                    tooltip="Batas peringatan restock untuk bahan tanpa varian."
                   >
                     <InputNumber
                       style={{ width: '100%' }}
@@ -912,7 +920,7 @@ const RawMaterials = () => {
                   name="restockReferencePrice"
                   label="Harga Acuan Restock / Satuan"
                   rules={[{ required: true, message: 'Harga acuan restock wajib diisi.' }]}
-                  extra="Fallback internal; harga aktual tetap diverifikasi saat Pembelian."
+                  tooltip="Fallback internal; harga aktual tetap diverifikasi saat Pembelian."
                 >
                   <InputNumber
                     style={{ width: '100%' }}
@@ -965,7 +973,7 @@ const RawMaterials = () => {
                   name="sellingPrice"
                   label="Harga Jual / Satuan"
                   rules={[{ required: true, message: 'Harga jual wajib diisi.' }]}
-                  extra="Tetap tersedia karena Bahan Baku saat ini dapat dipilih pada flow Penjualan."
+                  tooltip="Tetap tersedia karena Bahan Baku saat ini dapat dipilih pada flow Penjualan."
                 >
                   <InputNumber
                     style={{ width: '100%' }}

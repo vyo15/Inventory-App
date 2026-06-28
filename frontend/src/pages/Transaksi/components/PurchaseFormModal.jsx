@@ -145,7 +145,7 @@ const PurchaseFormModal = ({
               name="productVariantKey"
               label={selectedProduct?.variantLabel || "Varian Produk"}
               rules={[{ required: true, message: "Varian produk wajib dipilih" }]}
-              extra="Item bervarian wajib masuk ke varian."
+              tooltip="Item bervarian wajib masuk ke varian."
             >
               <Select placeholder="Pilih varian produk">
                 {productVariantOptions.map((item) => (
@@ -289,7 +289,7 @@ const PurchaseFormModal = ({
 
                 <Form.Item
                   label="Satuan Beli"
-                  extra="Satuan dari katalog supplier."
+                  tooltip="Satuan dari katalog supplier."
                 >
                   <Form.Item shouldUpdate noStyle>
                     {({ getFieldValue }) => (
@@ -364,7 +364,7 @@ const PurchaseFormModal = ({
                   </Form.Item>
                 </Form.Item>
 
-                <Form.Item label="Satuan Stok" extra="Satuan dari Raw Material.">
+                <Form.Item label="Satuan Stok" tooltip="Satuan dari Raw Material.">
                   <Form.Item shouldUpdate noStyle>
                     {({ getFieldValue }) => (
                       <div className="ims-readonly-field ims-readonly-field--compact">
@@ -564,7 +564,7 @@ const PurchaseFormModal = ({
           <Form.Item
             name="note"
             label="Catatan"
-            extra="Catatan manual dan ringkasan OCR akan tampil per baris agar mudah dicek ulang."
+            tooltip="Catatan manual dan ringkasan OCR akan tampil per baris agar mudah dicek ulang."
           >
             <Input.TextArea
               autoSize={{ minRows: 4, maxRows: 8 }}

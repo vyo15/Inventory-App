@@ -42,12 +42,14 @@ describe("userService", () => {
       display_name: "Operator Toko",
       role: ROLES.USER,
       status: USER_STATUS.ACTIVE,
+      avatar_data_url: "data:image/png;base64,avatar",
     })).toMatchObject({
       authUid: "local-2",
       usernameLower: "operator",
       displayName: "Operator Toko",
       roleLabel: "User",
       statusLabel: "Aktif",
+      avatarDataUrl: "data:image/png;base64,avatar",
     });
 
     expect(normalizeSystemUser({
@@ -84,6 +86,7 @@ describe("userService", () => {
       username: " operator.1 ",
       displayName: " Operator Satu ",
       password: "Operator8421",
+      avatarDataUrl: "data:image/webp;base64,avatar",
     }, administrator);
 
     expect(mocks.createLocalUser).toHaveBeenCalledWith({
@@ -92,6 +95,7 @@ describe("userService", () => {
       role: ROLES.USER,
       status: USER_STATUS.ACTIVE,
       password: "Operator8421",
+      avatarDataUrl: "data:image/webp;base64,avatar",
     });
     expect(created).toMatchObject({ authUid: "local-2", roleLabel: "User" });
 
@@ -107,19 +111,66 @@ describe("userService", () => {
     }, administrator)).rejects.toThrow("Password test ditolak");
   });
 
-  it("update menjaga self-management guard dan tidak mengirim password kosong", async () => {
-    const target = { id: 2, authUid: "local-2", role: ROLES.USER, status: USER_STATUS.ACTIVE };
-    mocks.updateLocalUser.mockResolvedValue({ ...target, displayName: "Operator Baru" });
+  it("mengizinkan edit profil sendiri tetapi tetap mengunci username, role, dan status", async () => {
+    const selfTarget = {
+      ...administrator,
+      username: "admin",
+      displayName: "Administrator",
+    };
+    mocks.updateLocalUser.mockResolvedValue({
+      ...selfTarget,
+      displayName: "Administrator Utama",
+      avatarDataUrl: null,
+    });
 
-    await expect(updateSystemUserProfile(administrator, { status: USER_STATUS.INACTIVE }, administrator))
+    const updatedSelf = await updateSystemUserProfile(selfTarget, {
+      username: "admin",
+      displayName: " Administrator Utama ",
+      role: ROLES.ADMINISTRATOR,
+      status: USER_STATUS.ACTIVE,
+      password: "",
+      avatarDataUrl: null,
+    }, administrator);
+
+    expect(mocks.updateLocalUser).toHaveBeenCalledWith(1, {
+      displayName: "Administrator Utama",
+      avatarDataUrl: null,
+    });
+    expect(updatedSelf.displayName).toBe("Administrator Utama");
+
+    await expect(updateSystemUserProfile(selfTarget, {
+      role: ROLES.USER,
+      status: USER_STATUS.ACTIVE,
+    }, administrator)).rejects.toMatchObject({ code: "DELETE_PROFILE_PERMISSION_DENIED" });
+
+    await expect(updateSystemUserProfile(selfTarget, {
+      username: "admin-baru",
+    }, administrator)).rejects.toMatchObject({ code: "DELETE_PROFILE_PERMISSION_DENIED" });
+
+    await expect(updateSystemUserStatus(selfTarget, USER_STATUS.INACTIVE, administrator))
       .rejects.toMatchObject({ code: "DELETE_PROFILE_PERMISSION_DENIED" });
+  });
+
+  it("administrator tetap dapat mengedit profil dan status user lain", async () => {
+    const target = {
+      id: 2,
+      authUid: "local-2",
+      username: "operator",
+      role: ROLES.USER,
+      status: USER_STATUS.ACTIVE,
+    };
+    mocks.updateLocalUser.mockResolvedValue({ ...target, displayName: "Operator Baru" });
 
     const updated = await updateSystemUserProfile(target, {
       displayName: " Operator Baru ",
       password: "",
+      avatarDataUrl: null,
     }, administrator);
 
-    expect(mocks.updateLocalUser).toHaveBeenCalledWith(2, { displayName: "Operator Baru" });
+    expect(mocks.updateLocalUser).toHaveBeenCalledWith(2, {
+      displayName: "Operator Baru",
+      avatarDataUrl: null,
+    });
     expect(updated.displayName).toBe("Operator Baru");
 
     await updateSystemUserStatus(target, USER_STATUS.INACTIVE, administrator);

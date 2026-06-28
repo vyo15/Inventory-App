@@ -15,6 +15,18 @@ after(testDatabase.cleanup);
 
 const seedBom = async (id = "bom-plan") => {
   const db = await testDatabase.getDb();
+  await upsertJsonRecord(db, "production_steps", {
+    id: "step-plan",
+    code: "STP-PLAN",
+    name: "Rakit Planning",
+    payrollMode: "per_qty",
+    payrollRate: 100,
+    payrollOutputBasis: "good_qty",
+    payrollClassification: "direct_labor",
+    includePayrollInHpp: true,
+    status: "active",
+    isActive: true,
+  });
   return upsertJsonRecord(db, "production_boms", {
     id,
     code: "BOM-PLAN",
@@ -31,6 +43,12 @@ const seedBom = async (id = "bom-plan") => {
       itemCode: "RAW-PLAN",
       itemName: "Bahan Planning",
       qtyPerUnit: 2,
+    }],
+    stepLines: [{
+      stepId: "step-plan",
+      stepCode: "STP-PLAN",
+      stepName: "Rakit Planning",
+      sequenceNo: 1,
     }],
     status: "active",
     isActive: true,

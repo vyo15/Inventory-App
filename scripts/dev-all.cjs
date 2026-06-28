@@ -51,8 +51,14 @@ const buildRuntimeConfiguration = ({
   projectRoot = rootDir,
   baseEnv = process.env,
 } = {}) => {
+  const inheritedPurpose = String(baseEnv.IMS_DATABASE_PURPOSE || "").trim().toLowerCase();
+  const inheritedDbPath = inheritedPurpose === "sandbox" ? "" : baseEnv.IMS_SQLITE_DB_PATH;
   const operational = {
-    databasePath: resolveBackendRuntimePath(null, "../data/ims-sqlite-sidecar.sqlite", projectRoot),
+    databasePath: resolveBackendRuntimePath(
+      baseEnv.IMS_OPERATIONAL_SOURCE_DB_PATH || inheritedDbPath,
+      "../data/ims-sqlite-sidecar.sqlite",
+      projectRoot,
+    ),
     backupDir: resolveBackendRuntimePath(null, "../backups/sqlite", projectRoot),
     logDir: resolveBackendRuntimePath(null, "../logs", projectRoot),
   };
@@ -80,6 +86,7 @@ const buildRuntimeConfiguration = ({
         IMS_SQLITE_DB_PATH: sandbox.databasePath,
         IMS_SQLITE_BACKUP_DIR: sandbox.backupDir,
         IMS_LOG_DIR: sandbox.logDir,
+        IMS_OPERATIONAL_SOURCE_DB_PATH: operational.databasePath,
       },
       envRemovals: [],
     };
@@ -89,7 +96,7 @@ const buildRuntimeConfiguration = ({
     || ["1", "true", "yes", "on"].includes(
       String(baseEnv.IMS_ENABLE_TESTING_LAB || "").trim().toLowerCase(),
     );
-  const envRemovals = ["IMS_ENABLE_TESTING_LAB", "IMS_DATABASE_PURPOSE"];
+  const envRemovals = ["IMS_ENABLE_TESTING_LAB", "IMS_DATABASE_PURPOSE", "IMS_OPERATIONAL_SOURCE_DB_PATH"];
   if (inheritedSandboxMode) {
     envRemovals.push("IMS_SQLITE_DB_PATH", "IMS_SQLITE_BACKUP_DIR", "IMS_LOG_DIR");
   }
@@ -109,6 +116,13 @@ const buildRuntimeConfiguration = ({
     envOverrides: {
       IMS_ENABLE_TESTING_LAB: "false",
       IMS_DATABASE_PURPOSE: "operational",
+      ...(inheritedSandboxMode
+        ? {
+          IMS_SQLITE_DB_PATH: operational.databasePath,
+          IMS_SQLITE_BACKUP_DIR: operational.backupDir,
+          IMS_LOG_DIR: operational.logDir,
+        }
+        : {}),
     },
     envRemovals,
   };
@@ -302,7 +316,8 @@ if (require.main === module) {
   console.log(`[dev] Backup   : ${runtimeConfiguration.backupDir}`);
   console.log(`[dev] Log      : ${runtimeConfiguration.logDir}`);
   if (runtimeConfiguration.mode === "testing-lab") {
-    console.log("[dev] Data operasional tidak digunakan.");
+    console.log(`[dev] Sumber clone operasional (read-only): ${runtimeConfiguration.envOverrides.IMS_OPERATIONAL_SOURCE_DB_PATH}`);
+    console.log("[dev] Data operasional tidak digunakan sebagai database aktif.");
   }
   console.log("[dev] Backend : http://localhost:3001");
   console.log("[dev] Frontend: http://localhost:5173/Inventory-App/");

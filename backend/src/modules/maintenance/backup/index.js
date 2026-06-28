@@ -21,6 +21,7 @@ module.exports = {
   calculateRequiredDiskBytes: pathApi.calculateRequiredDiskBytes,
   createMonthlyBackupFromDaily: lifecycle.createMonthlyBackupFromDaily,
   createOfficialSqliteBackup: creation.createOfficialSqliteBackup,
+  createOfficialSqliteBackupFromFile: creation.createOfficialSqliteBackupFromFile,
   ensureDailyBackupForToday: lifecycle.ensureDailyBackupForToday,
   ensureMonthlyBackups: lifecycle.ensureMonthlyBackups,
   enrichBackupLog: validation.enrichBackupLog,

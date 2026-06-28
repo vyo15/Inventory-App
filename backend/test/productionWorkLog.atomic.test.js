@@ -292,3 +292,121 @@ test("kegagalan output me-rollback payroll dan status complete tanpa mengulang m
   assert.equal(orderRow.status, "in_production");
   assert.equal(payrollCount.count, 0);
 });
+
+test("Start Production menolak BOM legacy dengan lebih dari satu tahapan", async () => {
+  await seedMasterData();
+  const db = await testDatabase.getDb();
+  const bomRow = await db.get("SELECT payload_json FROM production_boms WHERE id = 'bom-1'");
+  const bom = JSON.parse(bomRow.payload_json);
+  await upsertJsonRecord(db, "production_boms", {
+    ...bom,
+    stepLines: [
+      ...bom.stepLines,
+      { stepId: "step-2", stepCode: "STP-002", stepName: "Tahap Kedua", sequenceNo: 2 },
+    ],
+  });
+
+  await assert.rejects(createOrder(), /tepat 1 Tahapan Produksi/);
+  const orderCount = await db.get("SELECT COUNT(*) AS count FROM production_orders");
+  assert.equal(orderCount.count, 0);
+});
+
+test("Payroll memakai snapshot tarif saat Start walau master Tahapan berubah sebelum Complete", async () => {
+  await seedMasterData();
+  const order = await createOrder();
+  const started = await startProductionOrder({ orderId: order.id, actor: "tester" });
+  const db = await testDatabase.getDb();
+  const stepRow = await db.get("SELECT payload_json FROM production_steps WHERE id = 'step-1'");
+  const step = JSON.parse(stepRow.payload_json);
+  await upsertJsonRecord(db, "production_steps", {
+    ...step,
+    payrollRate: 900,
+    updatedAt: new Date().toISOString(),
+  });
+
+  const result = await completeProductionWorkLog({
+    workLogId: started.workLog.id,
+    payload: {
+      goodQty: 2,
+      actualOutputQty: 2,
+      workerIds: ["emp-1"],
+      workerNames: ["Operator Satu"],
+    },
+    actor: "tester",
+  });
+
+  assert.equal(started.workLog.stepPayrollRate, 500);
+  assert.equal(started.workLog.stepPayrollRuleSource, "production_step_start_snapshot");
+  assert.equal(result.workLog.laborCostActual, 1000);
+  const payrollRow = await db.get("SELECT payload_json FROM production_payrolls LIMIT 1");
+  const payroll = JSON.parse(payrollRow.payload_json);
+  assert.equal(payroll.payrollRate, 500);
+  assert.equal(payroll.finalAmount, 1000);
+  assert.equal(payroll.payrollRuleSource, "production_step_start_snapshot");
+});
+
+test("Complete Work Log menolak lebih dari satu operator agar payroll tidak berlipat", async () => {
+  await seedMasterData();
+  const db = await testDatabase.getDb();
+  await upsertJsonRecord(db, "production_employees", {
+    id: "emp-2",
+    code: "EMP-002",
+    name: "Operator Dua",
+    status: "active",
+    isActive: true,
+  });
+  const order = await createOrder();
+  const started = await startProductionOrder({ orderId: order.id, actor: "tester" });
+
+  await assert.rejects(
+    completeProductionWorkLog({
+      workLogId: started.workLog.id,
+      payload: {
+        goodQty: 2,
+        actualOutputQty: 2,
+        workerIds: ["emp-1", "emp-2"],
+        workerNames: ["Operator Satu", "Operator Dua"],
+      },
+      actor: "tester",
+    }),
+    /hanya boleh memiliki 1 operator/,
+  );
+
+  const workLog = await db.get("SELECT status FROM production_work_logs WHERE id = ?", [started.workLog.id]);
+  const product = await db.get("SELECT current_stock FROM products WHERE id = 'product-1'");
+  const payrollCount = await db.get("SELECT COUNT(*) AS count FROM production_payrolls");
+  assert.equal(workLog.status, "in_progress");
+  assert.equal(product.current_stock, 0);
+  assert.equal(payrollCount.count, 0);
+});
+
+test("Complete Work Log menolak operator nonaktif", async () => {
+  await seedMasterData();
+  const db = await testDatabase.getDb();
+  const employeeRow = await db.get("SELECT payload_json FROM production_employees WHERE id = 'emp-1'");
+  const employee = JSON.parse(employeeRow.payload_json);
+  await upsertJsonRecord(db, "production_employees", {
+    ...employee,
+    status: "inactive",
+    isActive: false,
+  });
+  const order = await createOrder();
+  const started = await startProductionOrder({ orderId: order.id, actor: "tester" });
+
+  await assert.rejects(
+    completeProductionWorkLog({
+      workLogId: started.workLog.id,
+      payload: {
+        goodQty: 2,
+        actualOutputQty: 2,
+        workerIds: ["emp-1"],
+        workerNames: ["Operator Satu"],
+      },
+      actor: "tester",
+    }),
+    /sudah nonaktif/,
+  );
+
+  const payrollCount = await db.get("SELECT COUNT(*) AS count FROM production_payrolls");
+  assert.equal(payrollCount.count, 0);
+});

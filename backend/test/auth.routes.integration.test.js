@@ -125,6 +125,29 @@ test("login route aktual menyimpan session di cookie HttpOnly tanpa mengirim tok
   assert.equal(mePayload.data.user.username, "admin");
 });
 
+test("login dan auth me mengembalikan foto profil terbaru", async () => {
+  const administrator = await bootstrapAdministrator();
+  const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+  const avatarDataUrl = `data:image/png;base64,${pngBytes.toString("base64")}`;
+  await authService.updateUser(administrator.id, { avatarDataUrl }, administrator);
+
+  const loginResponse = await request("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ username: "admin", password: ADMIN_PASSWORD }),
+  });
+  const loginPayload = await loginResponse.json();
+  const cookiePair = (loginResponse.headers.get("set-cookie") || "").split(";")[0];
+
+  assert.equal(loginPayload.data.user.avatarDataUrl, avatarDataUrl);
+
+  const meResponse = await request("/api/auth/me", {
+    headers: { cookie: cookiePair },
+  });
+  const mePayload = await meResponse.json();
+  assert.equal(meResponse.status, 200);
+  assert.equal(mePayload.data.user.avatarDataUrl, avatarDataUrl);
+});
+
 test("Bearer session lama hanya dimigrasikan saat compatibility diaktifkan eksplisit", async () => {
   await bootstrapAdministrator();
   const env = require("../src/config/env");

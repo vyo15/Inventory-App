@@ -8,6 +8,7 @@ import {
 import { listenProducts } from "../MasterData/productsService";
 import { listenRawMaterials } from "../MasterData/rawMaterialsService";
 import { getActiveSemiFinishedMaterials } from "./semiFinishedMaterialsService";
+import { getActiveProductionSteps } from "./productionStepsService";
 
 const safeTrim = (value) => String(value || "").trim();
 const nowIso = () => new Date().toISOString();
@@ -34,12 +35,13 @@ const resolveMaterialLines = (values = {}) => {
 export const generateProductionBomCode = async () => generateProductionCode("boms");
 
 export const getActiveBomReferenceData = async () => {
-  const [products, rawMaterials, semiFinishedMaterials] = await Promise.all([
+  const [products, rawMaterials, semiFinishedMaterials, productionSteps] = await Promise.all([
     onceFromListener(listenProducts).catch(() => []),
     onceFromListener(listenRawMaterials).catch(() => []),
     getActiveSemiFinishedMaterials().catch(() => []),
+    getActiveProductionSteps().catch(() => []),
   ]);
-  return { products, rawMaterials, semiFinishedMaterials };
+  return { products, rawMaterials, semiFinishedMaterials, productionSteps };
 };
 
 export const validateProductionBom = (values = {}) => {
@@ -47,6 +49,10 @@ export const validateProductionBom = (values = {}) => {
   if (!safeTrim(values.code || values.bomCode)) errors.code = "Kode BOM wajib diisi";
   if (!safeTrim(values.targetId)) errors.targetId = "Target BOM wajib dipilih";
   if (resolveMaterialLines(values).length === 0) errors.materialLines = "Material BOM wajib diisi";
+  const stepLines = Array.isArray(values.stepLines) ? values.stepLines : [];
+  if (stepLines.length !== 1 || !safeTrim(stepLines[0]?.stepId)) {
+    errors.stepLines = "BOM wajib memiliki tepat 1 Tahapan Produksi aktif";
+  }
   return errors;
 };
 
@@ -62,6 +68,8 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
     name: safeTrim(values.name || values.bomName || values.targetName || code),
     targetType: values.targetType || "product",
     materialLines: resolveMaterialLines(values),
+    stepLines: Array.isArray(values.stepLines) ? values.stepLines : [],
+    routingMode: "single_step",
     version: values.version || 1,
     isActive: values.isActive !== false,
     updatedAt: nowIso(),
@@ -89,16 +97,28 @@ export const isProductionBomCodeExists = async (code, excludeId = null) => {
   );
 };
 
-export const createProductionBom = async (values, currentUser = null) => createProductionRecord(
-  "boms",
-  normalizePayload(values, currentUser, false)
-);
+const assertValidProductionBom = (values = {}) => {
+  const errors = validateProductionBom(values);
+  const firstError = Object.values(errors)[0];
+  if (firstError) throw new Error(firstError);
+};
 
-export const updateProductionBom = async (id, values, currentUser = null) => updateProductionRecord(
-  "boms",
-  id,
-  normalizePayload(values, currentUser, true)
-);
+export const createProductionBom = async (values, currentUser = null) => {
+  assertValidProductionBom(values);
+  return createProductionRecord(
+    "boms",
+    normalizePayload(values, currentUser, false),
+  );
+};
+
+export const updateProductionBom = async (id, values, currentUser = null) => {
+  assertValidProductionBom(values);
+  return updateProductionRecord(
+    "boms",
+    id,
+    normalizePayload(values, currentUser, true),
+  );
+};
 
 export const toggleProductionBomActive = async (
   id,

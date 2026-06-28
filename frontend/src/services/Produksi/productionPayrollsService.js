@@ -38,14 +38,25 @@ export const getPayrollReferenceData = async () => ({
 });
 
 export const buildPayrollDraftFromWorkLog = (workLog = {}, employee = null, productionStep = null) => {
-  const payrollMode = productionStep?.payrollMode || workLog.payrollMode || "per_qty";
-  const payrollRate = toNumber(productionStep?.payrollRate ?? workLog.payrollRate ?? 0);
-  const outputQtyUsed = toNumber(workLog.goodQty || workLog.actualOutputQty || 0);
+  const payrollMode = workLog.stepPayrollMode || workLog.payrollMode || productionStep?.payrollMode || "per_qty";
+  const payrollRate = toNumber(workLog.stepPayrollRate ?? workLog.payrollRate ?? productionStep?.payrollRate ?? 0);
+  const payrollQtyBase = Math.max(1, toNumber(
+    workLog.stepPayrollQtyBase ?? workLog.payrollQtyBase ?? productionStep?.payrollQtyBase ?? 1,
+  ));
+  const payrollOutputBasis = workLog.stepPayrollOutputBasis
+    || workLog.payrollOutputBasis
+    || productionStep?.payrollOutputBasis
+    || "good_qty";
+  const outputQtyUsed = toNumber(
+    payrollOutputBasis === "actual_output_qty"
+      ? workLog.actualOutputQty || workLog.goodQty || 0
+      : workLog.goodQty || workLog.actualOutputQty || 0,
+  );
   const workedQty = toNumber(workLog.plannedQty || outputQtyUsed || 1);
   const totals = calculatePayrollAmounts({
     payrollMode,
     payrollRate,
-    payrollQtyBase: 1,
+    payrollQtyBase,
     outputQtyUsed,
     workedQty,
   });
@@ -66,14 +77,21 @@ export const buildPayrollDraftFromWorkLog = (workLog = {}, employee = null, prod
     workerName: employee?.name || "",
     payrollMode,
     payrollRate,
-    payrollQtyBase: 1,
+    payrollQtyBase,
+    payrollOutputBasis,
+    payrollClassification: workLog.stepPayrollClassification
+      || productionStep?.payrollClassification
+      || "direct_labor",
+    payrollRuleSource: workLog.stepPayrollRuleSource || "work_log_step_snapshot",
     outputQtyUsed,
     workedQty,
     amountCalculated: totals.amountCalculated,
     finalAmount: totals.finalAmount,
     status: "draft",
     paymentStatus: "unpaid",
-    includePayrollInHpp: productionStep?.includePayrollInHpp !== false,
+    includePayrollInHpp: typeof workLog.stepPayrollIncludeInHpp === "boolean"
+      ? workLog.stepPayrollIncludeInHpp
+      : productionStep?.includePayrollInHpp !== false,
   };
 };
 

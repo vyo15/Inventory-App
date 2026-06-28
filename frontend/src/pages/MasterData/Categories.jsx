@@ -462,7 +462,7 @@ const Categories = () => {
         <Form.Item
           name="parentId"
           label="Kelompok Induk"
-          extra="Opsional. Struktur dibatasi maksimal kategori utama dan satu tingkat subkategori."
+          tooltip="Opsional. Struktur dibatasi maksimal kategori utama dan satu tingkat subkategori."
         >
           <Select
             allowClear
@@ -474,7 +474,7 @@ const Categories = () => {
         <Form.Item name="description" label="Keterangan">
           <Input.TextArea rows={3} placeholder="Keterangan singkat agar kategori mudah dipahami." />
         </Form.Item>
-        <Form.Item name="sortOrder" label="Urutan" extra="Angka lebih kecil tampil lebih dahulu.">
+        <Form.Item name="sortOrder" label="Urutan" tooltip="Angka lebih kecil tampil lebih dahulu.">
           <InputNumber min={0} precision={0} style={{ width: "100%" }} />
         </Form.Item>
       </PageFormModal>

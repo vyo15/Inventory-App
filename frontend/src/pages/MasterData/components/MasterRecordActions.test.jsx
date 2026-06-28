@@ -20,10 +20,13 @@ describe("MasterRecordActions", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /detail/i }));
+    fireEvent.click(screen.getByRole("button", { name: /aksi lainnya/i }));
     fireEvent.click(screen.getByRole("button", { name: /edit/i }));
 
     expect(onDetail).toHaveBeenCalledWith(record);
     expect(onEdit).toHaveBeenCalledWith(record);
+
+    fireEvent.click(screen.getByRole("button", { name: /aksi lainnya/i }));
     expect(screen.getByRole("button", { name: "Nonaktifkan" })).toBeTruthy();
   });
 

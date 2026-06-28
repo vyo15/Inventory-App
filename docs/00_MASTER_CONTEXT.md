@@ -411,9 +411,9 @@ Status: **AKTIF / SOURCE-ALIGNED / GUARDED**.
 
 ## Realtime SQLite dan Retensi Histori — 2026-06-28
 
-- **Aktif/guarded:** backend menyediakan SSE protected di `/api/realtime/events`. Mutation SQLite dipublikasikan setelah commit berdasarkan tabel/scope; rollback tidak memublikasikan event. Frontend memakai satu provider per tab, route-scoped refresh, form-safety notice, serta satu fallback revision global yang hanya aktif saat SSE terputus dan tab terlihat.
-- **Aktif/guarded:** identitas realtime menggabungkan browser ID persisten dan page-instance ID in-memory agar tab hasil duplicate tidak dianggap sebagai client asal yang sama. Polling 15 detik per adapter telah dihentikan; API `subscribe` lama dipertahankan hanya untuk initial load compatibility.
-- **Aktif/guarded Auth:** perubahan tabel `users/roles` memicu reload session global sebelum filter scope route. Mutation `local_user_sessions` memakai scope `auth_session`, sehingga login/logout biasa tidak memaksa semua device reload. Revision fallback dibatasi menurut role agar user operasional tidak refresh karena event administrator-only.
+- **Aktif/guarded:** backend menyediakan SSE protected di `/api/realtime/events`. Mutation SQLite dipublikasikan setelah commit berdasarkan tabel/scope; rollback tidak memublikasikan event. Event juga dikirim ke tab pengirim untuk menjamin same-tab reconciliation. Frontend memakai satu provider per tab, route-scoped refresh, form-safety notice dengan auto-resume saat overlay aman, serta satu fallback revision global yang hanya aktif saat SSE terputus dan tab terlihat.
+- **Aktif/guarded:** identitas realtime menggabungkan browser ID persisten dan page-instance ID in-memory agar tab hasil duplicate tidak dianggap sebagai client asal yang sama. `fetchSqliteJson()` menyuntikkan `X-IMS-Client-ID` terpusat untuk seluruh request normal; backend mutation hanya membaca origin dari header dan memakai normalisasi yang sama dengan koneksi SSE. Browser ID dicache selama tab hidup agar origin tidak berubah saat storage browser dibersihkan/tidak tersedia. Polling 15 detik per adapter telah dihentikan; API `subscribe` lama dipertahankan hanya untuk initial load compatibility.
+- **Aktif/guarded Auth:** perubahan tabel `users/roles` memicu reload `/api/auth/me` dan reconnect SSE agar nama/avatar/status/role profile serta snapshot role koneksi selalu terbaru. Perubahan profile biasa tidak melakukan reload browser penuh; `session_expired` dan `database_replaced` tetap global. Mutation `local_user_sessions` memakai scope `auth_session`, sehingga login/logout biasa tidak memaksa semua device reload. Revision fallback dibatasi menurut role agar user operasional tidak refresh karena event administrator-only.
 - **Aktif/guarded Session:** koneksi SSE menyimpan `expiresAt` session hasil middleware auth. Saat waktu session habis, backend mengirim `session_expired`, menutup stream, dan frontend reload ke validasi auth agar koneksi lama tidak terus menerima metadata realtime.
 - **Aktif/guarded:** menu operasional tidak melakukan hard-delete master/user. Customer, Kategori, Supplier, Pricing Rule, User, dan record generic dinonaktifkan/soft-delete; varian zero-stock diarsipkan dengan histori.
 - **Maintenance-only:** tab `Data Nonaktif` boleh purge permanen hanya untuk Customer, Kategori, Supplier, Pricing Rule, dan User yang sudah inactive/deleted serta bebas dependency. Flow wajib backup `pre-repair`, keyword + exact target, transaction, dan audit snapshot tersanitasi.
@@ -426,3 +426,11 @@ Status: **AKTIF / SOURCE-ALIGNED / GUARDED**.
 - Baseline memakai backup resmi tipe `test`; reset memakai backup `pre-reset` dan restore guarded existing, bukan blanket delete.
 - Reset mempunyai write lock, active-write check, audit log, validation, rollback existing, serta broadcast `database_replaced`.
 - Skenario testing tetap dijalankan melalui menu/service bisnis resmi. Tidak ada direct seed SQL dari frontend dan tidak ada schema baru.
+
+## Update Produksi Multi-Jenis Bunga — 2026-06-28
+
+- Tahapan Produksi bersifat generik lintas Mawar/Tulip; konteks jenis bunga berada pada master Jenis Bunga, Semi Finished, dan BOM.
+- Runtime dikunci `1 BOM = 1 step = 1 PO = 1 Work Log = 1 payroll rule`; produksi bertingkat memakai rantai BOM/PO.
+- Rule payroll dibekukan saat Start Production dan snapshot Work Log menjadi source untuk Complete/HPP.
+- Satu Work Log hanya satu operator; pembagian pekerjaan memakai PO/Work Log terpisah.
+- Semi Finished boleh `Umum / Reusable`; Production Profile memakai monitoring metric eksplisit, bukan nama step.

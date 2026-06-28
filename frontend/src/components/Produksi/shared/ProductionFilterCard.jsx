@@ -1,5 +1,6 @@
 import { Card } from 'antd';
 import FilterBar from '../../Layout/Filters/FilterBar';
+import "./ProductionFilterCard.css";
 
 // Compatibility wrapper: surface Card produksi dipertahankan, sedangkan logic
 // filter desktop/mobile didelegasikan ke FilterBar shared.

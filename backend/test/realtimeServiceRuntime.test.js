@@ -3,6 +3,7 @@ const { EventEmitter } = require("node:events");
 const { afterEach, test } = require("node:test");
 const {
   REALTIME_MAX_CLIENTS_PER_USER,
+  broadcastRealtimeEvent,
   flushQueuedDatabaseMutations,
   getRealtimeRuntimeStatus,
   queueDatabaseMutation,
@@ -115,3 +116,41 @@ test("batch mutation campuran client dan system tidak menekan event ke client pe
   assert.deepEqual([...payload.tables].sort(), ["inventory_logs", "products"]);
 });
 
+test("event mutation tetap dikirim ke koneksi client pengirim", () => {
+  const req = createRequest({ clientId: "client-origin" });
+  const res = createResponse();
+  registerRealtimeClient(req, res);
+
+  broadcastRealtimeEvent({
+    tables: ["customers"],
+    originClientId: "client-origin",
+  });
+
+  assert.ok(res.frames.some((frame) => (
+    frame.includes("event: data_changed")
+    && frame.includes('"originClientId":"client-origin"')
+    && frame.includes('"customers"')
+  )));
+});
+
+test("SSE dan queue mutation memakai normalisasi client ID yang sama", () => {
+  const req = createRequest({ clientId: " browser-a:<page-a> !! " });
+  const res = createResponse();
+  registerRealtimeClient(req, res);
+
+  queueDatabaseMutation({
+    tables: ["customers"],
+    originClientId: " browser-a:<page-a> !! ",
+  });
+  const payload = flushQueuedDatabaseMutations();
+
+  assert.equal(payload.originClientId, "browser-a:page-a");
+  assert.ok(res.frames.some((frame) => (
+    frame.includes("event: connected")
+    && frame.includes('"clientId":"browser-a:page-a"')
+  )));
+  assert.ok(res.frames.some((frame) => (
+    frame.includes("event: data_changed")
+    && frame.includes('"originClientId":"browser-a:page-a"')
+  )));
+});

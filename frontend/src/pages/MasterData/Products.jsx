@@ -566,12 +566,14 @@ const Products = () => {
       onDetail: handleViewDetail,
       onEdit: handleEdit,
       onToggle: handleToggleActive,
+      toggleTitle: record.isActive === false ? 'Aktifkan kembali produk?' : 'Nonaktifkan produk?',
     }).primaryActions,
     moreActions: (record) => buildMasterRecordMobileActions({
       record,
       onDetail: handleViewDetail,
       onEdit: handleEdit,
       onToggle: handleToggleActive,
+      toggleTitle: record.isActive === false ? 'Aktifkan kembali produk?' : 'Nonaktifkan produk?',
     }).moreActions,
   };
 
@@ -715,7 +717,7 @@ const Products = () => {
                 name="categoryId"
                 label="Bentuk Produk"
                 rules={[{ required: true, message: 'Bentuk produk wajib dipilih.' }]}
-                extra="Contoh: Bouquet atau Bunga Tangkai."
+                tooltip="Contoh: Bouquet atau Bunga Tangkai."
               >
                 <Select
                   placeholder="Pilih bentuk produk"
@@ -728,7 +730,7 @@ const Products = () => {
               <Form.Item
                 name="flowerTypeId"
                 label="Jenis Bunga"
-                extra="Opsional untuk produk yang tidak khusus satu jenis bunga."
+                tooltip="Opsional untuk produk yang tidak khusus satu jenis bunga."
               >
                 <Select
                   allowClear
@@ -875,7 +877,7 @@ const Products = () => {
             <Form.Item
               name="variantLabel"
               label="Label Varian"
-              extra="Contoh: Warna, Ukuran, Motif."
+              tooltip="Contoh: Warna, Ukuran, atau Motif."
             >
               <Input placeholder="Contoh: Warna" />
             </Form.Item>

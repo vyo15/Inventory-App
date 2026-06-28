@@ -3,10 +3,11 @@ import { ROUTE_ACCESS_KEYS } from "../utils/auth/roleAccess";
 export const isGlobalRealtimeReloadEvent = (event) => (
   event?.type === "database_replaced"
   || event?.type === "session_expired"
-  || (
-    event?.type === "data_changed"
-    && (event.scopes || []).includes("auth")
-  )
+);
+
+export const isAuthProfileRealtimeEvent = (event) => (
+  event?.type === "data_changed"
+  && (event.scopes || []).includes("auth")
 );
 
 export const realtimeEventMatchesScopes = (event, scopes = []) => {

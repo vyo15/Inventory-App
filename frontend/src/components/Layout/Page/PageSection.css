@@ -18,8 +18,8 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: 14px;
+  margin-bottom: 12px;
   flex-wrap: wrap;
 }
 
@@ -53,7 +53,7 @@
 }
 
 .page-section > .ant-card-body {
-  padding: 18px !important;
+  padding: 15px 16px !important;
 }
 
 .page-section-body {

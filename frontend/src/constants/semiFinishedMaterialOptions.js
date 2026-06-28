@@ -47,8 +47,8 @@ export const DEFAULT_SEMI_FINISHED_FORM = {
   name: '',
   description: '',
   category: 'pola',
-  // IMS NOTE [AKTIF | no-silent-mawar-default]: Jenis Bunga wajib dipilih eksplisit.
-  // Data baru tidak boleh otomatis masuk group Mawar karena Semi Product akan dipakai untuk jenis bunga lain.
+  // IMS NOTE [AKTIF | reusable-component]: Jenis Bunga tidak diberi default.
+  // Kosong berarti komponen Umum / Reusable yang dapat dipakai lintas jenis bunga.
   flowerTypeId: '',
   flowerGroup: '',
   categoryId: '',

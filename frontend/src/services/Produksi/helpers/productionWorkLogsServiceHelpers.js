@@ -342,31 +342,54 @@ const resolveWorkerCountForHpp = (workLog = {}) => {
 };
 
 const resolveWorkLogStepPayrollRuleForHpp = ({ workLog = {}, productionStep = null } = {}) => {
-  const processType = safeTrim(productionStep?.processType || workLog.stepProcessType);
-  const payrollClassification = safeTrim(
-    productionStep?.payrollClassification ||
-      workLog.stepPayrollClassification ||
-      (processType === "support_process" ? "support_fulfillment" : "direct_labor"),
+  const hasSnapshot = Boolean(
+    safeTrim(workLog.stepPayrollMode)
+    || safeTrim(workLog.stepPayrollOutputBasis)
+    || Object.prototype.hasOwnProperty.call(workLog, "stepPayrollRate")
+    || safeTrim(workLog.stepPayrollRuleSource),
   );
-  const includePayrollInHpp =
-    typeof productionStep?.includePayrollInHpp === "boolean"
-      ? productionStep.includePayrollInHpp
-      : typeof workLog.stepPayrollIncludeInHpp === "boolean"
+  const processType = safeTrim(
+    hasSnapshot ? workLog.stepProcessType : productionStep?.processType || workLog.stepProcessType,
+  );
+  const payrollClassification = safeTrim(
+    (hasSnapshot ? workLog.stepPayrollClassification : productionStep?.payrollClassification)
+      || workLog.stepPayrollClassification
+      || (processType === "support_process" ? "support_fulfillment" : "direct_labor"),
+  );
+  const includePayrollInHpp = hasSnapshot
+    ? (typeof workLog.stepPayrollIncludeInHpp === "boolean"
         ? workLog.stepPayrollIncludeInHpp
-        : payrollClassification === "direct_labor";
+        : payrollClassification === "direct_labor")
+    : (typeof productionStep?.includePayrollInHpp === "boolean"
+        ? productionStep.includePayrollInHpp
+        : payrollClassification === "direct_labor");
 
   return {
-    stepId: safeTrim(productionStep?.id || workLog.stepId),
-    stepCode: safeTrim(productionStep?.code || workLog.stepCode),
-    stepName: safeTrim(productionStep?.name || workLog.stepName),
+    stepId: safeTrim(workLog.stepId || productionStep?.id),
+    stepCode: safeTrim(workLog.stepCode || productionStep?.code),
+    stepName: safeTrim(workLog.stepName || productionStep?.name),
     stepProcessType: processType,
-    payrollMode: normalizePayrollMode(productionStep?.payrollMode || workLog.stepPayrollMode),
-    payrollRate: Math.max(0, toNumber(productionStep?.payrollRate ?? workLog.stepPayrollRate ?? 0)),
-    payrollQtyBase: Math.max(1, toNumber(productionStep?.payrollQtyBase ?? workLog.stepPayrollQtyBase ?? 1)),
-    payrollOutputBasis: normalizePayrollOutputBasis(productionStep?.payrollOutputBasis || workLog.stepPayrollOutputBasis),
+    payrollMode: normalizePayrollMode(
+      hasSnapshot ? workLog.stepPayrollMode : productionStep?.payrollMode || workLog.stepPayrollMode,
+    ),
+    payrollRate: Math.max(0, toNumber(
+      hasSnapshot ? workLog.stepPayrollRate : productionStep?.payrollRate ?? workLog.stepPayrollRate ?? 0,
+    )),
+    payrollQtyBase: Math.max(1, toNumber(
+      hasSnapshot ? workLog.stepPayrollQtyBase : productionStep?.payrollQtyBase ?? workLog.stepPayrollQtyBase ?? 1,
+    )),
+    payrollOutputBasis: normalizePayrollOutputBasis(
+      hasSnapshot
+        ? workLog.stepPayrollOutputBasis
+        : productionStep?.payrollOutputBasis || workLog.stepPayrollOutputBasis,
+    ),
     payrollClassification,
     includePayrollInHpp,
-    source: productionStep?.id ? "production_step_master" : "work_log_step_snapshot",
+    source: hasSnapshot
+      ? workLog.stepPayrollRuleSource || "work_log_step_snapshot"
+      : productionStep?.id
+        ? "production_step_master_historical_fallback"
+        : "missing_payroll_rule",
   };
 };
 

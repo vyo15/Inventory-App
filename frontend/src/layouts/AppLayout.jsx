@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MenuOutlined } from "@ant-design/icons";
 import { App as AntdApp, Button, ConfigProvider, Drawer, Layout } from "antd";
 import { useLocation } from "react-router-dom";
@@ -20,9 +20,39 @@ import {
 } from "../theme/themeMode";
 import { ActionResultModalHost } from "../utils/feedback/actionResultFeedback";
 import { SqliteRealtimeProvider } from "../context/SqliteRealtimeContext.jsx";
+import useAuth from "../hooks/useAuth";
+import useSqliteRealtime from "../hooks/useSqliteRealtime";
+import { isAuthProfileRealtimeEvent } from "../config/realtimeRouteScopes";
+import { restartSqliteRealtime } from "../services/System/sqliteRealtimeService";
 import "../App.css";
 
 const { Header, Content } = Layout;
+
+export const AuthRealtimeSync = () => {
+  const { lastEvent } = useSqliteRealtime();
+  const { reloadProfile } = useAuth();
+  const handledEventRef = useRef(null);
+
+  useEffect(() => {
+    if (!isAuthProfileRealtimeEvent(lastEvent)) return undefined;
+    const eventKey = `${lastEvent.type}:${lastEvent.revision ?? lastEvent.occurredAt ?? "auth"}`;
+    if (handledEventRef.current === eventKey) return undefined;
+    handledEventRef.current = eventKey;
+
+    let cancelled = false;
+    const synchronizeProfile = async () => {
+      await reloadProfile();
+      if (!cancelled) restartSqliteRealtime();
+    };
+    synchronizeProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [lastEvent, reloadProfile]);
+
+  return null;
+};
 
 // =========================
 // SECTION: Responsive Application Shell — AKTIF / GUARDED
@@ -66,6 +96,7 @@ const AppLayout = () => {
     <ConfigProvider theme={antdThemeConfig}>
       <AntdApp component={false}>
         <SqliteRealtimeProvider>
+          <AuthRealtimeSync />
           <div className={`app-shell ${isDarkTheme ? "dark" : "light"}`}>
           <DesktopModuleDock darkTheme={isDarkTheme} />
 

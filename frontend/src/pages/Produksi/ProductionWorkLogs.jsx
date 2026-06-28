@@ -57,10 +57,7 @@ import {
   getWorkLogReferenceData,
   updateProductionWorkLog,
 } from "../../services/Produksi/productionWorkLogsService";
-import {
-  generatePayrollLinesFromCompletedWorkLog,
-  getAllProductionPayrolls,
-} from "../../services/Produksi/productionPayrollsService";
+import { getAllProductionPayrolls } from "../../services/Produksi/productionPayrollsService";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/numberId";
 import formatCurrency from "../../utils/formatters/currencyId";
@@ -88,6 +85,41 @@ import {
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data historis decimal tidak dimigrasi otomatis.
 // Behavior: input baru no-decimal; business rules dan schema/alur data utama tetap sama.
+
+const buildMonitoringProfileSnapshot = (step = {}, profile = null) => {
+  const source = profile || {};
+  const metric = step?.monitoringMetric || "none";
+  const basisType = step?.basisType || "";
+  const isPetal = metric === "petal";
+  const isLeaf = metric === "leaf";
+  const isStem = metric === "stem";
+
+  return {
+    ...source,
+    basisType,
+    monitoringMetric: metric,
+    referenceYieldPerBaseQty: basisType === "per_meter"
+      ? isLeaf
+        ? source.leafYieldPerMeter
+        : isPetal
+          ? source.petalYieldPerMeter
+          : 0
+      : basisType === "per_rod_40cm" && isStem
+        ? source.stemYieldPerRod40cm
+        : 0,
+    flowerEquivalentPerBaseQty: basisType === "per_meter"
+      ? isLeaf
+        ? source.flowerEquivalentPerLeafMeter
+        : isPetal
+          ? source.flowerEquivalentPerPetalMeter
+          : 0
+      : basisType === "per_rod_40cm" && isStem
+        ? source.flowerEquivalentPerRod40cm
+        : 0,
+    batchLeafQty: (source.assemblyLeafPackCount || 0) * (source.leafYieldPerMeter || 0),
+    batchStemQty: source.assemblyStemQty || 0,
+  };
+};
 
 const buildWorkLogLineActionColumn = ({ deleteTitle, isLocked, onDelete, onEdit }) => ({
   title: "Aksi",
@@ -327,6 +359,19 @@ const ProductionWorkLogs = () => {
 
   const employeeOptions = toReferenceOptions(referenceData.employees || []);
 
+  const completionEmployeeState = useMemo(() => {
+    const employees = referenceData.employees || [];
+    const stepId = completingRecord?.stepId || "";
+    const assigned = stepId
+      ? employees.filter((item) => Array.isArray(item.assignedStepIds) && item.assignedStepIds.includes(stepId))
+      : [];
+    const resolved = assigned.length > 0 ? assigned : employees;
+    return {
+      options: toReferenceOptions(resolved),
+      assignmentApplied: assigned.length > 0,
+    };
+  }, [completingRecord?.stepId, referenceData.employees]);
+
   const stepOptions = toReferenceOptions(referenceData.productionSteps || []);
 
   const getTargetOptions = (targetType) =>
@@ -363,30 +408,10 @@ const ProductionWorkLogs = () => {
   const monitoringPreview = useMemo(
     () =>
       calculateProductionMonitoring(
-        {
-          ...(selectedProductionProfile || {}),
-          basisType: selectedStepForMonitoring?.basisType || '',
-          referenceYieldPerBaseQty:
-            selectedStepForMonitoring?.basisType === 'per_meter'
-              ? (selectedStepForMonitoring?.name || '').toLowerCase().includes('daun')
-                ? selectedProductionProfile?.leafYieldPerMeter
-                : selectedProductionProfile?.petalYieldPerMeter
-              : selectedStepForMonitoring?.basisType === 'per_rod_40cm'
-                ? selectedProductionProfile?.stemYieldPerRod40cm
-                : 0,
-          flowerEquivalentPerBaseQty:
-            selectedStepForMonitoring?.basisType === 'per_meter'
-              ? (selectedStepForMonitoring?.name || '').toLowerCase().includes('daun')
-                ? selectedProductionProfile?.flowerEquivalentPerLeafMeter
-                : selectedProductionProfile?.flowerEquivalentPerPetalMeter
-              : selectedStepForMonitoring?.basisType === 'per_rod_40cm'
-                ? selectedProductionProfile?.flowerEquivalentPerRod40cm
-                : 0,
-          batchLeafQty:
-            (selectedProductionProfile?.assemblyLeafPackCount || 0) *
-            (selectedProductionProfile?.leafYieldPerMeter || 0),
-          batchStemQty: selectedProductionProfile?.assemblyStemQty || 0,
-        },
+        buildMonitoringProfileSnapshot(
+          selectedStepForMonitoring || {},
+          selectedProductionProfile,
+        ),
         {
           basisType: selectedStepForMonitoring?.basisType || '',
           baseInputQty: baseInputQtyValue,
@@ -642,30 +667,7 @@ const ProductionWorkLogs = () => {
         targetName: selectedTarget?.name || "",
         targetUnit: selectedTarget?.unit || values.targetUnit || "pcs",
         productionProfileName: selectedProfile?.profileName || '',
-        productionProfile: {
-          ...(selectedProfile || {}),
-          basisType: selectedStep?.basisType || '',
-          referenceYieldPerBaseQty:
-            selectedStep?.basisType === 'per_meter'
-              ? (selectedStep?.name || '').toLowerCase().includes('daun')
-                ? selectedProfile?.leafYieldPerMeter
-                : selectedProfile?.petalYieldPerMeter
-              : selectedStep?.basisType === 'per_rod_40cm'
-                ? selectedProfile?.stemYieldPerRod40cm
-                : 0,
-          flowerEquivalentPerBaseQty:
-            selectedStep?.basisType === 'per_meter'
-              ? (selectedStep?.name || '').toLowerCase().includes('daun')
-                ? selectedProfile?.flowerEquivalentPerLeafMeter
-                : selectedProfile?.flowerEquivalentPerPetalMeter
-              : selectedStep?.basisType === 'per_rod_40cm'
-                ? selectedProfile?.flowerEquivalentPerRod40cm
-                : 0,
-          batchLeafQty:
-            (selectedProfile?.assemblyLeafPackCount || 0) *
-            (selectedProfile?.leafYieldPerMeter || 0),
-          batchStemQty: selectedProfile?.assemblyStemQty || 0,
-        },
+        productionProfile: buildMonitoringProfileSnapshot(selectedStep || {}, selectedProfile),
         stepCode: selectedStep?.code || "",
         stepName: selectedStep?.name || "",
         sequenceNo: values.sequenceNo || 1,
@@ -753,7 +755,7 @@ const ProductionWorkLogs = () => {
     setCompletingRecord(record);
     completeForm.setFieldsValue({
       goodQty: record.goodQty || 0,
-      workerIds: Array.isArray(record.workerIds) ? record.workerIds : [],
+      workerIds: Array.isArray(record.workerIds) ? record.workerIds.slice(0, 1) : [],
       notes: record.notes || '',
     });
     setCompleteModalVisible(true);
@@ -767,7 +769,7 @@ const ProductionWorkLogs = () => {
       const selectedWorkers = (referenceData.employees || [])
         .filter((item) => (values.workerIds || []).includes(item.id));
 
-      await completeProductionWorkLog(
+      const completionResult = await completeProductionWorkLog(
         completingRecord.id,
         {
           goodQty: values.goodQty,
@@ -782,47 +784,15 @@ const ProductionWorkLogs = () => {
         },
         currentUser,
       );
-      // =====================================================
-      // ACTIVE / GUARDED - auto payroll setelah Work Log selesai
-      // Fungsi blok:
-      // - membuat payroll line otomatis dari Work Log completed;
-      // - menjaga flow lama output stok tetap selesai dulu, lalu payroll dibuat dengan guard idempotent.
-      // Alasan blok ini dipakai:
-      // - regression sebelumnya Work Log selesai tetapi Payroll Produksi tetap kosong.
-      // Status:
-      // - aktif dipakai; bukan data historis dan tidak mengubah business rule stok/HPP.
-      // =====================================================
-      let payrollMessageHandled = false;
-      try {
-        const payrollResult = await generatePayrollLinesFromCompletedWorkLog(completingRecord.id, currentUser);
-        const createdPayrollCount = Number(payrollResult?.createdCount || 0);
-        const skippedPayrollCount = Number(payrollResult?.skippedCount || 0);
+      const createdPayrollCount = Number(completionResult?.payroll?.createdCount || 0);
+      const skippedPayrollCount = Number(completionResult?.payroll?.skippedCount || 0);
 
-        if (createdPayrollCount > 0) {
-          payrollMessageHandled = true;
-          message.success(`Work log selesai dan ${createdPayrollCount} line payroll dibuat.`);
-        } else if (skippedPayrollCount > 0) {
-          payrollMessageHandled = true;
-          message.info('Work log selesai. Payroll sudah pernah dibuat, tidak dibuat dobel.');
-        }
-      } catch (payrollError) {
-        // =====================================================
-        // ACTIVE / GUARDED - fallback error payroll setelah complete
-        // Fungsi blok:
-        // - menjaga user tahu bahwa Work Log sudah selesai meski auto payroll gagal;
-        // - tidak menjalankan ulang complete agar output stok tidak dobel.
-        // Alasan blok ini dipakai:
-        // - complete Work Log adalah guarded stock flow, sedangkan payroll bisa diperbaiki via task terpisah/manual.
-        // Status:
-        // - aktif sebagai guard; bukan data historis.
-        // =====================================================
-        console.error(payrollError);
-        payrollMessageHandled = true;
-        message.warning(payrollError?.message || 'Work log selesai, tetapi payroll otomatis gagal dibuat.');
-      }
-
-      if (!payrollMessageHandled) {
-        message.success('Work log selesai. Output ditambahkan dan PO ditutup.');
+      if (createdPayrollCount > 0) {
+        message.success(`Work log selesai dan ${createdPayrollCount} line payroll dibuat secara atomic.`);
+      } else if (skippedPayrollCount > 0) {
+        message.info('Work log selesai. Payroll sudah tersedia dan tidak dibuat dobel.');
+      } else {
+        message.success('Work log selesai. Output, HPP, dan status PO sudah diperbarui.');
       }
       setCompleteModalVisible(false);
       setCompletingRecord(null);
@@ -1362,10 +1332,11 @@ const ProductionWorkLogs = () => {
               <Form.Item label="Worker" name="workerIds">
                 <Select
                   mode="multiple"
+                  maxCount={1}
                   showSearch
                   optionFilterProp="label"
                   options={employeeOptions}
-                  placeholder="Pilih operator produksi..."
+                  placeholder="Pilih 1 operator produksi..."
                 />
               </Form.Item>
             </Col>
@@ -1563,7 +1534,8 @@ const ProductionWorkLogs = () => {
       <WorkLogCompleteModal
         open={completeModalVisible}
         form={completeForm}
-        employeeOptions={employeeOptions}
+        employeeOptions={completionEmployeeState.options}
+        assignmentApplied={completionEmployeeState.assignmentApplied}
         estimateInfo={renderCompleteWorkLogEstimateInfo(completingRecord)}
         onCancel={() => {
           setCompleteModalVisible(false);

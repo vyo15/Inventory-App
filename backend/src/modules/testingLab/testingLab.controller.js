@@ -23,6 +23,28 @@ const getTestingLabStatusController = async (req, res, next) => {
   }
 };
 
+
+const previewOperationalSourceController = async (_req, res, next) => {
+  try {
+    const result = await testingLabService.previewOperationalSource();
+    return success(res, "Preview database operasional berhasil dimuat", result);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const cloneOperationalSourceController = async (req, res, next) => {
+  try {
+    const result = await testingLabService.cloneOperationalSourceToSandbox({
+      confirmKeyword: req.body?.confirmKeyword,
+      actor: getActor(req),
+    });
+    return success(res, "Data operasional berhasil disalin menjadi baseline sandbox", result);
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const createTestingBaselineController = async (req, res, next) => {
   try {
     const result = await testingLabService.createTestingBaseline({
@@ -112,11 +134,13 @@ const exportLastTestingResultController = async (_req, res, next) => {
 
 module.exports = {
   cancelTestingSessionController,
+  cloneOperationalSourceController,
   completeTestingSessionController,
   createTestingBaselineController,
   exportLastTestingResultController,
   getTestingLabRuntimeStatusController,
   getTestingLabStatusController,
+  previewOperationalSourceController,
   resetSandboxToBaselineController,
   runTestingValidationController,
   setActiveTestingBaselineController,

@@ -3,6 +3,7 @@ import {
   ROLES,
   ROUTE_ACCESS_KEYS,
   canAccessRoute,
+  canEditUserProfile,
   canManageUserProfile,
   filterSidebarMenuItemsByRole,
 } from "./roleAccess";
@@ -20,12 +21,17 @@ describe("roleAccess", () => {
     expect(canAccessRoute(ROUTE_ACCESS_KEYS.DASHBOARD, "")).toBe(false);
   });
 
-  it("administrator tidak dapat mengubah role/status dirinya sendiri", () => {
+  it("administrator dapat mengedit profil sendiri tetapi tidak role/status sendiri", () => {
+    expect(canEditUserProfile({
+      actorRole: ROLES.ADMINISTRATOR,
+      targetRole: ROLES.ADMINISTRATOR,
+    })).toBe(true);
+
     expect(canManageUserProfile({
       actorRole: ROLES.ADMINISTRATOR,
-      targetRole: ROLES.USER,
-      actorUid: "user-1",
-      targetUid: "user-1",
+      targetRole: ROLES.ADMINISTRATOR,
+      actorUid: "admin-1",
+      targetUid: "admin-1",
     })).toBe(false);
 
     expect(canManageUserProfile({

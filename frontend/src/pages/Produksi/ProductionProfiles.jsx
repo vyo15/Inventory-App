@@ -11,7 +11,6 @@ import {
   Input,
   InputNumber,
   message,
-  Popconfirm,
   Row,
   Select,
   Space,
@@ -40,6 +39,7 @@ import ProductionFilterCard from '../../components/Produksi/shared/ProductionFil
 import ProductionPageHeader from '../../components/Produksi/shared/ProductionPageHeader';
 import PageSection from '../../components/Layout/Page/PageSection';
 import DataTableView from '../../components/Layout/Table/DataTableView';
+import TableActionMenu from '../../components/Layout/Table/TableActionMenu';
 import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
 import ProductionSummaryCards from '../../components/Produksi/shared/ProductionSummaryCards';
 import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
@@ -308,23 +308,38 @@ const ProductionProfiles = () => {
     {
       title: 'Aksi',
       key: 'actions',
-      width: 156,
+      width: 132,
       className: 'app-table-action-column',
       render: (_, record) => (
-        <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-          <Button className="ims-action-button" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
-            Detail
-          </Button>
-          <Button className="ims-action-button" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            Edit
-          </Button>
-          <Popconfirm
-            title={record.isActive !== false ? 'Nonaktifkan profil ini?' : 'Aktifkan profil ini?'}
-            onConfirm={() => toggleProductionProfileActive(record.id, record.isActive === false, null).then(loadData)}
-          >
-            <Button className="ims-action-button" size="small">{record.isActive !== false ? 'Nonaktifkan' : 'Aktifkan'}</Button>
-          </Popconfirm>
-        </Space>
+        <TableActionMenu
+          visibleActions={[
+            {
+              key: 'detail',
+              label: 'Detail',
+              icon: <EyeOutlined />,
+              onClick: () => handleDetail(record),
+            },
+          ]}
+          moreActions={[
+            {
+              key: 'edit',
+              label: 'Edit',
+              icon: <EditOutlined />,
+              onClick: () => handleEdit(record),
+            },
+            {
+              key: 'toggle',
+              label: record.isActive !== false ? 'Nonaktifkan' : 'Aktifkan',
+              danger: record.isActive !== false,
+              confirm: {
+                title: record.isActive !== false ? 'Nonaktifkan profil ini?' : 'Aktifkan profil ini?',
+                okText: 'Ya',
+                cancelText: 'Batal',
+              },
+              onClick: () => toggleProductionProfileActive(record.id, record.isActive === false, null).then(loadData),
+            },
+          ]}
+        />
       ),
     },
   ];
@@ -342,12 +357,33 @@ const ProductionProfiles = () => {
       { label: "Tangkai", value: (record) => formatNumber(record.stemsPerUnit || 0) },
       { label: "Target Batch", value: (record) => `${formatNumber(record.assemblyTargetOutput || 0)} bunga` },
     ],
-    actions: (record) => (
-      <Space wrap className="ims-action-group">
-        <Button className="ims-action-button" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>Detail</Button>
-        <Button className="ims-action-button" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>Edit</Button>
-      </Space>
-    ),
+    primaryActions: (record) => [
+      {
+        key: 'detail',
+        label: 'Detail',
+        icon: <EyeOutlined />,
+        onClick: () => handleDetail(record),
+      },
+    ],
+    moreActions: (record) => [
+      {
+        key: 'edit',
+        label: 'Edit',
+        icon: <EditOutlined />,
+        onClick: () => handleEdit(record),
+      },
+      {
+        key: 'toggle',
+        label: record.isActive !== false ? 'Nonaktifkan' : 'Aktifkan',
+        danger: record.isActive !== false,
+        confirm: {
+          title: record.isActive !== false ? 'Nonaktifkan profil ini?' : 'Aktifkan profil ini?',
+          okText: 'Ya',
+          cancelText: 'Batal',
+        },
+        onClick: () => toggleProductionProfileActive(record.id, record.isActive === false, null).then(loadData),
+      },
+    ],
   };
 
   const requirementMobileCardConfig = {

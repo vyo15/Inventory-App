@@ -28,15 +28,24 @@ export const PRODUCTION_STEP_PAYROLL_MODES = [
   { value: "per_batch", label: "Per Batch" },
 ];
 
+export const PRODUCTION_STEP_MONITORING_METRICS = [
+  { value: "none", label: "Tidak memakai monitoring profil" },
+  { value: "petal", label: "Hasil Kelopak" },
+  { value: "leaf", label: "Hasil Daun" },
+  { value: "stem", label: "Hasil Tangkai / Kawat" },
+];
+
 export const PROCESS_TYPE_MAP = toOptionMap(PRODUCTION_STEP_PROCESS_TYPES);
 export const BASIS_TYPE_MAP = toOptionMap(PRODUCTION_STEP_BASIS_TYPES);
 export const PAYROLL_MODE_MAP = toOptionMap(PRODUCTION_STEP_PAYROLL_MODES);
+export const MONITORING_METRIC_MAP = toOptionMap(PRODUCTION_STEP_MONITORING_METRICS);
 export const DEFAULT_PRODUCTION_STEP_FORM = {
   code: "",
   name: "",
   description: "",
   processType: "raw_to_semi",
   basisType: "per_batch",
+  monitoringMetric: "none",
   payrollMode: "per_qty",
   payrollRate: 0,
   payrollOutputBasis: "good_qty",

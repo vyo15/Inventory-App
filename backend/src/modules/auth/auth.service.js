@@ -21,6 +21,88 @@ const createAuthError = (message, code = "ERROR", statusCode = 400) => {
 const normalizeText = (value = "") => String(value || "").trim();
 const normalizeUsername = (value = "") => normalizeText(value).toLowerCase();
 const toIsoSqlDate = (date = new Date()) => date.toISOString();
+const USER_AVATAR_KEY_PREFIX = "user_avatar:";
+const USER_AVATAR_MAX_BYTES = 200 * 1024;
+const USER_AVATAR_DATA_URL_PATTERN = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/;
+
+const getUserAvatarKey = (userId) => `${USER_AVATAR_KEY_PREFIX}${userId}`;
+
+const hasValidImageSignature = (mimeType, buffer) => {
+  if (mimeType === "image/jpeg") {
+    return buffer.length >= 3
+      && buffer[0] === 0xff
+      && buffer[1] === 0xd8
+      && buffer[2] === 0xff;
+  }
+
+  if (mimeType === "image/png") {
+    return buffer.length >= 8
+      && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  }
+
+  if (mimeType === "image/webp") {
+    return buffer.length >= 12
+      && buffer.subarray(0, 4).toString("ascii") === "RIFF"
+      && buffer.subarray(8, 12).toString("ascii") === "WEBP";
+  }
+
+  return false;
+};
+
+const normalizeAvatarDataUrl = (value) => {
+  if (value === null || value === "") return null;
+  if (typeof value !== "string") {
+    throw createAuthError("Format foto profil tidak valid.", "USER_AVATAR_INVALID");
+  }
+
+  const match = value.match(USER_AVATAR_DATA_URL_PATTERN);
+  if (!match) {
+    throw createAuthError(
+      "Foto profil hanya menerima JPG, PNG, atau WebP.",
+      "USER_AVATAR_INVALID",
+    );
+  }
+
+  const [, mimeType, base64Payload] = match;
+  const imageBuffer = Buffer.from(base64Payload, "base64");
+  if (!imageBuffer.length || imageBuffer.length > USER_AVATAR_MAX_BYTES) {
+    throw createAuthError(
+      "Ukuran foto profil setelah diproses maksimal 200 KB.",
+      "USER_AVATAR_TOO_LARGE",
+    );
+  }
+
+  if (!hasValidImageSignature(mimeType, imageBuffer)) {
+    throw createAuthError("Isi file foto profil tidak valid.", "USER_AVATAR_INVALID");
+  }
+
+  return `data:${mimeType};base64,${imageBuffer.toString("base64")}`;
+};
+
+const readUserWithAvatar = (db, userId) => db.get(
+  `SELECT u.*, avatar.value AS avatar_data_url
+   FROM users u
+   LEFT JOIN app_settings avatar ON avatar.key = ?
+   WHERE u.id = ?`,
+  [getUserAvatarKey(userId), userId],
+);
+
+const writeUserAvatar = async (db, userId, avatarDataUrl) => {
+  const key = getUserAvatarKey(userId);
+  if (!avatarDataUrl) {
+    await db.run("DELETE FROM app_settings WHERE key = ?", [key]);
+    return;
+  }
+
+  await db.run(
+    `INSERT INTO app_settings (key, value, updated_at)
+     VALUES (?, ?, CURRENT_TIMESTAMP)
+     ON CONFLICT(key) DO UPDATE SET
+       value = excluded.value,
+       updated_at = CURRENT_TIMESTAMP`,
+    [key, avatarDataUrl],
+  );
+};
 
 const toSafeUser = (row = {}) => ({
   id: row.id,
@@ -34,6 +116,7 @@ const toSafeUser = (row = {}) => ({
   createdAt: row.created_at,
   updatedAt: row.updated_at,
   lastLoginAt: row.last_login_at,
+  avatarDataUrl: row.avatar_data_url || null,
 });
 
 const assertValidUsername = (username) => {
@@ -208,12 +291,21 @@ async function login(payload = {}, requestMeta = {}) {
     metadata: { username: user.username, role: user.role },
   });
 
+  const refreshedUser = await readUserWithAvatar(db, user.id);
+
     return {
       token: session.token,
       expiresAt: session.expiresAt,
-      user: toSafeUser(user),
+      user: toSafeUser(refreshedUser || user),
     };
   });
+}
+
+async function getUserProfile(userId) {
+  const db = await getDb();
+  const user = await readUserWithAvatar(db, userId);
+  if (!user) throw createAuthError("User lokal tidak ditemukan.", "NOT_FOUND", 404);
+  return toSafeUser(user);
 }
 
 async function recordLegacyBearerMigration({
@@ -278,7 +370,13 @@ async function logout({ sessionId, user } = {}) {
 
 async function listUsers() {
   const db = await getDb();
-  const rows = await db.all("SELECT * FROM users ORDER BY role ASC, username ASC LIMIT 200");
+  const rows = await db.all(
+    `SELECT u.*, avatar.value AS avatar_data_url
+     FROM users u
+     LEFT JOIN app_settings avatar ON avatar.key = '${USER_AVATAR_KEY_PREFIX}' || u.id
+     ORDER BY u.role ASC, u.username ASC
+     LIMIT 200`,
+  );
   return rows.map(toSafeUser);
 }
 
@@ -289,6 +387,9 @@ async function createUser(payload = {}, actorUser = {}) {
   const role = normalizeText(payload.role || "user");
   const status = normalizeText(payload.status || "active");
   const password = String(payload.password || "");
+  const avatarDataUrl = Object.prototype.hasOwnProperty.call(payload, "avatarDataUrl")
+    ? normalizeAvatarDataUrl(payload.avatarDataUrl)
+    : null;
 
   assertValidUsername(username);
   assertValidRole(role);
@@ -304,7 +405,8 @@ async function createUser(payload = {}, actorUser = {}) {
     [username, username, displayName, createPasswordHash(password), role, status]
   );
 
-  const user = await db.get("SELECT * FROM users WHERE id = ?", [result.lastID]);
+  if (avatarDataUrl) await writeUserAvatar(db, result.lastID, avatarDataUrl);
+  const user = await readUserWithAvatar(db, result.lastID);
 
   await createAuditLog({
     module: "auth",
@@ -313,7 +415,7 @@ async function createUser(payload = {}, actorUser = {}) {
     entityId: user.id,
     actor: actorUser.username,
     description: `User lokal ${username} dibuat`,
-    metadata: { username, role, status },
+    metadata: { username, role, status, avatarAdded: Boolean(avatarDataUrl) },
   });
 
     return toSafeUser(user);
@@ -330,6 +432,10 @@ async function updateUser(userId, payload = {}, actorUser = {}) {
   const role = normalizeText(payload.role || current.role);
   const status = normalizeText(payload.status || current.status);
   const password = String(payload.password || "");
+  const avatarWasProvided = Object.prototype.hasOwnProperty.call(payload, "avatarDataUrl");
+  const avatarDataUrl = avatarWasProvided
+    ? normalizeAvatarDataUrl(payload.avatarDataUrl)
+    : undefined;
 
   assertValidUsername(username);
   assertValidRole(role);
@@ -362,6 +468,10 @@ async function updateUser(userId, payload = {}, actorUser = {}) {
     [username, username, displayName, passwordHash, role, status, current.id]
   );
 
+  if (avatarWasProvided) {
+    await writeUserAvatar(db, current.id, avatarDataUrl);
+  }
+
   if (status !== "active") {
     await db.run(
       "UPDATE local_user_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE user_id = ? AND revoked_at IS NULL",
@@ -369,7 +479,7 @@ async function updateUser(userId, payload = {}, actorUser = {}) {
     );
   }
 
-  const updated = await db.get("SELECT * FROM users WHERE id = ?", [current.id]);
+  const updated = await readUserWithAvatar(db, current.id);
 
   await createAuditLog({
     module: "auth",
@@ -378,7 +488,14 @@ async function updateUser(userId, payload = {}, actorUser = {}) {
     entityId: current.id,
     actor: actorUser.username,
     description: `User lokal ${username} diubah`,
-    metadata: { username, role, status, passwordChanged: Boolean(password) },
+    metadata: {
+      username,
+      role,
+      status,
+      passwordChanged: Boolean(password),
+      avatarChanged: avatarWasProvided,
+      avatarRemoved: avatarWasProvided && !avatarDataUrl,
+    },
   });
 
   return toSafeUser(updated);
@@ -423,6 +540,7 @@ module.exports = {
   bootstrapAdmin,
   deleteUser,
   getAuthStatus,
+  getUserProfile,
   listUsers,
   login,
   logout,

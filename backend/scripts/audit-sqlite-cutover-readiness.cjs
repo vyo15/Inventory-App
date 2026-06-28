@@ -41,12 +41,41 @@ const parseEnvFile = (filePath) => {
 
 const frontendFiles = walkFiles(frontendRoot, (file) => /\.(js|jsx|ts|tsx)$/.test(file));
 const backendRuntimeFiles = walkFiles(path.join(backendRoot, "src"), (file) => /\.(js|cjs|mjs)$/.test(file));
-const allowedHardDeleteRuntimeFiles = new Set([
-  path.join(backendRoot, "src", "modules", "maintenance", "maintenance.purge.service.js"),
-  path.join(backendRoot, "src", "modules", "maintenance", "maintenance.dataQuality.service.js"),
+const countHardDeleteStatements = (text) => (text.match(/\bDELETE\s+FROM\b/gi) || []).length;
+const containsOnlyExpectedDeletes = (text, expectedStatements) => {
+  if (countHardDeleteStatements(text) !== expectedStatements.length) return false;
+  return expectedStatements.every((statement) => text.includes(statement));
+};
+const allowedHardDeleteRuntimeRules = new Map([
+  [
+    path.join(backendRoot, "src", "modules", "maintenance", "maintenance.purge.service.js"),
+    () => true,
+  ],
+  [
+    path.join(backendRoot, "src", "modules", "maintenance", "maintenance.dataQuality.service.js"),
+    () => true,
+  ],
+  [
+    path.join(backendRoot, "src", "modules", "auth", "auth.service.js"),
+    (text) => containsOnlyExpectedDeletes(text, ["DELETE FROM app_settings WHERE key = ?"]),
+  ],
+  [
+    path.join(backendRoot, "src", "modules", "testingLab", "testingLab.operationalClone.service.js"),
+    (text) => containsOnlyExpectedDeletes(text, [
+      "DELETE FROM local_user_sessions",
+      "DELETE FROM backup_logs",
+      "DELETE FROM restore_logs",
+      "DELETE FROM app_settings WHERE key LIKE 'testing_lab.%'",
+      "DELETE FROM audit_logs WHERE module = 'testing_lab'",
+      "DELETE FROM audit_logs WHERE module = 'maintenance' AND entity_type IN ('backup_log', 'restore_log')",
+    ]),
+  ],
 ]);
 const hardDeleteRuntimeFiles = backendRuntimeFiles.filter((file) => /\bDELETE\s+FROM\b/i.test(readText(file)));
-const unguardedHardDeleteRuntimeFiles = hardDeleteRuntimeFiles.filter((file) => !allowedHardDeleteRuntimeFiles.has(file));
+const unguardedHardDeleteRuntimeFiles = hardDeleteRuntimeFiles.filter((file) => {
+  const rule = allowedHardDeleteRuntimeRules.get(file);
+  return !rule || !rule(readText(file));
+});
 const oldRemoteRuntimeFiles = frontendFiles.filter((file) => {
   const text = readText(file).toLowerCase();
   return text.includes(`${oldRemoteToken}/${oldRemoteStoreToken}`) ||
@@ -160,7 +189,7 @@ const result = {
   oldBrowserDbRuntimeFileCount: oldBrowserDbRuntimeFiles.length,
   directSqliteFrontendFileCount: frontendFiles.filter((file) => /adapters\/sqlite|requestSqliteApi/.test(readText(file))).length,
   hardDeletePolicy: {
-    mode: "maintenance_only",
+    mode: "guarded_or_exact_scoped_cleanup",
     detectedFiles: hardDeleteRuntimeFiles.map((file) => path.relative(root, file)),
     unguardedFiles: unguardedHardDeleteRuntimeFiles.map((file) => path.relative(root, file)),
   },

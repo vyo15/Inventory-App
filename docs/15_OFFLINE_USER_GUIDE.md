@@ -512,16 +512,16 @@ Status Maintenance menampilkan antrean database aktif, jumlah request menunggu, 
    Folder `logs/` adalah runtime-only dan tidak ikut clean source ZIP/Git archive.
 4. Jika queue tidak bergerak, hentikan transaksi baru, buat salinan backup terbaru bila memungkinkan, lalu restart backend secara terkontrol.
 
-## Sinkronisasi realtime antar laptop dan HP
+## Sinkronisasi realtime antar laptop, HP, dan tab yang sedang menyimpan
 
-IMS sekarang memakai SSE agar perubahan dari perangkat lain terlihat tanpa menekan Muat Ulang pada setiap halaman.
+IMS memakai SSE agar perubahan dari tab yang sedang menyimpan, tab lain, maupun perangkat lain terlihat tanpa menekan Muat Ulang pada setiap halaman.
 
 1. Pastikan laptop backend dan perangkat lain berada di jaringan yang sama serta user sudah login.
-2. Saat perangkat lain menambah/mengubah/menonaktifkan data, halaman yang relevan akan memuat ulang otomatis.
-3. Jika Anda sedang mengetik atau membuka modal/drawer, IMS tidak langsung mengganti halaman. Pesan `Data baru tersedia` akan muncul; simpan/batalkan form lalu tekan `Muat Ulang Data`.
-4. Setiap tab browser memiliki koneksi sendiri. Tab hasil duplicate tetap menerima perubahan karena IMS membuat identitas halaman baru pada setiap page load.
+2. Saat data berhasil disimpan, tab pengirim dan perangkat lain menerima event setelah database commit. Beberapa halaman langsung memakai response save agar perubahan tampil seketika, lalu SSE melakukan reconciliation ulang.
+3. Jika Anda sedang mengetik atau membuka modal/drawer, IMS tidak langsung mengganti halaman. Pesan `Data baru tersedia` akan muncul; setelah form ditutup atau tidak lagi aktif, data dimuat ulang otomatis. Tombol `Muat Ulang Data` tetap tersedia sebagai kontrol manual.
+4. Setiap tab browser memiliki koneksi sendiri. Tab hasil duplicate tetap menerima perubahan karena IMS membuat identitas halaman baru pada setiap page load. Request simpan membawa `X-IMS-Client-ID` otomatis; identitas tab tetap stabil selama halaman hidup meskipun penyimpanan browser dibersihkan atau diblokir.
 5. Jika koneksi realtime terputus, IMS mencoba menyambung ulang dan memakai satu refresh fallback saat tab terlihat. Halaman tidak lagi menjalankan polling 15 detik masing-masing.
-6. Jika administrator mengubah role atau menonaktifkan akun yang sedang dipakai, tab user akan reload dan memvalidasi session kembali. Login/logout user lain tidak memaksa semua perangkat reload.
+6. Jika administrator mengubah nama, foto, role, atau status akun, profile aktif dimuat ulang dan koneksi SSE disambungkan kembali agar role koneksi tidak stale. User nonaktif kembali ke auth gate; login/logout user lain tidak memaksa semua perangkat reload.
 7. Jika masa session habis, koneksi realtime ditutup otomatis dan halaman reload ke pemeriksaan login.
 8. Setelah restore database, semua perangkat akan reload agar tidak menampilkan state database lama.
 
@@ -593,13 +593,17 @@ Tunggu log `[dev] seluruh layanan berhenti.` sebelum menjalankan mode berikutnya
 
 ### Alur penggunaan
 
-1. Siapkan master, stok awal, modal/HPP, katalog Supplier, BOM, pekerja, dan akun testing melalui menu normal.
-2. Buka `Utilities -> Lab Pengujian` dan klik **Buat Baseline Baru**.
-3. Ketik `BUAT BASELINE TESTING`. Sistem membuat backup tipe `test`, memvalidasi checksum/integrity, dan menyimpannya sebagai baseline aktif.
-4. Pilih skenario, lalu lakukan langkah melalui menu operasional resmi. Lab hanya mencatat snapshot; Lab tidak menyisipkan transaksi langsung ke tabel.
-5. Klik **Selesaikan & Validasi** untuk melihat diff serta hasil integrity, foreign key, projection stok, saldo stok, dan ledger.
-6. Gunakan **Export Hasil** untuk menyimpan laporan JSON sesi.
-7. Untuk mengulang testing, klik **Reset ke Baseline** dan ketik `RESET SANDBOX`.
+1. Buka `Utilities -> Lab Pengujian`.
+2. Cara tercepat: klik **Ambil Data Operasional**. Sistem menampilkan preview sumber, jumlah data, schema, dan integrity tanpa mengubah database asli.
+3. Ketik `SALIN DATA OPERASIONAL`. Sistem membuat snapshot SQLite read-only yang konsisten, membersihkan session login serta histori backup/restore operasional beserta audit teknis yang menunjuk ke file tersebut, membuat backup sandbox sebelum penggantian, lalu menetapkan hasilnya sebagai baseline tipe `test`.
+4. Setelah clone selesai, aplikasi meminta login ulang karena seluruh session hasil clone sengaja dicabut.
+5. Alternatif: siapkan master/stok khusus testing di sandbox, lalu klik **Buat dari Sandbox Saat Ini** dan ketik `BUAT BASELINE TESTING`.
+6. Pilih skenario, lalu lakukan langkah melalui menu operasional resmi. Lab hanya mencatat snapshot; Lab tidak menyisipkan transaksi langsung ke tabel.
+7. Klik **Selesaikan & Validasi** untuk melihat diff serta hasil integrity, foreign key, projection stok, saldo stok, dan ledger.
+8. Gunakan **Export Hasil** untuk menyimpan laporan JSON sesi.
+9. Untuk mengulang testing, klik **Reset ke Baseline** dan ketik `RESET SANDBOX`.
+
+Clone operasional bersifat satu arah: operasional → sandbox. Perubahan testing tidak pernah dikirim kembali. Clone ditolak bila source sama dengan sandbox, source tidak valid, versi schema tidak sama dengan sandbox, masih ada sesi testing aktif, atau masih ada request tulis berjalan. Database sumber dibuka read-only dan disnapshot memakai SQLite `VACUUM INTO`, sehingga WAL yang sudah commit ikut terbaca tanpa copy file aktif secara mentah.
 
 Saat reset, backend menolak mutation baru, memastikan tidak ada request write yang masih berjalan, membuat backup `pre-reset`, menjalankan restore guarded, mencatat audit, lalu meminta seluruh perangkat memuat ulang database. Jika ada transaksi yang masih diproses, reset ditolak dan harus dicoba kembali setelah operasi selesai.
 

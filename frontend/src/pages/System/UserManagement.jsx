@@ -1,22 +1,33 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  Avatar,
+  Badge,
   Button,
+  Dropdown,
+  Empty,
   Form,
   Input,
   Modal,
+  Pagination,
   Select,
   Space,
   Tag,
   Tooltip,
   Typography,
+  Upload,
   message,
 } from "antd";
 import {
-  EditOutlined,
-  PlusOutlined,
-  StopOutlined,
+  CameraOutlined,
   CheckCircleOutlined,
+  DeleteOutlined,
+  EditOutlined,
   LockOutlined,
+  MoreOutlined,
+  PlusOutlined,
+  SearchOutlined,
+  StopOutlined,
+  TeamOutlined,
 } from "@ant-design/icons";
 import useAuth from "../../hooks/useAuth";
 import {
@@ -25,6 +36,7 @@ import {
   USER_STATUS,
   USER_STATUS_LABELS,
   getAssignableRolesForActor,
+  canEditUserProfile,
   canManageUserProfile,
 } from "../../utils/auth/roleAccess";
 import {
@@ -40,13 +52,17 @@ import {
 import PageFormModal from "../../components/Layout/Forms/PageFormModal";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
-import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
-import DataTableView from "../../components/Layout/Table/DataTableView";
-import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { DataRefreshIndicator } from "../../components/Layout/Feedback/DataLoadingState";
 import { getLocalPasswordPolicyHint, validateLocalPasswordPolicy } from "../../services/System/localAuthService";
+import "./UserManagement.css";
 
 const { Text } = Typography;
 const PASSWORD_POLICY_HINT = getLocalPasswordPolicyHint();
+const PAGE_SIZE = 9;
+const MAX_AVATAR_INPUT_BYTES = 2 * 1024 * 1024;
+const MAX_AVATAR_OUTPUT_BYTES = 180 * 1024;
+const AVATAR_SIZE = 256;
+const AVATAR_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 const normalizeUsernameValue = (value = "") => String(value || "").trim().toLowerCase();
 
@@ -65,19 +81,9 @@ const validateLocalPasswordField = (_, value) => {
   return Promise.resolve();
 };
 
-// Mode modal user: create untuk akun baru, edit untuk profile existing.
 const FORM_MODE = {
   CREATE: "create",
   EDIT: "edit",
-};
-
-const getRoleColor = (role) => {
-  if (role === ROLES.ADMINISTRATOR) return "blue";
-  return "green";
-};
-
-const getStatusColor = (status) => {
-  return status === USER_STATUS.ACTIVE ? "green" : "default";
 };
 
 const getUserManagementActionErrorMessage = (error = {}) => {
@@ -98,7 +104,123 @@ const getUserManagementActionErrorMessage = (error = {}) => {
   return error.message || "Aksi User Management gagal.";
 };
 
-// Halaman guarded untuk mengelola akun lokal IMS.
+const getInitials = (displayName = "", username = "") => {
+  const source = String(displayName || username || "User IMS").trim();
+  return source
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0))
+    .join("")
+    .toUpperCase() || "UI";
+};
+
+const upsertUserRecord = (records = [], nextUser = null) => {
+  if (!nextUser) return records;
+  const nextKey = nextUser.authUid || nextUser.id;
+  const existingIndex = records.findIndex((record) => (
+    (record.authUid || record.id) === nextKey
+  ));
+  const nextRecords = existingIndex >= 0
+    ? records.map((record, index) => (index === existingIndex ? nextUser : record))
+    : [...records, nextUser];
+
+  return nextRecords.sort((left, right) => {
+    const roleOrder = String(left.role || "").localeCompare(String(right.role || ""));
+    if (roleOrder !== 0) return roleOrder;
+    return String(left.username || "").localeCompare(String(right.username || ""));
+  });
+};
+
+const formatUserDate = (value, fallback = "Belum ada") => {
+  if (!value) return fallback;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return fallback;
+
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+};
+
+const formatLastLogin = (value) => {
+  if (!value) return "Belum pernah login";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Belum pernah login";
+
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+};
+
+const getDataUrlByteSize = (dataUrl = "") => {
+  const base64 = String(dataUrl).split(",")[1] || "";
+  const padding = (base64.match(/=+$/)?.[0] || "").length;
+  return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
+};
+
+const loadImageFile = (file) => new Promise((resolve, reject) => {
+  const objectUrl = URL.createObjectURL(file);
+  const image = new Image();
+
+  image.onload = () => {
+    URL.revokeObjectURL(objectUrl);
+    resolve(image);
+  };
+  image.onerror = () => {
+    URL.revokeObjectURL(objectUrl);
+    reject(new Error("Foto tidak dapat dibaca. Pilih file gambar lain."));
+  };
+  image.src = objectUrl;
+});
+
+const createProfileAvatarDataUrl = async (file) => {
+  if (!AVATAR_MIME_TYPES.includes(file?.type)) {
+    throw new Error("Format foto tidak didukung. Gunakan JPG, PNG, atau WebP.");
+  }
+  if (!file.size || file.size > MAX_AVATAR_INPUT_BYTES) {
+    throw new Error("Ukuran foto maksimal 2 MB.");
+  }
+
+  const image = await loadImageFile(file);
+  const sourceSize = Math.min(image.naturalWidth, image.naturalHeight);
+  if (!sourceSize) throw new Error("Dimensi foto tidak valid.");
+
+  const sourceX = Math.max(0, (image.naturalWidth - sourceSize) / 2);
+  const sourceY = Math.max(0, (image.naturalHeight - sourceSize) / 2);
+  const canvas = document.createElement("canvas");
+  canvas.width = AVATAR_SIZE;
+  canvas.height = AVATAR_SIZE;
+
+  const context = canvas.getContext("2d", { alpha: false });
+  if (!context) throw new Error("Browser tidak dapat memproses foto.");
+
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, AVATAR_SIZE, AVATAR_SIZE);
+  context.drawImage(
+    image,
+    sourceX,
+    sourceY,
+    sourceSize,
+    sourceSize,
+    0,
+    0,
+    AVATAR_SIZE,
+    AVATAR_SIZE,
+  );
+
+  for (const quality of [0.82, 0.72, 0.62, 0.52]) {
+    const dataUrl = canvas.toDataURL("image/webp", quality);
+    if (getDataUrlByteSize(dataUrl) <= MAX_AVATAR_OUTPUT_BYTES) return dataUrl;
+  }
+
+  throw new Error("Foto masih terlalu besar setelah diproses. Pilih foto lain.");
+};
+
 const UserManagement = () => {
   const { profile, reloadProfile } = useAuth();
   const [form] = Form.useForm();
@@ -111,9 +233,19 @@ const UserManagement = () => {
   const [statusChangeRequest, setStatusChangeRequest] = useState(null);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [searchValue, setSearchValue] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [avatarDraft, setAvatarDraft] = useState(null);
+  const [avatarDirty, setAvatarDirty] = useState(false);
+  const [isProcessingAvatar, setIsProcessingAvatar] = useState(false);
 
   const actorRole = profile?.role;
   const actorUid = profile?.authUid || profile?.id;
+  const selectedUserUid = selectedUser?.authUid || selectedUser?.id;
+  const isEditingSelf = formMode === FORM_MODE.EDIT
+    && Boolean(actorUid && selectedUserUid && actorUid === selectedUserUid);
 
   const assignableRoleOptions = useMemo(() => {
     return getAssignableRolesForActor(actorRole).map((role) => ({
@@ -121,6 +253,34 @@ const UserManagement = () => {
       value: role,
     }));
   }, [actorRole]);
+
+  const activeAdministratorCount = useMemo(() => {
+    return users.filter(
+      (userProfile) => userProfile.role === ROLES.ADMINISTRATOR
+        && userProfile.status === USER_STATUS.ACTIVE,
+    ).length;
+  }, [users]);
+
+  const filteredUsers = useMemo(() => {
+    const normalizedSearch = searchValue.trim().toLowerCase();
+    return users.filter((record) => {
+      const matchesSearch = !normalizedSearch
+        || `${record.displayName || ""} ${record.username || ""}`.toLowerCase().includes(normalizedSearch);
+      const matchesRole = roleFilter === "all" || record.role === roleFilter;
+      const matchesStatus = statusFilter === "all" || record.status === statusFilter;
+      return matchesSearch && matchesRole && matchesStatus;
+    });
+  }, [roleFilter, searchValue, statusFilter, users]);
+
+  const pagedUsers = useMemo(() => {
+    const startIndex = (currentPage - 1) * PAGE_SIZE;
+    return filteredUsers.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [currentPage, filteredUsers]);
+
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
+    if (currentPage > maxPage) setCurrentPage(maxPage);
+  }, [currentPage, filteredUsers.length]);
 
   const usernameAlreadyExists = (value) => {
     const username = normalizeUsernameValue(value);
@@ -130,7 +290,6 @@ const UserManagement = () => {
       const currentUsername = normalizeUsernameValue(userRecord.usernameLower || userRecord.username);
       const currentAuthUid = userRecord.authUid || userRecord.id;
       const selectedAuthUid = selectedUser?.authUid || selectedUser?.id;
-
       return currentUsername === username && currentAuthUid !== selectedAuthUid;
     });
   };
@@ -141,18 +300,8 @@ const UserManagement = () => {
     return Promise.reject(new Error("Username sudah terdaftar."));
   };
 
-  // UI guard: jangan nonaktifkan administrator aktif terakhir.
-  const activeAdministratorCount = useMemo(() => {
-    return users.filter(
-      (userProfile) =>
-        userProfile.role === ROLES.ADMINISTRATOR &&
-        userProfile.status === USER_STATUS.ACTIVE,
-    ).length;
-  }, [users]);
-
   const loadUsers = async () => {
     setIsLoading(true);
-
     try {
       const result = await listSystemUsers(profile);
       setUsers(result);
@@ -165,24 +314,26 @@ const UserManagement = () => {
   };
 
   useEffect(() => {
-    if (profile?.role) {
-      loadUsers();
-    }
+    if (profile?.role) loadUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.role]);
+
+  const resetAvatarDraft = (value = null) => {
+    setAvatarDraft(value || null);
+    setAvatarDirty(false);
+    setIsProcessingAvatar(false);
+  };
 
   const openCreateModal = () => {
     setFormMode(FORM_MODE.CREATE);
     setSelectedUser(null);
     form.resetFields();
-    const defaultCreateRole = assignableRoleOptions.some(
-      (option) => option.value === ROLES.USER,
-    )
+    resetAvatarDraft(null);
+    const defaultCreateRole = assignableRoleOptions.some((option) => option.value === ROLES.USER)
       ? ROLES.USER
       : assignableRoleOptions[0]?.value;
 
     form.setFieldsValue({
-      // AKTIF/GUARDED: default dibuat sebagai User agar admin tidak tidak sengaja membuat akun admin baru.
       role: defaultCreateRole || ROLES.USER,
       status: USER_STATUS.ACTIVE,
     });
@@ -193,6 +344,7 @@ const UserManagement = () => {
     setFormMode(FORM_MODE.EDIT);
     setSelectedUser(userRecord);
     form.resetFields();
+    resetAvatarDraft(userRecord.avatarDataUrl);
     form.setFieldsValue({
       authUid: userRecord.authUid,
       username: userRecord.username,
@@ -209,98 +361,78 @@ const UserManagement = () => {
     setIsModalOpen(false);
     setSelectedUser(null);
     form.resetFields();
+    resetAvatarDraft(null);
   };
 
-  // Password hanya dikirim ke layanan auth lokal, tidak disimpan di state.
+  const handleAvatarUpload = async (file) => {
+    setIsProcessingAvatar(true);
+    try {
+      const avatarDataUrl = await createProfileAvatarDataUrl(file);
+      setAvatarDraft(avatarDataUrl);
+      setAvatarDirty(true);
+      message.success("Foto profil siap disimpan.");
+    } catch (error) {
+      message.error(error.message || "Foto profil gagal diproses.");
+    } finally {
+      setIsProcessingAvatar(false);
+    }
+    return Upload.LIST_IGNORE;
+  };
+
+  const handleRemoveAvatar = () => {
+    setAvatarDraft(null);
+    setAvatarDirty(true);
+  };
+
   const handleSaveProfile = async (values) => {
     setIsSaving(true);
-
     try {
+      const payload = { ...values };
+      if (formMode === FORM_MODE.EDIT && isEditingSelf) {
+        delete payload.username;
+        delete payload.role;
+        delete payload.status;
+      }
+      if (formMode === FORM_MODE.CREATE && avatarDraft) {
+        payload.avatarDataUrl = avatarDraft;
+      }
+      if (formMode === FORM_MODE.EDIT && avatarDirty) {
+        payload.avatarDataUrl = avatarDraft;
+      }
+
+      let savedUser = null;
       if (formMode === FORM_MODE.CREATE) {
-        await createManualUserProfile(values, profile);
+        savedUser = await createManualUserProfile(payload, profile);
         message.success("Akun lokal berhasil dibuat.");
       } else if (selectedUser) {
-        await updateSystemUserProfile(selectedUser, values, profile);
+        savedUser = await updateSystemUserProfile(selectedUser, payload, profile);
         message.success("Akun lokal berhasil diperbarui.");
       }
 
+      if (savedUser) setUsers((currentUsers) => upsertUserRecord(currentUsers, savedUser));
       closeModal();
-      await loadUsers();
-      await reloadProfile();
+      if (formMode === FORM_MODE.EDIT && isEditingSelf) void reloadProfile();
+      void loadUsers();
     } catch (error) {
       console.error("[UserManagement] Gagal menyimpan user.", error);
-
       if (formMode === FORM_MODE.CREATE && isUsernameAlreadyUsedError(error)) {
         message.error(
           "Username sudah dipakai profile user lain. "
-            + "Gunakan username unik atau bersihkan profile lama secara manual sebelum membuat profile baru."
+            + "Gunakan username unik atau bersihkan profile lama secara manual sebelum membuat profile baru.",
         );
         return;
       }
-
       message.error(getUserManagementActionErrorMessage(error));
     } finally {
       setIsSaving(false);
     }
   };
 
-
-  const handleOpenStatusModal = (userRecord) => {
-    const canManage = canManageUserProfile({
+  const getActionState = (record) => {
+    const canEdit = canEditUserProfile({
       actorRole,
-      targetRole: userRecord.role,
-      targetUid: userRecord.authUid,
-      actorUid,
+      targetRole: record.role,
     });
-
-    if (!canManage) {
-      message.warning("Role aktif tidak boleh mengubah status profile ini.");
-      return;
-    }
-
-    setStatusChangeRequest({
-      userRecord,
-      nextStatus:
-        userRecord.status === USER_STATUS.ACTIVE
-          ? USER_STATUS.INACTIVE
-          : USER_STATUS.ACTIVE,
-    });
-    setIsStatusModalOpen(true);
-  };
-
-  const handleCloseStatusModal = () => {
-    if (isUpdatingStatus) return;
-
-    setIsStatusModalOpen(false);
-    setStatusChangeRequest(null);
-  };
-
-  const handleConfirmStatusChange = async () => {
-    if (!statusChangeRequest?.userRecord) return;
-
-    setIsUpdatingStatus(true);
-
-    try {
-      await updateSystemUserStatus(
-        statusChangeRequest.userRecord,
-        statusChangeRequest.nextStatus,
-        profile,
-      );
-      message.success("Status user berhasil diperbarui.");
-      setIsStatusModalOpen(false);
-      setStatusChangeRequest(null);
-      await loadUsers();
-    } catch (error) {
-      console.error("[UserManagement] Gagal mengubah status user.", error);
-      message.error(getUserManagementActionErrorMessage(error));
-    } finally {
-      setIsUpdatingStatus(false);
-    }
-  };
-
-
-  // Satu renderer dipakai tabel desktop dan mobile card agar guard aksi selalu konsisten.
-  const renderUserActions = (record) => {
     const canManage = canManageUserProfile({
       actorRole,
       targetRole: record.role,
@@ -308,8 +440,7 @@ const UserManagement = () => {
       actorUid,
     });
     const isSelfProfile = Boolean(actorUid && record.authUid === actorUid);
-    const isLastActiveAdministrator =
-      record.role === ROLES.ADMINISTRATOR
+    const isLastActiveAdministrator = record.role === ROLES.ADMINISTRATOR
       && record.status === USER_STATUS.ACTIVE
       && activeAdministratorCount <= 1;
     const statusGuardReason = record.status === USER_STATUS.ACTIVE && isSelfProfile
@@ -320,130 +451,177 @@ const UserManagement = () => {
           ? "Role aktif tidak boleh mengubah status akun ini."
           : "";
 
+    return { canEdit, canManage, isSelfProfile, statusGuardReason };
+  };
+
+  const handleOpenStatusModal = (userRecord) => {
+    const { canManage, statusGuardReason } = getActionState(userRecord);
+    if (!canManage || statusGuardReason) {
+      message.warning(statusGuardReason || "Role aktif tidak boleh mengubah status profile ini.");
+      return;
+    }
+
+    setStatusChangeRequest({
+      userRecord,
+      nextStatus: userRecord.status === USER_STATUS.ACTIVE
+        ? USER_STATUS.INACTIVE
+        : USER_STATUS.ACTIVE,
+    });
+    setIsStatusModalOpen(true);
+  };
+
+  const handleCloseStatusModal = () => {
+    if (isUpdatingStatus) return;
+    setIsStatusModalOpen(false);
+    setStatusChangeRequest(null);
+  };
+
+  const handleConfirmStatusChange = async () => {
+    if (!statusChangeRequest?.userRecord) return;
+    setIsUpdatingStatus(true);
+
+    try {
+      const updatedUser = await updateSystemUserStatus(
+        statusChangeRequest.userRecord,
+        statusChangeRequest.nextStatus,
+        profile,
+      );
+      setUsers((currentUsers) => upsertUserRecord(currentUsers, updatedUser));
+      message.success("Status user berhasil diperbarui.");
+      setIsStatusModalOpen(false);
+      setStatusChangeRequest(null);
+      void loadUsers();
+    } catch (error) {
+      console.error("[UserManagement] Gagal mengubah status user.", error);
+      message.error(getUserManagementActionErrorMessage(error));
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const renderUserCard = (record) => {
+    const { canEdit, isSelfProfile, statusGuardReason } = getActionState(record);
+    const isActive = record.status === USER_STATUS.ACTIVE;
+    const menuItems = [
+      {
+        key: "edit",
+        icon: <EditOutlined />,
+        label: isSelfProfile ? "Edit profil saya" : "Edit akun",
+        disabled: !canEdit,
+      },
+      { type: "divider" },
+      {
+        key: "status",
+        icon: isActive ? <StopOutlined /> : <CheckCircleOutlined />,
+        label: isActive ? "Nonaktifkan akun" : "Aktifkan akun",
+        danger: isActive,
+        disabled: Boolean(statusGuardReason),
+        title: statusGuardReason || undefined,
+      },
+    ];
+
     return (
-      <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-        <Button
-          className="ims-action-button"
-          icon={<EditOutlined />}
-          disabled={!canManage}
-          onClick={() => openEditModal(record)}
-        >
-          Edit
-        </Button>
-        <Tooltip title={statusGuardReason || (record.status === USER_STATUS.ACTIVE
-          ? "Nonaktifkan akun tanpa menghapus histori."
-          : "Aktifkan kembali akun lokal.")}>
-          <span style={{ display: "block", width: "100%" }}>
-            <Button
-              className="ims-action-button"
-              icon={record.status === USER_STATUS.ACTIVE ? <StopOutlined /> : <CheckCircleOutlined />}
-              disabled={Boolean(statusGuardReason)}
-              danger={record.status === USER_STATUS.ACTIVE}
-              loading={
-                isUpdatingStatus
-                && statusChangeRequest?.userRecord?.authUid === record.authUid
-              }
-              onClick={() => handleOpenStatusModal(record)}
+      <article
+        className={`ims-user-card${isSelfProfile ? " ims-user-card--self" : ""}`}
+        key={record.authUid || record.id}
+      >
+        <div className="ims-user-card-head">
+          <div className="ims-user-identity">
+            <Badge
+              dot
+              color={isActive ? "var(--ims-color-primary)" : "var(--ims-text-muted)"}
+              offset={[-4, 47]}
             >
-              {record.status === USER_STATUS.ACTIVE ? "Nonaktifkan" : "Aktifkan"}
-            </Button>
-          </span>
-        </Tooltip>
-      </Space>
+              <Avatar
+                className="ims-user-avatar"
+                size={56}
+                src={record.avatarDataUrl || undefined}
+                alt={`Foto ${record.displayName || record.username || "user"}`}
+              >
+                {getInitials(record.displayName, record.username)}
+              </Avatar>
+            </Badge>
+            <div className="ims-user-identity-copy">
+              <h3 title={record.displayName || "User IMS"}>{record.displayName || "User IMS"}</h3>
+              <p title={`@${record.username || "-"}`}>@{record.username || "-"}</p>
+            </div>
+          </div>
+
+          <Dropdown
+            trigger={["click"]}
+            menu={{
+              items: menuItems,
+              onClick: ({ key }) => {
+                if (key === "edit") openEditModal(record);
+                if (key === "status") handleOpenStatusModal(record);
+              },
+            }}
+          >
+            <Button
+              className="ims-user-more-button"
+              type="text"
+              icon={<MoreOutlined />}
+              aria-label={`Aksi akun ${record.displayName || record.username || "user"}`}
+            />
+          </Dropdown>
+        </div>
+
+        <div className="ims-user-badges">
+          <Tag
+            className={`ims-user-role-tag ims-user-role-tag--${record.role === ROLES.ADMINISTRATOR ? "administrator" : "user"}`}
+          >
+            {ROLE_LABELS[record.role] || record.role}
+          </Tag>
+          <Tag
+            className={`ims-user-status-tag ims-user-status-tag--${isActive ? "active" : "inactive"}`}
+          >
+            {USER_STATUS_LABELS[record.status] || record.status}
+          </Tag>
+          {isSelfProfile ? <Tag className="ims-user-self-tag">Akun Anda</Tag> : null}
+        </div>
+
+        <div className="ims-user-meta-grid">
+          <div className="ims-user-meta">
+            <span>Role</span>
+            <strong>{ROLE_LABELS[record.role] || record.role || "-"}</strong>
+          </div>
+          <div className="ims-user-meta">
+            <span>Dibuat</span>
+            <strong>{formatUserDate(record.createdAt, "-" )}</strong>
+          </div>
+        </div>
+
+        <div className="ims-user-card-footer">
+          <div className="ims-user-last-login">
+            <span>Login terakhir</span>
+            <strong>{formatLastLogin(record.lastLoginAt)}</strong>
+          </div>
+          <Tooltip title={canEdit ? (isSelfProfile ? "Edit profil saya" : "Edit akun lokal") : "Role aktif tidak boleh mengubah akun ini."}>
+            <span>
+              <Button
+                className="ims-user-edit-button"
+                icon={<EditOutlined />}
+                disabled={!canEdit}
+                onClick={() => openEditModal(record)}
+              >
+                Edit
+              </Button>
+            </span>
+          </Tooltip>
+        </div>
+      </article>
     );
   };
 
-  // Kolom ringkas; guard RBAC dan handler aksi tetap sama.
-  const columns = [
-    {
-      title: "User",
-      key: "userIdentity",
-      render: (_, record) => (
-        <Space direction="vertical" size={4} style={{ width: "100%" }}>
-          <Space direction="vertical" size={0} style={{ width: "100%" }}>
-            <Text strong ellipsis={{ tooltip: record.displayName }} style={{ maxWidth: "100%" }}>
-              {record.displayName}
-            </Text>
-            <Text type="secondary" ellipsis={{ tooltip: `@${record.username || "-"}` }} style={{ maxWidth: "100%" }}>
-              @{record.username || "-"}
-            </Text>
-          </Space>
-        </Space>
-      ),
-    },
-    {
-      title: "Role / Status",
-      key: "roleStatus",
-      width: 180,
-      render: (_, record) => (
-        <Space direction="vertical" size={6}>
-          <Tag color={getRoleColor(record.role)}>{ROLE_LABELS[record.role] || record.role}</Tag>
-          <Tag color={getStatusColor(record.status)}>
-            {USER_STATUS_LABELS[record.status] || record.status}
-          </Tag>
-        </Space>
-      ),
-    },
-    {
-      title: "Aksi",
-      key: "actions",
-      width: 210,
-      render: (_, record) => renderUserActions(record),
-    },
-  ];
-
-  const summaryItems = [
-    {
-      key: "total-users",
-      title: "Total Akun",
-      value: users.length,
-      subtitle: "Akun terdaftar.",
-      accent: "primary",
-    },
-    {
-      key: "active-users",
-      title: "User Aktif",
-      value: users.filter((item) => item.status === USER_STATUS.ACTIVE).length,
-      subtitle: "Bisa login.",
-      accent: "success",
-    },
-    {
-      key: "active-admins",
-      title: "Administrator Aktif",
-      value: activeAdministratorCount,
-      subtitle: "Guard akses.",
-      accent: "warning",
-    },
-    {
-      key: "role-users",
-      title: "Role User",
-      value: users.filter((item) => item.role === ROLES.USER).length,
-      subtitle: "Operasional.",
-      accent: "default",
-    },
-  ];
-
-  const userMobileCardConfig = {
-    title: (record) => record.displayName || '-',
-    subtitle: (record) => [`@${record.username || '-'}`],
-    tags: (record) => [
-      <Tag key="role" color={getRoleColor(record.role)}>{ROLE_LABELS[record.role] || record.role}</Tag>,
-      <Tag key="status" color={getStatusColor(record.status)}>
-        {USER_STATUS_LABELS[record.status] || record.status}
-      </Tag>,
-    ],
-    meta: [
-      { label: 'Role', value: (record) => ROLE_LABELS[record.role] || record.role || '-' },
-      { label: 'Status', value: (record) => USER_STATUS_LABELS[record.status] || record.status || '-' },
-    ],
-    actions: (record) => renderUserActions(record),
-  };
+  const displayNameValue = Form.useWatch("displayName", form);
+  const usernameValue = Form.useWatch("username", form);
+  const modalInitials = getInitials(displayNameValue, usernameValue);
 
   return (
-    <div className="page-container">
+    <div className="page-container ims-user-management">
       <PageHeader
         title="Manajemen User"
-        subtitle="Kelola akun pengguna IMS."
+        subtitle="Kelola akun lokal, role, status, dan foto profil pengguna IMS."
         actions={[
           {
             key: "create-user-profile",
@@ -455,44 +633,155 @@ const UserManagement = () => {
         ]}
       />
 
-      <Space direction="vertical" size={16} style={{ width: "100%" }}>
-        <SummaryStatGrid items={summaryItems} />
+      <section className="ims-user-overview" aria-label="Ringkasan akun">
+        <div className="ims-user-count-card">
+          <div className="ims-user-count-icon"><TeamOutlined /></div>
+          <div>
+            <div className="ims-user-count-value">{users.length}</div>
+            <div className="ims-user-count-label">Akun terdaftar</div>
+          </div>
+        </div>
+        <div className="ims-user-stat-strip">
+          <div className="ims-user-stat ims-user-stat--active">
+            <strong className="ims-user-stat-value">
+              {users.filter((item) => item.status === USER_STATUS.ACTIVE).length}
+            </strong>
+            <span className="ims-user-stat-label">User aktif</span>
+          </div>
+          <div className="ims-user-stat ims-user-stat--admin">
+            <strong className="ims-user-stat-value">{activeAdministratorCount}</strong>
+            <span className="ims-user-stat-label">Administrator</span>
+          </div>
+          <div className="ims-user-stat">
+            <strong className="ims-user-stat-value">
+              {users.filter((item) => item.role === ROLES.USER).length}
+            </strong>
+            <span className="ims-user-stat-label">Role User</span>
+          </div>
+        </div>
+      </section>
 
-        <PageSection
-          title="Daftar Akun"
-          subtitle="Role, status, dan akses login."
-        >
+      <PageSection title="Daftar Akun" subtitle="Cari akun, periksa akses, dan kelola status login.">
+        <Space direction="vertical" size={16} style={{ width: "100%" }}>
+          <div className="ims-user-toolbar">
+            <Input
+              className="ims-user-toolbar-search"
+              prefix={<SearchOutlined />}
+              value={searchValue}
+              onChange={(event) => {
+                setSearchValue(event.target.value);
+                setCurrentPage(1);
+              }}
+              placeholder="Cari nama atau username..."
+              allowClear
+            />
+            <Select
+              value={roleFilter}
+              onChange={(value) => {
+                setRoleFilter(value);
+                setCurrentPage(1);
+              }}
+              options={[
+                { label: "Semua role", value: "all" },
+                { label: ROLE_LABELS[ROLES.ADMINISTRATOR], value: ROLES.ADMINISTRATOR },
+                { label: ROLE_LABELS[ROLES.USER], value: ROLES.USER },
+              ]}
+            />
+            <Select
+              value={statusFilter}
+              onChange={(value) => {
+                setStatusFilter(value);
+                setCurrentPage(1);
+              }}
+              options={[
+                { label: "Semua status", value: "all" },
+                { label: USER_STATUS_LABELS[USER_STATUS.ACTIVE], value: USER_STATUS.ACTIVE },
+                { label: USER_STATUS_LABELS[USER_STATUS.INACTIVE], value: USER_STATUS.INACTIVE },
+              ]}
+            />
+            <div className="ims-user-result-count">
+              <strong>{filteredUsers.length}</strong> akun ditampilkan
+            </div>
+          </div>
+
           <DataRefreshIndicator loading={isLoading} dataSource={users} />
-          <DataTableView
-            showRefreshIndicator={false}
-            className="app-data-table"
-            rowKey="authUid"
-            columns={columns}
-            dataSource={users}
-            pagination={{ pageSize: 10 }}
-            tableLayout="fixed"
-            locale={{ emptyText: getDataTableEmptyText(isLoading) }}
-            mobileCardConfig={userMobileCardConfig}
-          />
-        </PageSection>
-      </Space>
+
+          {filteredUsers.length > 0 ? (
+            <>
+              <div className="ims-user-grid">{pagedUsers.map(renderUserCard)}</div>
+              {filteredUsers.length > PAGE_SIZE ? (
+                <div className="ims-user-pagination">
+                  <Pagination
+                    current={currentPage}
+                    pageSize={PAGE_SIZE}
+                    total={filteredUsers.length}
+                    showSizeChanger={false}
+                    onChange={setCurrentPage}
+                  />
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <div className="ims-user-empty">
+              <Empty description={isLoading ? "Memuat akun..." : "Tidak ada akun yang cocok."} />
+            </div>
+          )}
+        </Space>
+      </PageSection>
 
       <PageFormModal
-        title={
-          formMode === FORM_MODE.CREATE
-            ? "Tambah Akun"
-            : "Edit Akun Lokal"
-        }
+        title={formMode === FORM_MODE.CREATE
+          ? "Tambah Akun"
+          : isEditingSelf
+            ? "Edit Profil Saya"
+            : "Edit Akun Lokal"}
         open={isModalOpen}
         onCancel={closeModal}
         okText="Simpan"
         cancelText="Batal"
         form={form}
         onFinish={handleSaveProfile}
-        confirmLoading={isSaving}
-        modalProps={{ destroyOnHidden: true }}
+        confirmLoading={isSaving || isProcessingAvatar}
+        modalProps={{ destroyOnHidden: true, width: 620 }}
         formProps={{ requiredMark: false }}
       >
+        <div className="ims-user-photo-field">
+          <Avatar
+            className="ims-user-photo-preview"
+            size={88}
+            src={avatarDraft || undefined}
+            alt="Preview foto profil"
+          >
+            {modalInitials}
+          </Avatar>
+          <div className="ims-user-photo-copy">
+            <h4>Foto Profil</h4>
+            <p>
+              Foto opsional. JPG, PNG, atau WebP maksimal 2 MB akan dipotong 1:1 dan diperkecil otomatis.
+            </p>
+            <div className="ims-user-photo-actions">
+              <Upload
+                accept={AVATAR_MIME_TYPES.join(",")}
+                beforeUpload={handleAvatarUpload}
+                showUploadList={false}
+                disabled={isProcessingAvatar || isSaving}
+              >
+                <Button icon={<CameraOutlined />} loading={isProcessingAvatar}>
+                  {avatarDraft ? "Ganti Foto" : "Pilih Foto"}
+                </Button>
+              </Upload>
+              <Button
+                danger
+                icon={<DeleteOutlined />}
+                disabled={!avatarDraft || isProcessingAvatar || isSaving}
+                onClick={handleRemoveAvatar}
+              >
+                Hapus Foto
+              </Button>
+            </div>
+          </div>
+        </div>
+
         <Form.Item
           label="Username"
           name="username"
@@ -515,57 +804,61 @@ const UserManagement = () => {
         </Form.Item>
 
         <Form.Item
-              label={formMode === FORM_MODE.CREATE ? "Password" : "Password Baru"}
-              name="password"
-              rules={
-                formMode === FORM_MODE.CREATE
-                  ? [
-                      { required: true, message: "Password akun wajib diisi." },
-                      { validator: validateLocalPasswordField },
-                    ]
-                  : [{ validator: (_, value) => (value ? validateLocalPasswordField(_, value) : Promise.resolve()) }]
-              }
-            >
-              <Input.Password
-                autoComplete="new-password"
-                prefix={<LockOutlined />}
-                placeholder={formMode === FORM_MODE.CREATE ? PASSWORD_POLICY_HINT : "Isi jika ingin ganti password"}
-              />
-            </Form.Item>
+          label={formMode === FORM_MODE.CREATE ? "Password" : "Password Baru"}
+          name="password"
+          rules={formMode === FORM_MODE.CREATE
+            ? [
+                { required: true, message: "Password akun wajib diisi." },
+                { validator: validateLocalPasswordField },
+              ]
+            : [{ validator: (_, value) => (value
+                ? validateLocalPasswordField(_, value)
+                : Promise.resolve()) }]}
+        >
+          <Input.Password
+            autoComplete="new-password"
+            prefix={<LockOutlined />}
+            placeholder={formMode === FORM_MODE.CREATE
+              ? PASSWORD_POLICY_HINT
+              : "Isi jika ingin ganti password"}
+          />
+        </Form.Item>
 
-            <Form.Item
-              label="Konfirmasi Password"
-              name="confirmPassword"
-              dependencies={["password"]}
-              rules={[
-                ({ getFieldValue }) => ({
-                  validator(_, value) {
-                    const password = getFieldValue("password");
-                    if (!password && formMode === FORM_MODE.EDIT) return Promise.resolve();
-                    if (!value && formMode === FORM_MODE.CREATE) {
-                      return Promise.reject(new Error("Konfirmasi password wajib diisi."));
-                    }
-                    if (password && value !== password) {
-                      return Promise.reject(new Error("Konfirmasi password belum sama."));
-                    }
-                    return Promise.resolve();
-                  },
-                }),
-              ]}
-            >
-              <Input.Password
-                autoComplete="new-password"
-                prefix={<LockOutlined />}
-                placeholder="Ulangi password"
-              />
-            </Form.Item>
+        <Form.Item
+          label="Konfirmasi Password"
+          name="confirmPassword"
+          dependencies={["password"]}
+          rules={[
+            ({ getFieldValue }) => ({
+              validator(_, value) {
+                const password = getFieldValue("password");
+                if (!password && formMode === FORM_MODE.EDIT) return Promise.resolve();
+                if (!value && formMode === FORM_MODE.CREATE) {
+                  return Promise.reject(new Error("Konfirmasi password wajib diisi."));
+                }
+                if (password && value !== password) {
+                  return Promise.reject(new Error("Konfirmasi password belum sama."));
+                }
+                return Promise.resolve();
+              },
+            }),
+          ]}
+        >
+          <Input.Password
+            autoComplete="new-password"
+            prefix={<LockOutlined />}
+            placeholder="Ulangi password"
+          />
+        </Form.Item>
 
         <Form.Item
           label="Role"
           name="role"
           rules={[{ required: true, message: "Role wajib dipilih." }]}
+          extra={isEditingSelf ? "Role akun sendiri dikunci untuk menjaga akses administrator." : undefined}
         >
           <Select
+            disabled={isEditingSelf}
             options={assignableRoleOptions}
             placeholder="Pilih Administrator atau User"
           />
@@ -575,8 +868,10 @@ const UserManagement = () => {
           label="Status"
           name="status"
           rules={[{ required: true, message: "Status wajib dipilih." }]}
+          extra={isEditingSelf ? "Status akun yang sedang digunakan tidak dapat diubah." : undefined}
         >
           <Select
+            disabled={isEditingSelf}
             options={[
               { label: USER_STATUS_LABELS[USER_STATUS.ACTIVE], value: USER_STATUS.ACTIVE },
               { label: USER_STATUS_LABELS[USER_STATUS.INACTIVE], value: USER_STATUS.INACTIVE },
@@ -586,20 +881,16 @@ const UserManagement = () => {
       </PageFormModal>
 
       <Modal
-        title={
-          statusChangeRequest?.nextStatus === USER_STATUS.INACTIVE
-            ? "Nonaktifkan user?"
-            : "Aktifkan user?"
-        }
+        title={statusChangeRequest?.nextStatus === USER_STATUS.INACTIVE
+          ? "Nonaktifkan user?"
+          : "Aktifkan user?"}
         open={isStatusModalOpen}
         onCancel={handleCloseStatusModal}
         onOk={handleConfirmStatusChange}
         confirmLoading={isUpdatingStatus}
-        okText={
-          statusChangeRequest?.nextStatus === USER_STATUS.INACTIVE
-            ? "Nonaktifkan"
-            : "Aktifkan"
-        }
+        okText={statusChangeRequest?.nextStatus === USER_STATUS.INACTIVE
+          ? "Nonaktifkan"
+          : "Aktifkan"}
         okButtonProps={{ danger: statusChangeRequest?.nextStatus === USER_STATUS.INACTIVE }}
         cancelText="Batal"
         destroyOnHidden
@@ -616,7 +907,6 @@ const UserManagement = () => {
           </Text>
         </Space>
       </Modal>
-
     </div>
   );
 };

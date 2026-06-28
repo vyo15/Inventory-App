@@ -35,13 +35,14 @@ const {
 } = require("./backupPackage");
 const { getBackupPreview, getSchemaVersion, validateSqliteFile } = require("./backupValidation");
 
-const createOfficialSqliteBackupUnsafe = async (db, options = {}) => {
+const packageSqliteSnapshotUnsafe = async (db, options = {}, writeSnapshot) => {
   const backupType = normalizeBackupType(options.type || options.backupType || "manual");
   const actor = options.actor || "system";
   const action = options.action || "backup_create";
   const createdAt = options.createdAt ? new Date(options.createdAt) : new Date();
   if (Number.isNaN(createdAt.getTime())) throw new Error("Tanggal backup tidak valid.");
-  const schemaVersion = await getSchemaVersion(db);
+
+  const schemaVersionHint = options.schemaVersionHint || await getSchemaVersion(db);
   const timestamp = safeCompactTimestamp(createdAt);
   const targetDir = getBackupTypeDir(backupType);
   const tmpDir = path.join(env.backupDir, ".tmp", `${timestamp}-${backupType}-${crypto.randomBytes(4).toString("hex")}`);
@@ -52,7 +53,7 @@ const createOfficialSqliteBackupUnsafe = async (db, options = {}) => {
     mustExist: true,
   });
 
-  const requestedFilename = `IMS-BF-BACKUP-${timestamp}-SV${schemaVersion}-${backupType}${BACKUP_FILE_SUFFIX}`;
+  const requestedFilename = `IMS-BF-BACKUP-${timestamp}-SV${schemaVersionHint}-${backupType}${BACKUP_FILE_SUFFIX}`;
   const uniquePackage = getUniquePackagePath(targetDir, requestedFilename);
   const packageFilename = uniquePackage.filename;
   const packagePath = uniquePackage.path;
@@ -60,22 +61,7 @@ const createOfficialSqliteBackupUnsafe = async (db, options = {}) => {
   const backupDbPath = path.join(tmpDir, SQLITE_PACKAGE_DATABASE_FILE);
 
   try {
-    const sourceDbPath = getDbPath();
-    const sourceDbStat = fs.statSync(sourceDbPath);
-    const sourceWalPath = `${sourceDbPath}-wal`;
-    const sourceWalSize = fs.existsSync(sourceWalPath) ? fs.statSync(sourceWalPath).size : 0;
-    const estimatedLogicalSize = sourceDbStat.size + sourceWalSize;
-    assertZip32EntrySize(estimatedLogicalSize, "database aktif dan WAL");
-    assertSufficientDiskSpace({
-      targetDir: tmpDir,
-      expectedWriteBytes: estimatedLogicalSize,
-      copyCount: 2,
-      operation: "Pembuatan backup database",
-    });
-
-    await db.exec("PRAGMA wal_checkpoint(FULL);");
-    await db.exec(`VACUUM INTO ${sqliteStringLiteral(backupDbPath)};`);
-
+    const snapshotMeta = await writeSnapshot({ backupDbPath, tmpDir });
     const validation = await validateSqliteFile(backupDbPath);
     if (!validation.valid) {
       throw new Error(`Backup database lokal tidak valid: integrity=${validation.integrityCheck}; foreignKey=${validation.foreignKeyCheck}`);
@@ -96,7 +82,7 @@ const createOfficialSqliteBackupUnsafe = async (db, options = {}) => {
       backupType,
       storageClass: getBackupStorageClass(backupType),
       createdAt: createdAt.toISOString(),
-      schemaVersion: validation.schemaVersion || schemaVersion,
+      schemaVersion: validation.schemaVersion || schemaVersionHint,
       databaseFile: SQLITE_PACKAGE_DATABASE_FILE,
       databaseSizeBytes: dbStat.size,
       checksumAlgorithm: "sha256",
@@ -109,7 +95,8 @@ const createOfficialSqliteBackupUnsafe = async (db, options = {}) => {
       foreignKeyCheck: validation.foreignKeyCheck,
       createdBy: actor,
       sourceMachine: os.hostname(),
-      sourceDbPath: getDbPath(),
+      sourceDbPath: options.sourceDbPath || getDbPath(),
+      sourceSnapshotMode: snapshotMeta?.mode || "active_database_vacuum",
       notes: options.notes || "Backup resmi dibuat dari layanan IMS.",
       tables: validation.tables,
     };
@@ -161,6 +148,7 @@ const createOfficialSqliteBackupUnsafe = async (db, options = {}) => {
         backupFormat: manifest.backupFormat,
         backupFormatVersion: manifest.backupFormatVersion,
         compression: manifest.compression,
+        sourceSnapshotMode: manifest.sourceSnapshotMode,
       },
     });
 
@@ -183,8 +171,83 @@ const createOfficialSqliteBackupUnsafe = async (db, options = {}) => {
   }
 };
 
+const createOfficialSqliteBackupUnsafe = async (db, options = {}) => packageSqliteSnapshotUnsafe(
+  db,
+  options,
+  async ({ backupDbPath, tmpDir }) => {
+    const sourceDbPath = getDbPath();
+    const sourceDbStat = fs.statSync(sourceDbPath);
+    const sourceWalPath = `${sourceDbPath}-wal`;
+    const sourceWalSize = fs.existsSync(sourceWalPath) ? fs.statSync(sourceWalPath).size : 0;
+    const estimatedLogicalSize = sourceDbStat.size + sourceWalSize;
+    assertZip32EntrySize(estimatedLogicalSize, "database aktif dan WAL");
+    assertSufficientDiskSpace({
+      targetDir: tmpDir,
+      expectedWriteBytes: estimatedLogicalSize,
+      copyCount: 2,
+      operation: "Pembuatan backup database",
+    });
+
+    await db.exec("PRAGMA wal_checkpoint(FULL);");
+    await db.exec(`VACUUM INTO ${sqliteStringLiteral(backupDbPath)};`);
+    return { mode: "active_database_vacuum" };
+  },
+);
+
+const createOfficialSqliteBackupFromFileUnsafe = async (db, options = {}) => {
+  const sourceSqlitePath = path.resolve(String(options.sourceSqlitePath || "").trim());
+  if (!options.sourceSqlitePath || !fs.existsSync(sourceSqlitePath)) {
+    const error = new Error("Snapshot SQLite sumber tidak ditemukan.");
+    error.code = "BACKUP_SOURCE_SQLITE_NOT_FOUND";
+    throw error;
+  }
+  const sourceLstat = fs.lstatSync(sourceSqlitePath);
+  if (!sourceLstat.isFile() || sourceLstat.isSymbolicLink()) {
+    const error = new Error("Snapshot SQLite sumber harus berupa file biasa dan bukan symlink.");
+    error.code = "BACKUP_SOURCE_SQLITE_UNSAFE";
+    throw error;
+  }
+  const sourceValidation = await validateSqliteFile(sourceSqlitePath);
+  if (!sourceValidation.valid) {
+    const error = new Error("Snapshot SQLite sumber gagal integrity atau foreign-key check.");
+    error.code = "BACKUP_SOURCE_SQLITE_INVALID";
+    error.validation = sourceValidation;
+    throw error;
+  }
+
+  return packageSqliteSnapshotUnsafe(
+    db,
+    {
+      ...options,
+      schemaVersionHint: sourceValidation.schemaVersion,
+      sourceDbPath: options.sourceDbPath || sourceSqlitePath,
+    },
+    async ({ backupDbPath, tmpDir }) => {
+      const sourceStat = fs.statSync(sourceSqlitePath);
+      assertZip32EntrySize(sourceStat.size, "snapshot SQLite sumber");
+      assertSufficientDiskSpace({
+        targetDir: tmpDir,
+        expectedWriteBytes: sourceStat.size,
+        copyCount: 2,
+        operation: "Pembuatan backup dari snapshot SQLite",
+      });
+      fs.copyFileSync(sourceSqlitePath, backupDbPath, fs.constants.COPYFILE_EXCL);
+      return { mode: options.sourceSnapshotMode || "validated_sqlite_file" };
+    },
+  );
+};
+
 const createOfficialSqliteBackup = (db, options = {}) => runSerializedDbOperation(
   () => createOfficialSqliteBackupUnsafe(db, options),
 );
 
-module.exports = { createOfficialSqliteBackup, createOfficialSqliteBackupUnsafe };
+const createOfficialSqliteBackupFromFile = (db, options = {}) => runSerializedDbOperation(
+  () => createOfficialSqliteBackupFromFileUnsafe(db, options),
+);
+
+module.exports = {
+  createOfficialSqliteBackup,
+  createOfficialSqliteBackupFromFile,
+  createOfficialSqliteBackupFromFileUnsafe,
+  createOfficialSqliteBackupUnsafe,
+};

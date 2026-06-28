@@ -22,7 +22,6 @@ import {
   Input,
   InputNumber,
   message,
-  Popconfirm,
   Row,
   Select,
   Space,
@@ -59,6 +58,7 @@ import PageSection from "../../components/Layout/Page/PageSection";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import StockDisplayBlock from "../../components/Layout/Table/StockDisplayBlock";
 import DataTableView from "../../components/Layout/Table/DataTableView";
+import TableActionMenu from "../../components/Layout/Table/TableActionMenu";
 import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
 import ImsNotice from "../../components/Layout/Feedback/ImsNotice";
 import InfoPopoverButton from "../../components/Layout/Feedback/InfoPopoverButton";
@@ -597,48 +597,42 @@ const SemiFinishedMaterials = () => {
     {
       title: "Aksi",
       key: "actions",
-      width: "14%",
-      // AKTIF / GUARDED: tombol aksi tetap di kolom kanan natural tanpa fixed/sticky agar primary table tidak memaksa horizontal scroll.
+      width: 132,
+      // AKTIF / GUARDED: aksi utama tetap terlihat, aksi sekunder dipindahkan ke menu compact.
       className: "app-table-action-column",
       render: (_, record) => (
-        <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-          {/* AKTIF / GUARDED: action semi finished dibuat 3 baris visual-only; logic produksi, stok varian, PO, Work Log, payroll, dan HPP tidak disentuh. */}
-          <Button
-            className="ims-action-button ims-action-button--block"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleViewDetail(record)}
-          >
-            Detail
-          </Button>
-
-          <Button
-            className="ims-action-button ims-action-button--block"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            Edit
-          </Button>
-
-          <Popconfirm
-            title={
-              record.isActive !== false ? "Nonaktifkan item ini?" : "Aktifkan item ini?"
-            }
-            description={
-              record.isActive !== false
-                ? "Item tidak akan bisa dipilih untuk data baru."
-                : "Item akan aktif kembali untuk data baru."
-            }
-            onConfirm={() => handleToggleActive(record)}
-            okText="Ya"
-            cancelText="Batal"
-          >
-            <Button className="ims-action-button ims-action-button--block" size="small">
-              {record.isActive !== false ? "Nonaktifkan" : "Aktifkan"}
-            </Button>
-          </Popconfirm>
-        </Space>
+        <TableActionMenu
+          visibleActions={[
+            {
+              key: "detail",
+              label: "Detail",
+              icon: <EyeOutlined />,
+              onClick: () => handleViewDetail(record),
+            },
+          ]}
+          moreActions={[
+            {
+              key: "edit",
+              label: "Edit",
+              icon: <EditOutlined />,
+              onClick: () => handleEdit(record),
+            },
+            {
+              key: "toggle",
+              label: record.isActive !== false ? "Nonaktifkan" : "Aktifkan",
+              danger: record.isActive !== false,
+              confirm: {
+                title: record.isActive !== false ? "Nonaktifkan item ini?" : "Aktifkan item ini?",
+                description: record.isActive !== false
+                  ? "Item tidak akan bisa dipilih untuk data baru."
+                  : "Item akan aktif kembali untuk data baru.",
+                okText: "Ya",
+                cancelText: "Batal",
+              },
+              onClick: () => handleToggleActive(record),
+            },
+          ]}
+        />
       ),
     },
   ];
@@ -685,41 +679,36 @@ const SemiFinishedMaterials = () => {
         minStockThreshold={Number(record.minStockAlert || 0)}
       />
     ),
-    actions: (record) => (
-      <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-        <Button
-          className="ims-action-button ims-action-button--block"
-          size="small"
-          icon={<EyeOutlined />}
-          onClick={() => handleViewDetail(record)}
-        >
-          Detail
-        </Button>
-        <Button
-          className="ims-action-button ims-action-button--block"
-          size="small"
-          icon={<EditOutlined />}
-          onClick={() => handleEdit(record)}
-        >
-          Edit
-        </Button>
-        <Popconfirm
-          title={record.isActive !== false ? "Nonaktifkan item ini?" : "Aktifkan item ini?"}
-          description={
-            record.isActive !== false
-              ? "Item tidak akan bisa dipilih untuk data baru."
-              : "Item akan aktif kembali untuk data baru."
-          }
-          onConfirm={() => handleToggleActive(record)}
-          okText="Ya"
-          cancelText="Batal"
-        >
-          <Button className="ims-action-button ims-action-button--block" size="small">
-            {record.isActive !== false ? "Nonaktifkan" : "Aktifkan"}
-          </Button>
-        </Popconfirm>
-      </Space>
-    ),
+    primaryActions: (record) => [
+      {
+        key: "detail",
+        label: "Detail",
+        icon: <EyeOutlined />,
+        onClick: () => handleViewDetail(record),
+      },
+    ],
+    moreActions: (record) => [
+      {
+        key: "edit",
+        label: "Edit",
+        icon: <EditOutlined />,
+        onClick: () => handleEdit(record),
+      },
+      {
+        key: "toggle",
+        label: record.isActive !== false ? "Nonaktifkan" : "Aktifkan",
+        danger: record.isActive !== false,
+        confirm: {
+          title: record.isActive !== false ? "Nonaktifkan item ini?" : "Aktifkan item ini?",
+          description: record.isActive !== false
+            ? "Item tidak akan bisa dipilih untuk data baru."
+            : "Item akan aktif kembali untuk data baru.",
+          okText: "Ya",
+          cancelText: "Batal",
+        },
+        onClick: () => handleToggleActive(record),
+      },
+    ],
   };
 
   // ---------------------------------------------------------------------------
@@ -1043,7 +1032,7 @@ const SemiFinishedMaterials = () => {
                 label="Jenis Komponen"
                 name="category"
                 rules={[{ required: true, message: "Jenis komponen wajib dipilih" }]}
-                extra="Dipakai oleh logic produksi dan perhitungan resep komponen."
+                tooltip="Dipakai oleh logic produksi dan perhitungan resep komponen."
               >
                 <Select options={SEMI_FINISHED_CATEGORIES} />
               </Form.Item>
@@ -1053,13 +1042,14 @@ const SemiFinishedMaterials = () => {
               <Form.Item
                 label="Jenis Bunga"
                 name="flowerTypeId"
-                rules={[{ required: true, message: "Jenis bunga wajib dipilih" }]}
+                tooltip="Opsional. Kosongkan untuk komponen umum/reusable seperti kawat tangkai yang dipakai lintas jenis bunga."
               >
                 <Select
+                  allowClear
                   showSearch
                   optionFilterProp="label"
                   options={flowerTypeSelectOptions}
-                  placeholder="Pilih jenis bunga"
+                  placeholder="Umum / Reusable atau pilih jenis bunga"
                 />
               </Form.Item>
             </Col>
@@ -1068,7 +1058,7 @@ const SemiFinishedMaterials = () => {
               <Form.Item
                 label="Kelompok Komponen"
                 name="categoryId"
-                extra="Opsional untuk pencarian dan laporan; tidak mengubah logic produksi."
+                tooltip="Opsional untuk pencarian dan laporan; tidak mengubah logic produksi."
               >
                 <Select
                   allowClear
@@ -1118,7 +1108,7 @@ const SemiFinishedMaterials = () => {
             <Form.Item
               label="Label Varian"
               name="variantLabel"
-              extra="AKTIF: label ini hanya metadata tampilan. Contoh: Warna, Ukuran, Tipe, Motif, Spesifikasi."
+              tooltip="Label ini hanya metadata tampilan. Contoh: Warna, Ukuran, Tipe, Motif, atau Spesifikasi."
             >
               <Input placeholder="Contoh: Warna" />
             </Form.Item>

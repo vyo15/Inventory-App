@@ -56,9 +56,10 @@ const me = async (req, res, next) => {
       });
     }
 
-    return success(res, "Session lokal aktif", { user: req.localAuth.user });
+    const user = await authService.getUserProfile(req.localAuth.user.id);
+    return success(res, "Session lokal aktif", { user });
   } catch (error) {
-    return next(error);
+    return handleAuthError(res, next, error);
   }
 };
 

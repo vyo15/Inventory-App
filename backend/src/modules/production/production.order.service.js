@@ -24,6 +24,31 @@ const {
   runProductionTransaction,
 } = require("./production.shared");
 
+const resolveSingleActiveBomStep = async (db, bom = {}, { requestedStepId = "" } = {}) => {
+  const stepLines = Array.isArray(bom.stepLines) ? bom.stepLines : [];
+  if (stepLines.length !== 1 || !normalizeText(stepLines[0]?.stepId)) {
+    fail(
+      "Resep Produksi/BOM wajib memiliki tepat 1 Tahapan Produksi. Perbaiki BOM sebelum membuat atau memulai Production Order.",
+      "PRODUCTION_BOM_SINGLE_STEP_REQUIRED",
+      409,
+    );
+  }
+
+  const stepLine = stepLines[0];
+  const stepId = normalizeText(stepLine.stepId);
+  const wantedStepId = normalizeText(requestedStepId);
+  if (wantedStepId && wantedStepId !== stepId) {
+    fail("Tahapan produksi yang dipilih tidak terdaftar pada Resep Produksi/BOM.", "PRODUCTION_STEP_NOT_IN_BOM", 409);
+  }
+
+  const step = await getRecord(db, "production_steps", stepId, "Tahapan Produksi");
+  if (step.isActive === false || normalizeLower(step.status) === "inactive") {
+    fail("Tahapan Produksi pada BOM sudah nonaktif.", "PRODUCTION_BOM_STEP_INACTIVE", 409);
+  }
+
+  return { stepLine, step };
+};
+
 const buildOrderPayload = async (db, {
   values = {},
   sourcePlan = null,
@@ -33,6 +58,7 @@ const buildOrderPayload = async (db, {
   const bomId = normalizeText(values.bomId || sourcePlan?.bomId || merged.bomId);
   if (!bomId) fail("Resep Produksi/BOM wajib dipilih sebelum membuat Production Order.", "PRODUCTION_BOM_REQUIRED");
   const bom = await getRecord(db, "production_boms", bomId, "BOM produksi");
+  await resolveSingleActiveBomStep(db, bom);
 
   const requestedTargetId = normalizeText(values.targetId || values.targetItemId || "");
   const requestedTargetType = normalizeSourceType(values.targetType || "");
@@ -298,15 +324,12 @@ const startProductionOrder = async ({ orderId, payload = {}, actor = "system" } 
     "JOB",
     payload.workNumber || payload.code || payload.referenceNumber,
   );
-  const stepLines = Array.isArray(bom.stepLines) ? bom.stepLines : [];
   const requestedStepId = normalizeText(payload.stepId || "");
-  const requestedStep = requestedStepId
-    ? stepLines.find((step) => normalizeText(step.stepId) === requestedStepId)
-    : null;
-  if (requestedStepId && stepLines.length > 0 && !requestedStep) {
-    fail("Tahapan produksi yang dipilih tidak terdaftar pada Resep Produksi/BOM.", "PRODUCTION_STEP_NOT_IN_BOM", 409);
-  }
-  const chosenStep = requestedStep || stepLines[0] || {};
+  const { stepLine: chosenStepLine, step: chosenStep } = await resolveSingleActiveBomStep(
+    db,
+    bom,
+    { requestedStepId },
+  );
   const plannedQty = toPositiveNumber(order.batchCount || order.orderQty || order.targetQty || 0);
   const materialUsages = await buildWorkLogMaterialUsages(db, order, actor, workNumber);
   const materialCostActual = materialUsages.reduce((sum, line) => sum + toPositiveNumber(line.totalCostSnapshot), 0);
@@ -367,17 +390,23 @@ const startProductionOrder = async ({ orderId, payload = {}, actor = "system" } 
     targetHasVariants: order.targetHasVariants === true,
     targetVariantKey: order.targetVariantKey || "",
     targetVariantLabel: order.targetVariantLabel || "",
-    stepId: chosenStep.stepId || payload.stepId || "",
-    stepCode: chosenStep.stepCode || payload.stepCode || "",
-    stepName: chosenStep.stepName || payload.stepName || "",
-    sequenceNo: toPositiveInteger(chosenStep.sequenceNo || payload.sequenceNo || 1),
-    stepProcessType: chosenStep.processType || "",
-    stepPayrollMode: chosenStep.payrollMode || "per_qty",
-    stepPayrollRate: toPositiveNumber(chosenStep.payrollRate),
-    stepPayrollQtyBase: Math.max(1, toPositiveNumber(chosenStep.payrollQtyBase || 1)),
-    stepPayrollOutputBasis: chosenStep.payrollOutputBasis || "good_qty",
-    stepPayrollClassification: chosenStep.payrollClassification || "direct_labor",
-    stepPayrollIncludeInHpp: chosenStep.includePayrollInHpp !== false,
+    stepId: chosenStep.id || chosenStepLine.stepId || "",
+    stepCode: chosenStep.code || chosenStepLine.stepCode || "",
+    stepName: chosenStep.name || chosenStepLine.stepName || "",
+    sequenceNo: toPositiveInteger(chosenStepLine.sequenceNo || 1),
+    stepProcessType: chosenStep.processType || chosenStepLine.processType || "",
+    stepBasisType: chosenStep.basisType || chosenStepLine.basisType || "",
+    stepMonitoringMetric: chosenStep.monitoringMetric || chosenStepLine.monitoringMetric || "none",
+    stepPayrollMode: chosenStep.payrollMode || chosenStepLine.payrollMode || "per_qty",
+    stepPayrollRate: toPositiveNumber(chosenStep.payrollRate ?? chosenStepLine.payrollRate),
+    stepPayrollQtyBase: Math.max(1, toPositiveNumber(chosenStep.payrollQtyBase ?? chosenStepLine.payrollQtyBase ?? 1)),
+    stepPayrollOutputBasis: chosenStep.payrollOutputBasis || chosenStepLine.payrollOutputBasis || "good_qty",
+    stepPayrollClassification: chosenStep.payrollClassification || chosenStepLine.payrollClassification || "direct_labor",
+    stepPayrollIncludeInHpp: typeof chosenStep.includePayrollInHpp === "boolean"
+      ? chosenStep.includePayrollInHpp
+      : chosenStepLine.includePayrollInHpp !== false,
+    stepPayrollRuleSource: "production_step_start_snapshot",
+    stepPayrollSnapshotAt: startedAt,
     plannedQty,
     theoreticalOutputQty: toPositiveNumber(order.expectedOutputQty || (toPositiveNumber(order.batchOutputQty) * plannedQty)),
     actualOutputQty: 0,

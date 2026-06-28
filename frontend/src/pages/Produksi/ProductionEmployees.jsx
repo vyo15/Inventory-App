@@ -18,7 +18,6 @@ import {
   Input,
   InputNumber,
   message,
-  Popconfirm,
   Row,
   Select,
   Space,
@@ -63,6 +62,7 @@ import ProductionPageHeader from "../../components/Produksi/shared/ProductionPag
 import PageSection from "../../components/Layout/Page/PageSection";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import DataTableView from "../../components/Layout/Table/DataTableView";
+import TableActionMenu from "../../components/Layout/Table/TableActionMenu";
 import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
 import ImsNotice from "../../components/Layout/Feedback/ImsNotice";
 import InfoPopoverButton from "../../components/Layout/Feedback/InfoPopoverButton";
@@ -529,47 +529,41 @@ const ProductionEmployees = () => {
     {
       title: "Aksi",
       key: "actions",
-      width: 176,
+      width: 132,
       className: "app-table-action-column",
       render: (_, record) => (
-        <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-          <Button className="ims-action-button"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleViewDetail(record)}
-          >
-            Detail
-          </Button>
-
-          <Button
-            className="ims-action-button"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            Edit
-          </Button>
-
-          <Popconfirm
-            title={
-              record.isActive
-                ? "Nonaktifkan karyawan ini?"
-                : "Aktifkan karyawan ini?"
-            }
-            description={
-              record.isActive
-                ? "Karyawan tidak akan bisa dipilih untuk work log baru."
-                : "Karyawan akan aktif kembali untuk work log baru."
-            }
-            onConfirm={() => handleToggleActive(record)}
-            okText="Ya"
-            cancelText="Batal"
-          >
-            <Button className="ims-action-button" size="small">
-              {record.isActive ? "Nonaktifkan" : "Aktifkan"}
-            </Button>
-          </Popconfirm>
-        </Space>
+        <TableActionMenu
+          visibleActions={[
+            {
+              key: "detail",
+              label: "Detail",
+              icon: <EyeOutlined />,
+              onClick: () => handleViewDetail(record),
+            },
+          ]}
+          moreActions={[
+            {
+              key: "edit",
+              label: "Edit",
+              icon: <EditOutlined />,
+              onClick: () => handleEdit(record),
+            },
+            {
+              key: "toggle",
+              label: record.isActive ? "Nonaktifkan" : "Aktifkan",
+              danger: record.isActive,
+              confirm: {
+                title: record.isActive ? "Nonaktifkan karyawan ini?" : "Aktifkan karyawan ini?",
+                description: record.isActive
+                  ? "Karyawan tidak akan bisa dipilih untuk work log baru."
+                  : "Karyawan akan aktif kembali untuk work log baru.",
+                okText: "Ya",
+                cancelText: "Batal",
+              },
+              onClick: () => handleToggleActive(record),
+            },
+          ]}
+        />
       ),
     },
   ];
@@ -622,41 +616,36 @@ const ProductionEmployees = () => {
         </Space>
       );
     },
-    actions: (record) => (
-      <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-        <Button
-          className="ims-action-button ims-action-button--block"
-          size="small"
-          icon={<EyeOutlined />}
-          onClick={() => handleViewDetail(record)}
-        >
-          Detail
-        </Button>
-        <Button
-          className="ims-action-button ims-action-button--block"
-          size="small"
-          icon={<EditOutlined />}
-          onClick={() => handleEdit(record)}
-        >
-          Edit
-        </Button>
-        <Popconfirm
-          title={record.isActive ? "Nonaktifkan karyawan ini?" : "Aktifkan karyawan ini?"}
-          description={
-            record.isActive
-              ? "Karyawan tidak akan bisa dipilih untuk work log baru."
-              : "Karyawan akan aktif kembali untuk work log baru."
-          }
-          onConfirm={() => handleToggleActive(record)}
-          okText="Ya"
-          cancelText="Batal"
-        >
-          <Button className="ims-action-button ims-action-button--block" size="small">
-            {record.isActive ? "Nonaktifkan" : "Aktifkan"}
-          </Button>
-        </Popconfirm>
-      </Space>
-    ),
+    primaryActions: (record) => [
+      {
+        key: "detail",
+        label: "Detail",
+        icon: <EyeOutlined />,
+        onClick: () => handleViewDetail(record),
+      },
+    ],
+    moreActions: (record) => [
+      {
+        key: "edit",
+        label: "Edit",
+        icon: <EditOutlined />,
+        onClick: () => handleEdit(record),
+      },
+      {
+        key: "toggle",
+        label: record.isActive ? "Nonaktifkan" : "Aktifkan",
+        danger: record.isActive,
+        confirm: {
+          title: record.isActive ? "Nonaktifkan karyawan ini?" : "Aktifkan karyawan ini?",
+          description: record.isActive
+            ? "Karyawan tidak akan bisa dipilih untuk work log baru."
+            : "Karyawan akan aktif kembali untuk work log baru.",
+          okText: "Ya",
+          cancelText: "Batal",
+        },
+        onClick: () => handleToggleActive(record),
+      },
+    ],
   };
 
   const summaryItems = [
@@ -974,9 +963,17 @@ const ProductionEmployees = () => {
 
           <Divider orientation="left">Preferensi Payroll Arsip</Divider>
 
-          <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
-            Payroll final sekarang mengikuti rule pada menu Tahapan Produksi. Pengaturan custom payroll karyawan di bawah ini hanya dipertahankan sebagai arsip audit dan tidak dipakai untuk generate payroll baru.
-          </Typography.Paragraph>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+            <InfoPopoverButton
+              label="Info Arsip Payroll"
+              title="Status pengaturan payroll karyawan"
+              description="Payroll final mengikuti rule pada menu Tahapan Produksi. Pengaturan custom payroll karyawan hanya dipertahankan sebagai arsip audit."
+              items={[
+                { key: "source", label: "Payroll baru", value: "Dibuat dari Tahapan Produksi dan Work Log completed." },
+                { key: "archive", label: "Field di bawah", value: "Read-only dan tidak dipakai untuk generate payroll baru." },
+              ]}
+            />
+          </div>
 
           <Row gutter={16}>
             <Col xs={24} md={12}>

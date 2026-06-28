@@ -34,7 +34,7 @@ Tujuan:
 - relasi dengan BOM
 
 Catatan real dari source terbaru:
-- Good Qty menjadi input hasil aktif utama; field hasil lain tidak dijadikan step terpisah dan tidak menjadi field monitoring di form Step.
+- Good Qty menjadi input hasil aktif utama. Form Step tetap menyediakan metadata opsional `monitoringMetric` (`none`, `petal`, `leaf`, atau `stem`) hanya untuk integrasi Production Profile; metadata ini tidak mengganti Good Qty, BOM, Work Log, payroll, atau HPP.
 - assembly dianggap proses akhir.
 - packing opsional bila memang ada pekerjaan pengemasan terpisah.
 - Step memakai `basisType` universal dengan label UI `Per Meter Bahan`, `Per Kawat`, `Per Qty`, dan `Per Batch`.
@@ -459,3 +459,48 @@ Boundary yang tidak boleh dilanggar:
 HPP final tetap mengikuti resolver aktif: Work Log completed + payroll final/confirmed/paid + rule step. Estimasi labor dari step boleh tampil di UI sebagai preview, tetapi tidak boleh dipakai sebagai final HPP.
 
 Referensi batch offline: `docs/13_OFFLINE_PRODUCTION_PAYROLL_HPP_CONTRACT.md`.
+
+## Arsitektur Multi-Jenis Bunga dan Single-Step Runtime — 2026-06-28
+
+### Boundary domain
+
+```text
+Tahapan Produksi generik
++ Jenis Bunga
++ Item Semi Finished spesifik/reusable
++ BOM per transformasi stok
+→ PO / Work Log / Payroll / HPP per tahap
+```
+
+Contoh Mawar:
+
+```text
+Kain Flanel → Potongan Awal Kelopak Mawar
+Potongan Awal Kelopak Mawar → Kelopak Mawar
+Kain Flanel Hijau → Potongan Awal Daun Mawar
+Potongan Awal Daun Mawar → Daun Mawar
+Kawat 40 cm → 2 Kawat Tangkai 20 cm
+10 Kelopak + 1 Daun + 1 Kawat 20 cm → Mawar Rakitan 1 Tangkai
+```
+
+Setiap baris merupakan BOM/PO/Work Log terpisah. Ketika Tulip ditambahkan, master step tetap dipakai ulang; yang ditambah adalah Jenis Bunga, item output/input, dan BOM Tulip.
+
+### Single-step execution contract
+
+- UI dan backend mewajibkan tepat satu step aktif pada setiap BOM.
+- Start Production memvalidasi ulang step dari master aktif, lalu menyimpan snapshot process/basis/monitoring/payroll ke Work Log.
+- Work Log selesai menutup satu PO dan menambah satu target output stok. Runtime belum menjalankan route beberapa operasi dalam satu PO.
+- Field `stepLines` lama tetap dipertahankan untuk compatibility JSON, tetapi record aktif hanya boleh berisi satu line.
+
+### Payroll snapshot dan operator
+
+- Snapshot Work Log saat Start menjadi sumber tarif, mode, output basis, klasifikasi, dan include-in-HPP.
+- Perubahan master Tahapan tidak merevisi Work Log yang sudah berjalan.
+- Satu Work Log hanya satu operator. Pembagian kerja dilakukan dengan pembagian qty ke PO/Work Log terpisah sampai tersedia model output per operator yang disetujui.
+- Completion bersifat atomic: validasi operator → payroll/accrued labor → output stok/HPP → PO completed → audit.
+
+### Komponen reusable dan monitoring
+
+- `flowerTypeId` Semi Finished boleh kosong dan ditampilkan sebagai `Umum / Reusable`.
+- Kawat tangkai/pola universal tidak perlu diduplikasi per jenis bunga.
+- Production Profile adalah monitoring opsional. Mapping kelopak/daun/tangkai memakai `monitoringMetric` eksplisit pada step dan tidak memakai pencarian kata pada nama step.

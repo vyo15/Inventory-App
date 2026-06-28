@@ -261,3 +261,17 @@ Batasan:
 - Work log final, payroll final/paid, dan HPP final masih harus mengikuti rule existing: material actual + payroll final/paid.
 - BOM SQLite foundation tidak boleh membuat HPP final otomatis sampai audit produksi selesai.
 - Jangan memblokir read Work Log operasional hanya karena payload membawa snapshot biaya; pembatasan halaman Payroll/HPP dan dataset Payroll tetap guard utama tanpa merusak flow produksi harian.
+
+## 8. Runtime Guard Update — Multi-Jenis Bunga dan Payroll Snapshot (2026-06-28)
+
+Source aktual SQLite menetapkan guard berikut:
+
+1. BOM aktif wajib memiliki tepat satu Tahapan Produksi. Multi-stage flower flow dibuat sebagai rantai BOM/PO/Work Log, bukan beberapa step dalam satu PO.
+2. Start Production membaca master step aktif dan membekukan rule payroll ke Work Log (`stepPayroll*`, source, dan snapshot time).
+3. Generate payroll saat Complete wajib membaca snapshot Work Log lebih dahulu. Master step hanya fallback compatibility untuk Work Log historis tanpa snapshot.
+4. Complete Work Log hanya menerima satu operator aktif. Beberapa operator wajib menggunakan Work Log terpisah agar output bersama tidak dikalikan penuh untuk setiap operator.
+5. Complete endpoint sudah membuat payroll dan HPP secara atomic; frontend tidak boleh menjalankan generate-payroll kedua setelah response complete.
+6. Komponen Semi Finished reusable boleh tanpa Jenis Bunga. Jenis bunga tetap metadata item/BOM, bukan bagian nama master Tahapan.
+7. Production Profile tetap opsional; metric yield ditentukan field step eksplisit dan tidak boleh diinfer dari nama step.
+
+Perubahan ini tidak menambah schema/tabel baru dan tidak melakukan migrasi massal record produksi historis. BOM multi-step historis harus direview manual sebelum digunakan.

@@ -9,7 +9,6 @@ import {
   Input,
   InputNumber,
   Modal,
-  Popconfirm,
   Row,
   Select,
   Space,
@@ -44,6 +43,7 @@ import FilterBar from '../../components/Layout/Filters/FilterBar';
 import PageHeader from '../../components/Layout/Page/PageHeader';
 import PageSection from '../../components/Layout/Page/PageSection';
 import DataTableView from '../../components/Layout/Table/DataTableView';
+import TableActionMenu from '../../components/Layout/Table/TableActionMenu';
 import SupplierDetailDrawer from './components/SupplierDetailDrawer';
 import ResponsiveFormSection from '../../components/Layout/Mobile/ResponsiveFormSection';
 import RupiahInputNumber from '../../components/Layout/Forms/RupiahInputNumber';
@@ -492,28 +492,40 @@ const SupplierPurchases = () => {
     {
       title: 'Aksi',
       key: 'actions',
-      width: '16%',
+      width: 132,
       className: 'app-table-action-column',
       render: (_, record) => (
-        <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-          <Button className="ims-action-button ims-action-button--block" size="small" icon={<EyeOutlined />} onClick={() => openSupplierDrawer(record)}>
-            Detail
-          </Button>
-          <Button className="ims-action-button ims-action-button--block" size="small" icon={<EditOutlined />} onClick={() => openEditSupplier(record)}>
-            Edit
-          </Button>
-          <Popconfirm
-            title="Nonaktifkan supplier ini?"
-            description="Katalog dan histori lama tetap tersimpan."
-            onConfirm={() => handleDeleteSupplier(record)}
-            okText="Nonaktifkan"
-            cancelText="Batal"
-          >
-            <Button className="ims-action-button ims-action-button--block" danger size="small" icon={<StopOutlined />}>
-              Nonaktifkan
-            </Button>
-          </Popconfirm>
-        </Space>
+        <TableActionMenu
+          visibleActions={[
+            {
+              key: 'detail',
+              label: 'Detail',
+              icon: <EyeOutlined />,
+              onClick: () => openSupplierDrawer(record),
+            },
+          ]}
+          moreActions={[
+            {
+              key: 'edit',
+              label: 'Edit',
+              icon: <EditOutlined />,
+              onClick: () => openEditSupplier(record),
+            },
+            {
+              key: 'deactivate',
+              label: 'Nonaktifkan',
+              icon: <StopOutlined />,
+              danger: true,
+              confirm: {
+                title: 'Nonaktifkan supplier ini?',
+                description: 'Katalog dan histori lama tetap tersimpan.',
+                okText: 'Nonaktifkan',
+                cancelText: 'Batal',
+              },
+              onClick: () => handleDeleteSupplier(record),
+            },
+          ]}
+        />
       ),
     },
   ];
@@ -649,12 +661,35 @@ const SupplierPurchases = () => {
       const names = [...new Set((record.catalogOffers || []).filter((offer) => offer.isActive !== false).map((offer) => offer.itemName).filter(Boolean))];
       return names.length ? names.slice(0, 3).join(', ') : 'Belum ada katalog barang';
     },
-    actions: (record) => (
-      <Space direction="vertical" size={6}>
-        <Button block size="small" onClick={() => openSupplierDrawer(record)}>Detail</Button>
-        <Button block size="small" onClick={() => openEditSupplier(record)}>Edit</Button>
-      </Space>
-    ),
+    primaryActions: (record) => [
+      {
+        key: 'detail',
+        label: 'Detail',
+        icon: <EyeOutlined />,
+        onClick: () => openSupplierDrawer(record),
+      },
+    ],
+    moreActions: (record) => [
+      {
+        key: 'edit',
+        label: 'Edit',
+        icon: <EditOutlined />,
+        onClick: () => openEditSupplier(record),
+      },
+      {
+        key: 'deactivate',
+        label: 'Nonaktifkan',
+        icon: <StopOutlined />,
+        danger: true,
+        confirm: {
+          title: 'Nonaktifkan supplier ini?',
+          description: 'Katalog dan histori lama tetap tersimpan.',
+          okText: 'Nonaktifkan',
+          cancelText: 'Batal',
+        },
+        onClick: () => handleDeleteSupplier(record),
+      },
+    ],
   };
 
 

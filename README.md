@@ -30,6 +30,8 @@ npm test      -> automated test suite
 
 `npm run dev` menjalankan backend dan frontend dari satu terminal. Saat dihentikan dengan `Ctrl+C`, runner meminta backend menutup HTTP dan SQLite melalui channel internal, menunggu checkpoint WAL selesai, lalu menghentikan frontend. Jangan menutup terminal sebelum log `[dev] seluruh layanan berhenti.` muncul.
 
+`npm run lab` memakai database/backup/log sandbox terpisah dan meneruskan path database operasional sebagai **sumber clone read-only**. Dari menu Lab Pengujian, Administrator dapat memilih **Ambil Data Operasional** untuk membuat baseline sandbox tanpa menulis atau mengubah database asli. Session login, histori backup/restore operasional, dan setting Lab tidak dibawa ke baseline; setelah clone pengguna wajib login ulang.
+
 Alamat default:
 
 - Frontend: `http://localhost:5173/Inventory-App/`

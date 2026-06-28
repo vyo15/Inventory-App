@@ -60,6 +60,10 @@ test("mode Lab menyuntikkan environment sandbox yang terpisah", () => {
   assert.equal(config.envOverrides.IMS_SQLITE_DB_PATH, path.join(projectRoot, "data", "ims-testing-sandbox.sqlite"));
   assert.equal(config.envOverrides.IMS_SQLITE_BACKUP_DIR, path.join(projectRoot, "backups", "testing-sandbox"));
   assert.equal(config.envOverrides.IMS_LOG_DIR, path.join(projectRoot, "logs", "testing-sandbox"));
+  assert.equal(
+    config.envOverrides.IMS_OPERATIONAL_SOURCE_DB_PATH,
+    path.join(projectRoot, "data", "ims-sqlite-sidecar.sqlite"),
+  );
   assert.notEqual(config.databasePath, path.join(projectRoot, "data", "ims-sqlite-sidecar.sqlite"));
   assert.notEqual(config.backupDir, path.join(projectRoot, "backups", "sqlite"));
 });
@@ -73,6 +77,7 @@ test("mode operasional membersihkan environment sandbox lama tanpa mengubah pare
     IMS_SQLITE_DB_PATH: "../data/ims-testing-sandbox.sqlite",
     IMS_SQLITE_BACKUP_DIR: "../backups/testing-sandbox",
     IMS_LOG_DIR: "../logs/testing-sandbox",
+    IMS_OPERATIONAL_SOURCE_DB_PATH: "../data/custom-operational.sqlite",
   };
   const originalSnapshot = { ...baseEnv };
   const config = buildRuntimeConfiguration({
@@ -86,13 +91,15 @@ test("mode operasional membersihkan environment sandbox lama tanpa mengubah pare
   });
 
   assert.equal(config.mode, "operational");
-  assert.equal(config.databasePath, path.join(projectRoot, "data", "ims-sqlite-sidecar.sqlite"));
+  const expectedOperationalPath = path.join(projectRoot, "data", "custom-operational.sqlite");
+  assert.equal(config.databasePath, expectedOperationalPath);
   assert.equal(config.backupDir, path.join(projectRoot, "backups", "sqlite"));
   assert.equal(childEnv.IMS_ENABLE_TESTING_LAB, "false");
   assert.equal(childEnv.IMS_DATABASE_PURPOSE, "operational");
-  assert.equal(childEnv.IMS_SQLITE_DB_PATH, undefined);
-  assert.equal(childEnv.IMS_SQLITE_BACKUP_DIR, undefined);
-  assert.equal(childEnv.IMS_LOG_DIR, undefined);
+  assert.equal(childEnv.IMS_SQLITE_DB_PATH, expectedOperationalPath);
+  assert.equal(childEnv.IMS_SQLITE_BACKUP_DIR, path.join(projectRoot, "backups", "sqlite"));
+  assert.equal(childEnv.IMS_LOG_DIR, path.join(projectRoot, "logs"));
+  assert.equal(childEnv.IMS_OPERATIONAL_SOURCE_DB_PATH, undefined);
   assert.deepEqual(baseEnv, originalSnapshot);
 });
 
@@ -102,3 +109,21 @@ test("package menyediakan command lab tanpa mengubah npm test", () => {
   assert.match(packageJson.scripts.test, /npm --prefix backend test/);
   assert.match(packageJson.scripts.test, /npm --prefix frontend test/);
 });
+
+test("mode Lab meneruskan custom path operasional sebagai sumber clone read-only", () => {
+  const projectRoot = path.resolve(__dirname, "..");
+  const customOperationalPath = path.join(projectRoot, "data", "custom-operational.sqlite");
+  const config = buildRuntimeConfiguration({
+    testingLab: true,
+    projectRoot,
+    baseEnv: {
+      IMS_DATABASE_PURPOSE: "operational",
+      IMS_SQLITE_DB_PATH: customOperationalPath,
+    },
+  });
+
+  assert.equal(config.databasePath, path.join(projectRoot, "data", "ims-testing-sandbox.sqlite"));
+  assert.equal(config.envOverrides.IMS_OPERATIONAL_SOURCE_DB_PATH, customOperationalPath);
+  assert.notEqual(config.envOverrides.IMS_OPERATIONAL_SOURCE_DB_PATH, config.databasePath);
+});
+

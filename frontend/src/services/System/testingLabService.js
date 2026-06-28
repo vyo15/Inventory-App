@@ -19,6 +19,23 @@ export const getTestingLabStatus = async () => {
   return response?.data || null;
 };
 
+
+export const getTestingLabOperationalSourcePreview = async () => {
+  const response = await fetchSqliteJson("/api/testing-lab/operational-source/preview", {
+    headers: authHeaders(),
+  });
+  return response?.data || null;
+};
+
+export const cloneTestingLabOperationalSource = async (confirmKeyword) => {
+  const response = await fetchSqliteJson("/api/testing-lab/operational-source/clone", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ confirmKeyword }),
+  });
+  return response?.data || null;
+};
+
 export const createTestingBaseline = async (confirmKeyword) => {
   const response = await fetchSqliteJson("/api/testing-lab/baseline", {
     method: "POST",

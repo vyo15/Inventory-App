@@ -144,6 +144,45 @@ const assertDirectCreateAllowed = async ({ db = null, entityType, payload = {} }
   return true;
 };
 
+
+const validateProductionBomPayload = async ({ db = null, payload = {} } = {}) => {
+  const targetId = normalizeText(payload.targetId || "");
+  const materialLines = Array.isArray(payload.materialLines)
+    ? payload.materialLines
+    : Array.isArray(payload.materials)
+      ? payload.materials
+      : [];
+  const stepLines = Array.isArray(payload.stepLines) ? payload.stepLines : [];
+
+  if (!targetId) {
+    fail("Target Resep Produksi/BOM wajib dipilih.", "PRODUCTION_BOM_TARGET_REQUIRED");
+  }
+  if (materialLines.length === 0) {
+    fail("Resep Produksi/BOM wajib memiliki minimal 1 material.", "PRODUCTION_BOM_MATERIAL_REQUIRED");
+  }
+  if (stepLines.length !== 1 || !normalizeText(stepLines[0]?.stepId)) {
+    fail(
+      "Resep Produksi/BOM wajib memiliki tepat 1 Tahapan Produksi. Buat BOM terpisah untuk tahap berikutnya.",
+      "PRODUCTION_BOM_SINGLE_STEP_REQUIRED",
+    );
+  }
+
+  if (db) {
+    const step = await getRecord(db, "production_steps", normalizeText(stepLines[0].stepId), "Tahapan Produksi");
+    if (step.isActive === false || normalizeLower(step.status) === "inactive") {
+      fail("Tahapan Produksi pada BOM sudah nonaktif.", "PRODUCTION_BOM_STEP_INACTIVE", 409);
+    }
+  }
+
+  return true;
+};
+
+const validateProductionBomDirectCreate = ({ db = null, payload = {} } = {}) =>
+  validateProductionBomPayload({ db, payload });
+
+const validateProductionBomDirectUpdate = ({ db = null, mergedPayload = {} } = {}) =>
+  validateProductionBomPayload({ db, payload: mergedPayload });
+
 const getProductionRouterDefinitions = () => [
   {
     path: "/steps",
@@ -187,6 +226,8 @@ const getProductionRouterDefinitions = () => [
       codePrefix: "BOM",
       requiredName: false,
       protectedWriteNote: PRODUCTION_PROTECTED_WRITE_NOTE,
+      validateDirectCreate: validateProductionBomDirectCreate,
+      validateDirectUpdate: validateProductionBomDirectUpdate,
     },
   },
   {
@@ -264,4 +305,5 @@ module.exports = {
   assertDirectCreateAllowed,
   assertDirectUpdateAllowed,
   getProductionRouterDefinitions,
+  validateProductionBomPayload,
 };

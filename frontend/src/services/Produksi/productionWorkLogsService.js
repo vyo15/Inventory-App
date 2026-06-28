@@ -6,7 +6,14 @@ import {
   listProductionRecords,
   updateProductionRecord,
 } from "../../data/adapters/sqlite/sqliteProductionAdapter";
-import { getProductionOrderById } from "./productionOrdersService";
+import {
+  getAllProductionOrders,
+  getProductionOrderById,
+  getProductionOrderReferenceData,
+} from "./productionOrdersService";
+import { getActiveProductionEmployees } from "./productionEmployeesService";
+import { getActiveProductionProfiles } from "./productionProfilesService";
+import { getActiveProductionSteps } from "./productionStepsService";
 import {
   buildWorkLogDraftFromBom as buildWorkLogDraftFromBomPayload,
   normalizeProductionWorkLogPayload,
@@ -16,7 +23,43 @@ import {
 const safeTrim = (value) => String(value || "").trim();
 
 export const validateProductionWorkLog = validateProductionWorkLogPayload;
-export const getWorkLogReferenceData = async () => ({ productionOrders: [], boms: [], employees: [], steps: [] });
+
+export const getWorkLogReferenceData = async () => {
+  const loaders = [
+    ["inventory", getProductionOrderReferenceData],
+    ["productionOrders", getAllProductionOrders],
+    ["employees", getActiveProductionEmployees],
+    ["productionSteps", getActiveProductionSteps],
+    ["productionProfiles", getActiveProductionProfiles],
+  ];
+  const settled = await Promise.allSettled(loaders.map(([, loader]) => loader()));
+  const values = {};
+  const metaWarnings = [];
+
+  settled.forEach((result, index) => {
+    const [key] = loaders[index];
+    if (result.status === "fulfilled") {
+      values[key] = result.value;
+      return;
+    }
+    values[key] = key === "inventory" ? {} : [];
+    metaWarnings.push(`Referensi ${key} gagal dimuat. Muat ulang sebelum menyelesaikan Work Log.`);
+  });
+
+  const inventory = values.inventory || {};
+  return {
+    boms: Array.isArray(inventory.boms) ? inventory.boms : [],
+    productionOrders: Array.isArray(values.productionOrders) ? values.productionOrders : [],
+    employees: Array.isArray(values.employees) ? values.employees : [],
+    rawMaterials: Array.isArray(inventory.rawMaterials) ? inventory.rawMaterials : [],
+    semiFinishedMaterials: Array.isArray(inventory.semiFinishedMaterials) ? inventory.semiFinishedMaterials : [],
+    products: Array.isArray(inventory.products) ? inventory.products : [],
+    productionSteps: Array.isArray(values.productionSteps) ? values.productionSteps : [],
+    productionProfiles: Array.isArray(values.productionProfiles) ? values.productionProfiles : [],
+    metaWarnings,
+  };
+};
+
 export const buildWorkLogDraftFromBom = (...args) => buildWorkLogDraftFromBomPayload(...args);
 
 export const buildWorkLogDraftFromProductionOrder = async (orderIdOrOrder = {}) => {
@@ -101,8 +144,7 @@ export const completeProductionWorkLog = async (id, payloadOrUser = {}, currentU
   );
   void currentUser;
   const payload = looksLikeUser ? {} : (payloadOrUser || {});
-  const result = await commitProductionWorkLogComplete(id, payload);
-  return result?.workLog || result;
+  return commitProductionWorkLogComplete(id, payload);
 };
 
 export const updateWorkLogStatus = async (id, status, currentUser = null) => updateProductionWorkLog(

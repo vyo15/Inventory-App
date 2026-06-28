@@ -1,4 +1,4 @@
-import { Button, Dropdown, Space } from "antd";
+import { App, Button, Dropdown, Space } from "antd";
 import { MoreOutlined } from "@ant-design/icons";
 import "./MobileActionMenu.css";
 
@@ -7,6 +7,7 @@ import "./MobileActionMenu.css";
 // Fungsi:
 // - menjaga card mobile tetap ringkas dengan maksimal dua aksi utama terlihat.
 // - aksi tambahan/destructive masuk menu titik tiga.
+// - metadata confirm opsional menjaga guard destructive tetap aktif di mobile.
 // Guardrail:
 // - presentational-only; jangan masukkan mutation stok, sales, purchase, finance,
 //   production, reset, restore, atau business rule langsung di komponen ini.
@@ -17,6 +18,7 @@ const MobileActionMenu = ({
   className = "",
   maxPrimaryActions = 1,
 }) => {
+  const { modal } = App.useApp();
   const visiblePrimaryActions = (Array.isArray(primaryActions) ? primaryActions : [])
     .filter(Boolean)
     .slice(0, Math.max(1, Number(maxPrimaryActions) || 1));
@@ -24,9 +26,26 @@ const MobileActionMenu = ({
   const menuItems = dropdownActions.map((item, index) => ({
     key: item.key || `mobile-action-${index}`,
     label: item.label,
+    icon: item.icon,
     danger: item.danger,
     disabled: item.disabled,
-    onClick: item.onClick,
+    onClick: (info) => {
+      info?.domEvent?.stopPropagation?.();
+
+      if (!item.confirm) {
+        item.onClick?.(info);
+        return;
+      }
+
+      modal.confirm({
+        title: item.confirm.title,
+        content: item.confirm.description,
+        okText: item.confirm.okText || "Ya",
+        cancelText: item.confirm.cancelText || "Batal",
+        okButtonProps: item.confirm.okButtonProps,
+        onOk: () => item.onClick?.(info),
+      });
+    },
   }));
 
   if (!visiblePrimaryActions.length && !menuItems.length) {

@@ -1227,7 +1227,7 @@ const Sales = () => {
             title="Data Penjualan"
             subtitle="Isi pelanggan, item, channel, status, tanggal, dan catatan tanpa mengubah flow stok keluar."
           >
-          <Form.Item label="Pelanggan" name="customerId" extra="Opsional untuk pembeli umum.">
+          <Form.Item label="Pelanggan" name="customerId" tooltip="Opsional untuk pembeli umum.">
             <Select placeholder="Pilih pelanggan" allowClear showSearch optionFilterProp="children">
               {customers.map((customer) => (
                 <Option key={customer.id} value={customer.id}>
@@ -1313,7 +1313,7 @@ const Sales = () => {
                                 name={[name, "variantKey"]}
                                 label={selectedItem.variantLabel || "Varian"}
                                 rules={[{ required: true, message: "Pilih varian!" }]}
-                                extra="Item bervarian wajib pilih varian."
+                                tooltip="Item bervarian wajib pilih varian."
                               >
                                 <Select placeholder="Pilih varian" showSearch optionFilterProp="children">
                                   {buildVariantOptionsFromItem(selectedItem).map((item) => (

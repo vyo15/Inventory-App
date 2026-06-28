@@ -88,6 +88,10 @@ const env = {
   corsOrigin: process.env.IMS_SQLITE_CORS_ORIGIN || "",
   corsOrigins: parseOrigins(process.env.IMS_SQLITE_CORS_ORIGIN),
   dbPath: resolveFromBackend(process.env.IMS_SQLITE_DB_PATH, "../data/ims-sqlite-sidecar.sqlite"),
+  operationalSourceDbPath: resolveFromBackend(
+    process.env.IMS_OPERATIONAL_SOURCE_DB_PATH,
+    "../data/ims-sqlite-sidecar.sqlite",
+  ),
   defaultDbPath,
   defaultBackupDir,
   defaultLogDir,

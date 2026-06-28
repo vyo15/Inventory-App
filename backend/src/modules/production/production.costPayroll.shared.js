@@ -22,52 +22,95 @@ const {
   toRecord,
 } = require("./production.shared");
 
+const hasOwn = (value = {}, key = "") => Object.prototype.hasOwnProperty.call(value, key);
+
 const getPayrollRule = async (db, workLog = {}) => {
+  const hasSnapshot = [
+    "stepPayrollMode",
+    "stepPayrollRate",
+    "stepPayrollQtyBase",
+    "stepPayrollOutputBasis",
+    "stepPayrollClassification",
+    "stepPayrollIncludeInHpp",
+  ].some((field) => hasOwn(workLog, field));
+
+  if (hasSnapshot) {
+    const payrollClassification = workLog.stepPayrollClassification
+      || (workLog.stepProcessType === "support_process" ? "support_fulfillment" : "direct_labor");
+    return {
+      step: null,
+      payrollMode: workLog.stepPayrollMode === "per_batch" ? "per_batch" : "per_qty",
+      payrollRate: toPositiveNumber(workLog.stepPayrollRate),
+      payrollQtyBase: Math.max(1, toPositiveNumber(workLog.stepPayrollQtyBase || 1)),
+      payrollOutputBasis: workLog.stepPayrollOutputBasis === "actual_output_qty" ? "actual_output_qty" : "good_qty",
+      payrollClassification,
+      includePayrollInHpp: typeof workLog.stepPayrollIncludeInHpp === "boolean"
+        ? workLog.stepPayrollIncludeInHpp
+        : payrollClassification === "direct_labor",
+      source: workLog.stepPayrollRuleSource || "work_log_step_snapshot",
+    };
+  }
+
   let step = null;
   if (workLog.stepId) {
     const row = await db.get("SELECT * FROM production_steps WHERE id = ? AND status != 'deleted'", [workLog.stepId]);
     if (row) step = toRecord(row);
   }
   const payrollClassification = step?.payrollClassification
-    || workLog.stepPayrollClassification
-    || ((step?.processType || workLog.stepProcessType) === "support_process" ? "support_fulfillment" : "direct_labor");
+    || (step?.processType === "support_process" ? "support_fulfillment" : "direct_labor");
   return {
     step,
-    payrollMode: (step?.payrollMode || workLog.stepPayrollMode) === "per_batch" ? "per_batch" : "per_qty",
-    payrollRate: toPositiveNumber(step?.payrollRate ?? workLog.stepPayrollRate ?? 0),
-    payrollQtyBase: Math.max(1, toPositiveNumber(step?.payrollQtyBase ?? workLog.stepPayrollQtyBase ?? 1)),
-    payrollOutputBasis: (step?.payrollOutputBasis || workLog.stepPayrollOutputBasis) === "actual_output_qty" ? "actual_output_qty" : "good_qty",
+    payrollMode: step?.payrollMode === "per_batch" ? "per_batch" : "per_qty",
+    payrollRate: toPositiveNumber(step?.payrollRate ?? 0),
+    payrollQtyBase: Math.max(1, toPositiveNumber(step?.payrollQtyBase ?? 1)),
+    payrollOutputBasis: step?.payrollOutputBasis === "actual_output_qty" ? "actual_output_qty" : "good_qty",
     payrollClassification,
     includePayrollInHpp: typeof step?.includePayrollInHpp === "boolean"
       ? step.includePayrollInHpp
-      : typeof workLog.stepPayrollIncludeInHpp === "boolean"
-        ? workLog.stepPayrollIncludeInHpp
-        : payrollClassification === "direct_labor",
+      : payrollClassification === "direct_labor",
+    source: step?.id ? "production_step_master_legacy_fallback" : "missing_payroll_rule",
   };
 };
 
 const getWorkersForWorkLog = async (db, workLog = {}) => {
-  const ids = Array.isArray(workLog.workerIds) ? workLog.workerIds.filter(Boolean) : [];
+  const ids = [...new Set(Array.isArray(workLog.workerIds) ? workLog.workerIds.filter(Boolean) : [])];
   const names = Array.isArray(workLog.workerNames) ? workLog.workerNames.filter(Boolean) : [];
   const codes = Array.isArray(workLog.workerCodes) ? workLog.workerCodes.filter(Boolean) : [];
+
+  if (ids.length > 1 || (!ids.length && names.length > 1)) {
+    fail(
+      "Satu Work Log hanya boleh memiliki 1 operator agar qty hasil dan payroll tidak terhitung ganda. Pisahkan Production Order/Work Log per operator.",
+      "PRODUCTION_SINGLE_WORKER_REQUIRED",
+      409,
+    );
+  }
+
   const employeeRows = await listRecords(db, "production_employees");
   const workers = [];
 
   ids.forEach((id, index) => {
-    const employee = employeeRows.find((row) => row.id === id);
+    const employee = employeeRows.find((row) => normalizeText(row.id) === normalizeText(id));
+    if (!employee) {
+      fail("Operator produksi tidak ditemukan.", "PRODUCTION_WORKER_NOT_FOUND", 409);
+    }
+    if (employee.isActive === false || normalizeLower(employee.status) === "inactive") {
+      fail("Operator produksi yang dipilih sudah nonaktif.", "PRODUCTION_WORKER_INACTIVE", 409);
+    }
     workers.push({
-      id,
-      code: employee?.code || codes[index] || "",
-      name: employee?.name || names[index] || id,
+      id: employee.id,
+      code: employee.code || codes[index] || "",
+      name: employee.name || names[index] || employee.id,
+      assignedStepIds: Array.isArray(employee.assignedStepIds) ? employee.assignedStepIds : [],
     });
   });
 
-  if (!workers.length) {
-    names.forEach((name, index) => workers.push({
-      id: `name:${normalizeLower(name)}`,
-      code: codes[index] || "",
-      name,
-    }));
+  if (!workers.length && names.length === 1) {
+    workers.push({
+      id: `name:${normalizeLower(names[0])}`,
+      code: codes[0] || "",
+      name: names[0],
+      assignedStepIds: [],
+    });
   }
 
   return workers;
@@ -150,7 +193,7 @@ const generatePayrollLinesInTransaction = async (db, {
       totalAmount: amounts.finalAmount,
       status: "draft",
       paymentStatus: "unpaid",
-      payrollRuleSource: rule.step?.id ? "production_step_master" : "work_log_step_snapshot",
+      payrollRuleSource: rule.source,
       createdAt: nowIso(),
       createdBy: actor,
       updatedAt: nowIso(),

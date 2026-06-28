@@ -1041,7 +1041,7 @@ const ProductionPlanning = () => {
               label="Varian Target"
               name="targetVariantKey"
               rules={[{ required: true, message: "Varian target wajib dipilih" }]}
-              extra="Progress mengikuti varian target."
+              tooltip="Progress mengikuti varian target."
             >
               <Select
                 showSearch

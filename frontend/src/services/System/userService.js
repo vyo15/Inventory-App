@@ -12,6 +12,7 @@ import {
   USER_STATUS_LABELS,
   canAccessUserManagement,
   canCreateUserProfile,
+  canEditUserProfile,
   canManageUserProfile,
   canViewUserProfile,
 } from "../../utils/auth/roleAccess";
@@ -61,18 +62,24 @@ const normalizeLocalSystemUser = (user = {}) => {
     createdBy: user.createdBy || "sqlite_local",
     updatedBy: user.updatedBy || "sqlite_local",
     lastLoginAt: user.lastLoginAt || user.last_login_at || null,
+    avatarDataUrl: user.avatarDataUrl || user.avatar_data_url || null,
   };
 };
 
 const validateUsername = (username) => Boolean(username) && /^[a-z0-9._-]+$/i.test(username);
 
-const normalizeLocalUserPayload = (values = {}) => ({
-  username: String(values.username || "").trim(),
-  displayName: String(values.displayName || values.username || "").trim(),
-  role: values.role || ROLES.USER,
-  status: values.status || USER_STATUS.ACTIVE,
-  password: values.password ? String(values.password) : undefined,
-});
+const normalizeLocalUserPayload = (values = {}) => {
+  const payload = {
+    username: String(values.username || "").trim(),
+    displayName: String(values.displayName || values.username || "").trim(),
+    role: values.role || ROLES.USER,
+    status: values.status || USER_STATUS.ACTIVE,
+    password: values.password ? String(values.password) : undefined,
+  };
+
+  if (values.avatarDataUrl) payload.avatarDataUrl = String(values.avatarDataUrl);
+  return payload;
+};
 
 const normalizeLocalUserPatch = (values = {}) => {
   const payload = {};
@@ -95,6 +102,10 @@ const normalizeLocalUserPatch = (values = {}) => {
 
   if (values.password) {
     payload.password = String(values.password);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(values, "avatarDataUrl")) {
+    payload.avatarDataUrl = values.avatarDataUrl ? String(values.avatarDataUrl) : null;
   }
 
   return payload;
@@ -124,6 +135,13 @@ const assertActorCanCreate = (actorProfile = {}, targetRole = ROLES.USER) => {
   }
 };
 
+const assertActorCanEditTarget = (actorProfile = {}, targetUser = {}) => {
+  const targetRole = targetUser.role || ROLES.USER;
+  if (!canEditUserProfile({ actorRole: actorProfile.role, targetRole })) {
+    throw createGuardError("Role ini tidak boleh mengubah profil user target.");
+  }
+};
+
 const assertActorCanManageTarget = (actorProfile = {}, targetUser = {}) => {
   const targetRole = targetUser.role || ROLES.USER;
   const targetUid = targetUser.authUid || targetUser.id || "";
@@ -135,7 +153,7 @@ const assertActorCanManageTarget = (actorProfile = {}, targetUser = {}) => {
   });
 
   if (!canManage) {
-    throw createGuardError("Role ini tidak boleh mengubah user target.");
+    throw createGuardError("Role ini tidak boleh mengubah role atau status user target.");
   }
 };
 
@@ -180,7 +198,34 @@ export const updateSystemUserProfile = async (userOrId, values, actorProfile) =>
     ? userOrId
     : { id: userId, role: payload.role || ROLES.USER };
 
-  assertActorCanManageTarget(actorProfile, targetUser);
+  assertActorCanEditTarget(actorProfile, targetUser);
+
+  const actorUid = resolveActorUid(actorProfile);
+  const targetUid = targetUser.authUid || targetUser.id || "";
+  const isSelfUpdate = Boolean(actorUid && targetUid && actorUid === targetUid);
+
+  if (isSelfUpdate) {
+    const requestedUsername = Object.prototype.hasOwnProperty.call(payload, "username")
+      ? String(payload.username || "").trim()
+      : targetUser.username;
+    const requestedRole = Object.prototype.hasOwnProperty.call(payload, "role")
+      ? payload.role
+      : targetUser.role;
+    const requestedStatus = Object.prototype.hasOwnProperty.call(payload, "status")
+      ? payload.status
+      : targetUser.status;
+
+    if (requestedUsername && targetUser.username && requestedUsername !== targetUser.username) {
+      throw createGuardError("Username akun sendiri tidak dapat diubah dari Manajemen User.");
+    }
+    if (requestedRole !== targetUser.role || requestedStatus !== targetUser.status) {
+      throw createGuardError("Role dan status akun sendiri tidak dapat diubah.");
+    }
+
+    delete payload.username;
+    delete payload.role;
+    delete payload.status;
+  }
 
   if (payload.password) {
     const passwordError = validateLocalPasswordPolicy(payload.password);
@@ -204,6 +249,14 @@ export const deleteSystemUserProfile = async (userOrId, actorProfile) => {
   return deleteLocalUser(userId);
 };
 
-export const updateSystemUserStatus = async (userOrId, status, actorProfile) => (
-  updateSystemUserProfile(userOrId, { status }, actorProfile)
-);
+export const updateSystemUserStatus = async (userOrId, status, actorProfile) => {
+  const userId = resolveUserId(userOrId);
+  assertUserExists(userId);
+
+  const targetUser = typeof userOrId === "object" && userOrId !== null
+    ? userOrId
+    : { id: userId, role: ROLES.USER };
+
+  assertActorCanManageTarget(actorProfile, targetUser);
+  return normalizeLocalSystemUser(await updateLocalUser(userId, { status }));
+};

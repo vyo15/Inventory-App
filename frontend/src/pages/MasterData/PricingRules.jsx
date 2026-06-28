@@ -15,7 +15,6 @@ import {
   Switch,
   Tag,
   message,
-  Popconfirm,
   Card,
   Row,
   Col,
@@ -37,6 +36,7 @@ import { formatCurrencyIDR } from "../../utils/formatters/currencyId";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
+import TableActionMenu from "../../components/Layout/Table/TableActionMenu";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 
 // SECTION: import pricing service
@@ -506,36 +506,40 @@ const PricingRules = () => {
     {
       title: "Aksi",
       key: "actions",
-      width: "14%",
+      width: 132,
       className: "app-table-action-column",
       render: (_, record) => (
-        <div className="ims-action-group ims-action-group--vertical">
-          {/* AKTIF / GUARDED: action Pricing Rules tetap Detail/Edit/Nonaktifkan; hanya layout table yang dipadatkan. */}
-          <Button
-            className="ims-action-button ims-action-button--block"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handlePreviewRule(record)}
-          >
-            Detail
-          </Button>
-
-          <Button className="ims-action-button ims-action-button--block" size="small" icon={<EditOutlined />} onClick={() => openEditModal(record)}>
-            Edit
-          </Button>
-
-          <Popconfirm
-            title="Nonaktifkan pricing rule?"
-            description="Rule tetap tersimpan sebagai histori dan dapat ditinjau dari Maintenance."
-            okText="Ya"
-            cancelText="Batal"
-            onConfirm={() => handleDeactivateRule(record?.id)}
-          >
-            <Button className="ims-action-button ims-action-button--block" size="small" danger icon={<StopOutlined />}>
-              Nonaktifkan
-            </Button>
-          </Popconfirm>
-        </div>
+        <TableActionMenu
+          visibleActions={[
+            {
+              key: "detail",
+              label: "Detail",
+              icon: <EyeOutlined />,
+              onClick: () => handlePreviewRule(record),
+            },
+          ]}
+          moreActions={[
+            {
+              key: "edit",
+              label: "Edit",
+              icon: <EditOutlined />,
+              onClick: () => openEditModal(record),
+            },
+            {
+              key: "deactivate",
+              label: "Nonaktifkan",
+              icon: <StopOutlined />,
+              danger: true,
+              confirm: {
+                title: "Nonaktifkan pricing rule?",
+                description: "Rule tetap tersimpan sebagai histori dan dapat ditinjau dari Maintenance.",
+                okText: "Ya",
+                cancelText: "Batal",
+              },
+              onClick: () => handleDeactivateRule(record?.id),
+            },
+          ]}
+        />
       ),
     },
   ];
@@ -636,32 +640,35 @@ const PricingRules = () => {
       ) },
       { label: 'Pembulatan', value: (record) => `${String(record?.roundingType || 'up').toUpperCase()} / ${formatNumberId(record?.roundingUnit || 0)}` },
     ],
-    actions: (record) => (
-      <div className="ims-action-group ims-action-group--vertical">
-        <Button
-          className="ims-action-button ims-action-button--block"
-          size="small"
-          icon={<EyeOutlined />}
-          onClick={() => handlePreviewRule(record)}
-        >
-          Detail
-        </Button>
-        <Button className="ims-action-button ims-action-button--block" size="small" icon={<EditOutlined />} onClick={() => openEditModal(record)}>
-          Edit
-        </Button>
-        <Popconfirm
-          title="Nonaktifkan pricing rule?"
-          description="Rule tetap tersimpan sebagai histori dan dapat ditinjau dari Maintenance."
-          okText="Ya"
-          cancelText="Batal"
-          onConfirm={() => handleDeactivateRule(record?.id)}
-        >
-          <Button className="ims-action-button ims-action-button--block" size="small" danger icon={<StopOutlined />}>
-            Nonaktifkan
-          </Button>
-        </Popconfirm>
-      </div>
-    ),
+    primaryActions: (record) => [
+      {
+        key: "detail",
+        label: "Detail",
+        icon: <EyeOutlined />,
+        onClick: () => handlePreviewRule(record),
+      },
+    ],
+    moreActions: (record) => [
+      {
+        key: "edit",
+        label: "Edit",
+        icon: <EditOutlined />,
+        onClick: () => openEditModal(record),
+      },
+      {
+        key: "deactivate",
+        label: "Nonaktifkan",
+        icon: <StopOutlined />,
+        danger: true,
+        confirm: {
+          title: "Nonaktifkan pricing rule?",
+          description: "Rule tetap tersimpan sebagai histori dan dapat ditinjau dari Maintenance.",
+          okText: "Ya",
+          cancelText: "Batal",
+        },
+        onClick: () => handleDeactivateRule(record?.id),
+      },
+    ],
   };
 
 

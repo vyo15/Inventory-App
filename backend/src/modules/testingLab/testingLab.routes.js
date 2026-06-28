@@ -8,6 +8,8 @@ const requireAdmin = [requireLocalAuth, requireLocalAdministrator];
 router.get("/runtime", requireLocalAuth, controller.getTestingLabRuntimeStatusController);
 router.get("/status", ...requireAdmin, controller.getTestingLabStatusController);
 router.get("/result-export", ...requireAdmin, controller.exportLastTestingResultController);
+router.get("/operational-source/preview", ...requireAdmin, controller.previewOperationalSourceController);
+router.post("/operational-source/clone", ...requireAdmin, controller.cloneOperationalSourceController);
 router.post("/baseline", ...requireAdmin, controller.createTestingBaselineController);
 router.post("/baseline/select", ...requireAdmin, controller.setActiveTestingBaselineController);
 router.post("/reset", ...requireAdmin, controller.resetSandboxToBaselineController);

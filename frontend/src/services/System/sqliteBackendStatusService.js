@@ -3,6 +3,7 @@ const LEGACY_AUTH_TOKEN_KEY = "ims.sqlite.authToken";
 export const MAINTENANCE_STATUS_CONTRACT_VERSION = 3;
 const LEGACY_SQLITE_CLIENT_ID_KEY = "ims.sqlite.clientId";
 const SQLITE_BROWSER_ID_KEY = "ims.sqlite.browserId";
+let sqliteBrowserId = "";
 let sqlitePageInstanceId = "";
 
 const REQUIRED_MAINTENANCE_COUNT_TABLES = Object.freeze([
@@ -37,14 +38,21 @@ const createRuntimeIdentifier = (prefix) => {
 };
 
 const getSqliteBrowserId = () => {
+  if (sqliteBrowserId) return sqliteBrowserId;
+
   try {
     const existing = window.localStorage.getItem(SQLITE_BROWSER_ID_KEY);
-    if (existing) return existing;
-    const generated = createRuntimeIdentifier("browser");
-    window.localStorage.setItem(SQLITE_BROWSER_ID_KEY, generated);
-    return generated;
+    if (existing) {
+      sqliteBrowserId = existing;
+      return sqliteBrowserId;
+    }
+
+    sqliteBrowserId = createRuntimeIdentifier("browser");
+    window.localStorage.setItem(SQLITE_BROWSER_ID_KEY, sqliteBrowserId);
+    return sqliteBrowserId;
   } catch {
-    return createRuntimeIdentifier("browser-volatile");
+    sqliteBrowserId = createRuntimeIdentifier("browser-volatile");
+    return sqliteBrowserId;
   }
 };
 

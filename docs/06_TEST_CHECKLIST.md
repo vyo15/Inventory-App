@@ -342,7 +342,9 @@ Referensi detail: `docs/21_RESPONSIVE_UI_UX_STANDARD.md`.
 - [ ] Buka IMS di laptop dan HP dengan session valid; hanya satu koneksi SSE dibuat per tab.
 - [ ] Tambah Customer di client A; daftar Customer dan Cakupan Data client B berubah tanpa reload manual.
 - [ ] Ubah Supplier/Kategori/Produk dari client B; hanya route yang relevan pada client A yang refresh.
-- [ ] Mutation client asal tidak memicu remount berulang karena `X-IMS-Client-ID`.
+- [ ] Semua request mutation normal membawa `X-IMS-Client-ID` yang sama dengan query `clientId` koneksi SSE tab tersebut; event kembali ditandai `isLocalOrigin=true` dan hanya menjalankan satu refresh scope setelah commit.
+- [ ] Client ID tetap stabil selama tab hidup ketika `localStorage` dibersihkan atau tidak tersedia.
+- [ ] Query `clientId` pada endpoint mutation tidak boleh menyamar sebagai origin bila header `X-IMS-Client-ID` tidak ada.
 - [ ] Duplicate tab pada browser yang sama menghasilkan page-instance ID berbeda; mutation tab A tetap diterima tab B.
 - [ ] Write dalam transaction hanya mengirim event setelah commit; rollback tidak mengirim event.
 - [ ] Burst beberapa write menghasilkan event ter-debounce dan request refresh tidak overlap.
@@ -390,6 +392,18 @@ Referensi detail: `docs/21_RESPONSIVE_UI_UX_STANDARD.md`.
 - [ ] Folder backup sandbox berbeda dari folder backup operasional.
 - [ ] Header menampilkan badge `MODE TESTING` ketika purpose sandbox aktif.
 
+### Clone data operasional
+- [ ] `npm run lab` meneruskan path database operasional yang benar sebagai source read-only, termasuk bila lokasi operasional custom.
+- [ ] Preview menampilkan filename, schema, ukuran, integrity, akun, dan jumlah data tanpa menulis source.
+- [ ] Clone membutuhkan keyword `SALIN DATA OPERASIONAL` dan hanya dapat dijalankan Administrator.
+- [ ] Clone ditolak bila source sama dengan sandbox, source symlink/tidak ditemukan, versi schema tidak sama dengan sandbox, integrity gagal, atau tidak ada administrator aktif.
+- [ ] Sandbox lama dibackup dengan tipe `pre-import` sebelum penggantian.
+- [ ] Snapshot clone menghapus `local_user_sessions`, `backup_logs`, `restore_logs`, audit Lab lama dari source, serta setting `testing_lab.*`.
+- [ ] User/master/stok/transaksi/counter/audit bisnis dari operasional tetap terbawa.
+- [ ] Setelah clone, baseline tipe `test` aktif dan seluruh client diwajibkan reload/login ulang.
+- [ ] Database operasional tidak berubah ukuran/mtime akibat operasi clone dan tidak menerima audit/log baru dari Lab.
+- [ ] Riwayat sesi Lab sandbox sebelum clone dipulihkan tanpa mencampur session aktif atau hasil baseline lama.
+
 ### Baseline dan reset
 - [ ] Pembuatan baseline membutuhkan keyword `BUAT BASELINE TESTING`.
 - [ ] Baseline tersimpan sebagai backup tipe `test` dan berstatus verified.
@@ -409,3 +423,18 @@ Referensi detail: `docs/21_RESPONSIVE_UI_UX_STANDARD.md`.
 - [ ] Validasi memeriksa integrity SQLite, foreign key, administrator aktif, projection stok, saldo stok, dan duplicate ledger source.
 - [ ] Sesi selesai/cancel/reset tercatat pada audit log dan terlihat pada Riwayat Sesi.
 - [ ] Export hasil JSON tidak memuat token, password hash, atau payload pribadi realtime.
+
+## Produksi Multi-Jenis Bunga dan Payroll Snapshot — 2026-06-28
+
+- [ ] Reference form BOM memuat Tahapan Produksi aktif.
+- [ ] BOM tanpa step dan BOM dengan lebih dari satu step ditolak frontend serta backend.
+- [ ] BOM lama multi-step tidak dapat membuat/memulai PO sebelum diperbaiki menjadi satu step.
+- [ ] Start Production menyimpan snapshot payroll/monitoring dari master step aktif.
+- [ ] Ubah tarif master setelah Start; Complete tetap memakai tarif snapshot lama.
+- [ ] Complete Work Log hanya memanggil endpoint complete atomic satu kali dan tidak memanggil generate payroll kedua.
+- [ ] Operator aktif muncul pada modal Complete; operator yang assigned ke step diprioritaskan.
+- [ ] Dua operator pada satu Work Log ditolak tanpa menambah output/payroll atau menutup PO.
+- [ ] Operator nonaktif ditolak.
+- [ ] Semi Finished tanpa Jenis Bunga tersimpan dan tampil sebagai `Umum / Reusable`.
+- [ ] Mawar dan Tulip dapat memakai master Tahapan yang sama dengan BOM/item berbeda.
+- [ ] Monitoring Profile memakai `monitoringMetric` eksplisit; rename nama step tidak mengubah jenis yield.

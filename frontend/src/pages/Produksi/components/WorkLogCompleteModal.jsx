@@ -8,6 +8,7 @@ const WorkLogCompleteModal = ({
   open,
   form,
   employeeOptions,
+  assignmentApplied = false,
   estimateInfo,
   onCancel,
   onOk,
@@ -39,20 +40,25 @@ const WorkLogCompleteModal = ({
       <Form.Item
         label="Operator Produksi"
         name="workerIds"
+        extra={assignmentApplied
+          ? "Daftar diprioritaskan dari operator yang ditugaskan pada tahapan ini."
+          : "Pilih tepat 1 operator. Jika pekerjaan dibagi, pisahkan Production Order/Work Log per operator agar payroll tidak terhitung ganda."}
         rules={[
           {
             required: true,
             type: "array",
             min: 1,
-            message: "Operator Produksi wajib dipilih agar payroll otomatis bisa dibuat",
+            max: 1,
+            message: "Pilih tepat 1 Operator Produksi agar payroll akurat",
           },
         ]}
       >
         <Select
           mode="multiple"
+          maxCount={1}
           optionFilterProp="label"
           options={employeeOptions}
-          placeholder="Pilih operator yang mengerjakan work log ini..."
+          placeholder="Pilih 1 operator yang mengerjakan Work Log..."
         />
       </Form.Item>
 

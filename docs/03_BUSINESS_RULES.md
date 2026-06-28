@@ -451,7 +451,7 @@ Status: **AKTIF / GUARDED / TRANSACTIONAL**.
 
 - Tahapan Produksi memakai `basisType` sebagai field aktif untuk cara kerja step. Field `workBasisType` tidak dipakai lagi di source terbaru.
 - Label basis step aktif adalah: `Per Meter Bahan`, `Per Kawat`, `Per Qty`, dan `Per Batch`.
-- Cara pantau hasil / `monitoringMode` tidak lagi tampil dan tidak lagi disimpan dari form Step karena reject/QC detail belum menjadi workflow utama.
+- Field legacy `monitoringMode` tidak lagi tampil dan tidak lagi disimpan. Form Step memakai metadata eksplisit `monitoringMetric` (`none`, `petal`, `leaf`, atau `stem`) hanya bila step terhubung ke Production Profile; sistem tidak boleh menebak jenis hasil dari nama step.
 - Mode upah step aktif hanya `per_qty` dan `per_batch`; mode `fixed` tidak lagi menjadi pilihan aktif.
 - Field `payrollQtyBase` tidak lagi menjadi input atau payload dari menu Step. Untuk per qty, tarif dibaca sebagai tarif per 1 hasil. Untuk per batch, tarif mengikuti batch Work Log.
 - Klasifikasi payroll tidak dipilih manual di UI Step. Sistem menurunkan klasifikasi dari `processType` agar tidak ada rule ganda antara UI Step, Work Log, Payroll, dan HPP.
@@ -1307,14 +1307,16 @@ Kontrak resmi: `docs/10_OFFLINE_DATABASE_CONTRACT.md`.
 
 Status: **AKTIF / GUARDED**.
 
-### Realtime lintas perangkat
+### Realtime lintas perangkat dan tab pengirim
 - Backend memublikasikan invalidasi data melalui Server-Sent Events (SSE) administrator/user yang sudah login. SSE hanya membawa revision, tabel, dan scope; data bisnis tetap dibaca ulang melalui endpoint HTTP ber-role guard.
 - Event perubahan hanya boleh dikirim setelah write/transaction SQLite berhasil commit. Rollback tidak boleh mengirim event.
-- Client asal mutation tidak menerima echo normal jika `X-IMS-Client-ID` cocok. Client lain melakukan refresh silent pada scope route yang relevan.
+- Client asal mutation tetap menerima event commit dan menandainya sebagai local-origin. Dengan begitu tab yang melakukan save, tab lain, dan perangkat lain memakai jalur refresh scope yang sama; halaman boleh tetap melakukan optimistic/local state update dari response mutation untuk feedback instan.
 - `X-IMS-Client-ID` wajib unik per tab/page instance. Browser ID boleh persisten, tetapi page-instance ID wajib dibuat ulang setiap page load agar tab duplicate tetap menerima event dari tab pengirim.
-- Saat form, modal, drawer, popover, atau input aktif, refresh otomatis harus ditahan dan UI menampilkan `Data baru tersedia` agar pekerjaan user tidak hilang.
+- `fetchSqliteJson()` menjadi satu-satunya injector header `X-IMS-Client-ID` untuk request JSON normal; adapter tidak boleh membuat origin header sendiri-sendiri. Identitas browser/page wajib stabil selama tab hidup meskipun storage browser dibersihkan atau tidak tersedia.
+- Request mutation backend hanya boleh mengambil origin dari header `X-IMS-Client-ID`; query `clientId` hanya dipakai oleh koneksi EventSource karena native EventSource tidak mendukung custom header. Backend wajib memakai normalisasi client ID yang sama untuk request mutation dan registrasi SSE.
+- Saat form, modal, drawer, popover, atau input aktif, refresh otomatis harus ditahan dan UI menampilkan `Data baru tersedia` agar pekerjaan user tidak hilang. Setelah kondisi form aman, pending refresh wajib berjalan otomatis tanpa menunggu user pindah tab atau menekan tombol manual.
 - Jika SSE putus/tidak didukung, satu fallback revision global berjalan 60 detik, tidak overlap, berhenti saat tab tersembunyi, dan langsung catch-up saat tab kembali terlihat. Adapter data tidak boleh membuat polling interval masing-masing; API subscription legacy hanya melakukan initial load.
-- Perubahan profile akses dari tabel `users/roles` wajib diproses global sebelum pencocokan scope route dan memvalidasi ulang session melalui reload aman. Perubahan session login/logout biasa memakai scope `auth_session` dan tidak boleh me-reload seluruh device.
+- Perubahan profile akses dari tabel `users/roles` wajib memvalidasi ulang `/api/auth/me`, memperbarui AuthContext, dan menyambung ulang SSE agar snapshot role koneksi tidak stale. Perubahan profile biasa tidak boleh memaksa reload browser penuh; hanya `session_expired` dan `database_replaced` yang memakai reload global. Perubahan session login/logout biasa memakai scope `auth_session` dan tidak boleh me-reload seluruh device.
 - Koneksi SSE wajib mengikuti `expiresAt` session. Ketika session habis, backend mengirim `session_expired`, menutup stream, dan frontend melakukan reload agar user kembali melalui auth gate.
 - Revision fallback untuk role `user` hanya boleh berubah pada event yang memang terlihat oleh role tersebut; event audit/maintenance/finance administrator-only tidak boleh memicu wildcard refresh user.
 - Koneksi SSE dibatasi secara defensif per server, user, dan IP. Saat buffer client tidak mampu menerima event, koneksi ditutup agar EventSource reconnect dan fallback revision melakukan catch-up, bukan menahan memory tanpa batas.
@@ -1333,3 +1335,17 @@ Status: **AKTIF / GUARDED**.
 - Purge wajib memerlukan keyword `HAPUS PERMANEN` dan konfirmasi kedua berupa kode/nama/id target.
 - Sistem wajib membuat backup `pre-repair` sebelum purge, menjalankan hard-delete dalam transaction, dan menyimpan snapshot record yang disanitasi pada audit action `inactive_record_purge`.
 - Password hash user tidak boleh dimasukkan ke snapshot audit. Audit log purge tidak masuk allowlist purge dan harus tetap dipertahankan.
+
+## Update Rule Produksi Multi-Jenis Bunga — 2026-06-28
+
+Status: **AKTIF / GUARDED**.
+
+- Master **Tahapan Produksi** wajib memakai nama pekerjaan generik yang dapat dipakai lintas jenis bunga, misalnya `Potong Bahan Awal Kelopak`, `Bentuk Kelopak`, `Bentuk Daun`, `Potong Kawat Tangkai`, dan `Rakit Bunga`. Nama Mawar, Tulip, atau jenis lain berada pada master Jenis Bunga, item Semi Finished, dan Resep/BOM.
+- Runtime aktif memakai kontrak **1 BOM = 1 target output = tepat 1 Tahapan Produksi = 1 Production Order = 1 Work Log = 1 aturan payroll**. Proses bertingkat wajib dibuat sebagai rantai BOM/PO terpisah agar mutasi stok, payroll, dan HPP setiap tahap dapat diaudit.
+- BOM tanpa step atau BOM dengan lebih dari satu step ditolak. BOM historis multi-step harus dipersempit menjadi satu step sebelum digunakan kembali.
+- Saat **Start Production**, rule payroll master step dibekukan ke Work Log. Snapshot Work Log menjadi source of truth payroll/HPP untuk pekerjaan tersebut; perubahan tarif master setelah Start hanya berlaku untuk Work Log baru. Master step hanya boleh menjadi fallback untuk data historis yang belum memiliki snapshot.
+- Satu Work Log baru hanya boleh memiliki tepat **1 operator**. Jika pekerjaan dibagi beberapa operator, qty/PO/Work Log harus dipisahkan per operator supaya Good Qty tidak dibayar penuh berulang kepada setiap pekerja.
+- Operator yang dipilih wajib ada dan aktif. UI memprioritaskan operator yang ditugaskan ke step, tetapi assignment step tetap metadata operasional dan tidak mengganti validasi operator aktif backend.
+- Complete Work Log, output stok, payroll draft, accrued labor HPP, penutupan PO, dan audit dilakukan melalui satu endpoint/transaction atomic. Frontend tidak boleh memanggil generate payroll kedua kali setelah complete berhasil.
+- Semi Finished boleh tidak memiliki Jenis Bunga untuk komponen **Umum / Reusable**, seperti `Kawat Tangkai 20 cm`, yang digunakan lintas Mawar/Tulip.
+- Monitoring Production Profile tidak boleh ditebak dari nama step. Step memakai metadata eksplisit `monitoringMetric` (`none`, `petal`, `leaf`, atau `stem`). Production Profile tetap opsional dan bukan source of truth BOM/HPP.

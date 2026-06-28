@@ -11,6 +11,8 @@ const sidebarSource = fs.readFileSync(path.resolve("src/config/sidebarMenu.js"),
 const testingLabEndpoints = [
   "/api/testing-lab/runtime",
   "/api/testing-lab/status",
+  "/api/testing-lab/operational-source/preview",
+  "/api/testing-lab/operational-source/clone",
   "/api/testing-lab/baseline",
   "/api/testing-lab/baseline/select",
   "/api/testing-lab/reset",
@@ -40,6 +42,8 @@ describe("Testing Lab frontend contract", () => {
   it("menampilkan sandbox guard, baseline, guided scenario, validasi, diff, dan riwayat", () => {
     expect(pageSource).toContain("MODE TESTING — BUKAN DATA TOKO ASLI");
     expect(pageSource).toContain("Baseline Sandbox");
+    expect(pageSource).toContain("Ambil Data Operasional");
+    expect(pageSource).toContain("login ulang");
     expect(pageSource).toContain("Skenario Pengujian");
     expect(pageSource).toContain("Validasi & Hasil");
     expect(pageSource).toContain("Diff Sesi Terakhir");

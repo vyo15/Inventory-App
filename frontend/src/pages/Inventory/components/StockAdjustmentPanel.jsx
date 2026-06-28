@@ -899,7 +899,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
               name="variantKey"
               label="Varian Item"
               rules={[{ required: true, message: "Varian wajib dipilih untuk item bervarian" }]}
-              extra="Pilih varian jika item bervarian."
+              tooltip="Pilih varian jika item bervarian."
             >
               <Select
                 showSearch

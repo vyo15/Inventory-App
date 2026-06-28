@@ -110,14 +110,12 @@ const handleConnected = (event) => {
 
 const handleDataEvent = (eventName) => (event) => {
   const payload = parsePayload(event, eventName);
-  if (
-    eventName === "data_changed"
-    && payload.originClientId
-    && payload.originClientId === getSqliteClientId()
-  ) {
-    return;
-  }
-  emitEvent(payload);
+  emitEvent({
+    ...payload,
+    isLocalOrigin: eventName === "data_changed"
+      && Boolean(payload.originClientId)
+      && payload.originClientId === getSqliteClientId(),
+  });
 };
 
 const startSqliteRealtime = () => {
@@ -155,6 +153,12 @@ const stopSqliteRealtime = () => {
   fallbackRequestInFlight = false;
   lastKnownRevision = null;
   emitStatus({ state: "idle", connected: false });
+};
+
+export const restartSqliteRealtime = () => {
+  const hasSubscribers = listeners.size > 0 || statusListeners.size > 0;
+  stopSqliteRealtime();
+  if (hasSubscribers) startSqliteRealtime();
 };
 
 export const subscribeSqliteRealtime = (listener) => {

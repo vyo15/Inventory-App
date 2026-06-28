@@ -76,6 +76,39 @@
   margin-top: 14px !important;
 }
 
+/* ---------- Compact Desktop Density — AKTIF / UI-ONLY ----------
+   Menurunkan tinggi kontrol dan row pada desktop/laptop. Mobile tetap memakai
+   ukuran sentuh existing agar usability tidak berkurang. */
+@media (min-width: 769px) {
+  .app-content-card .ant-input,
+  .app-content-card .ant-input-affix-wrapper,
+  .app-content-card .ant-select-selector,
+  .app-content-card .ant-picker,
+  .app-content-card .ant-input-number {
+    min-height: 38px;
+  }
+
+  .app-content-card .ant-select-single .ant-select-selection-item,
+  .app-content-card .ant-select-single .ant-select-selection-placeholder {
+    line-height: 36px !important;
+  }
+
+  .app-content-card .ant-btn {
+    min-height: 36px;
+  }
+
+  .app-content-card .ant-table-thead > tr > th {
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
+  }
+
+  .app-content-card .ant-table-tbody > tr > td {
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
+    vertical-align: middle;
+  }
+}
+
 /* ---------- Drawer ---------- */
 .app-shell .ant-drawer-header {
   padding: 18px 20px !important;
@@ -302,7 +335,7 @@
 .ims-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .ims-page-alert {
@@ -321,7 +354,7 @@
 /* AKTIF / GUARDED UI: wrapper halaman tidak boleh diberi shadow agar Enterprise Clean tidak kembali jadi card bertumpuk. */
 .ims-page > .ant-card > .ant-card-body,
 .ims-page .ims-section-card.ant-card > .ant-card-body {
-  padding: 20px;
+  padding: 16px;
 }
 
 .ims-page .ims-summary-row {
@@ -335,7 +368,7 @@
 
 .ims-page .ims-summary-row .ant-card .ant-card-body,
 .ims-page .ims-summary-card.ant-card .ant-card-body {
-  padding: 18px 20px;
+  padding: 14px 16px;
 }
 
 .ims-page .ims-page-title.ant-typography {

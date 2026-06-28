@@ -62,6 +62,9 @@ export const buildBomStepFormLine = ({ values, selectedStep }) => ({
   id: values.id || createClientId("step"),
   stepCode: selectedStep?.code || '',
   stepName: selectedStep?.name || '',
+  processType: selectedStep?.processType || '',
+  basisType: selectedStep?.basisType || '',
+  monitoringMetric: selectedStep?.monitoringMetric || 'none',
 });
 
 // =====================================================

@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const logger = require("../../utils/logger");
+const { normalizeClientId } = require("../../middlewares/requestContext");
 
 const REALTIME_HEARTBEAT_INTERVAL_MS = 25_000;
 const REALTIME_MUTATION_DEBOUNCE_MS = 35;
@@ -181,13 +182,14 @@ const broadcastRealtimeEvent = ({
     ...buildScopesForTables(normalizedTables),
     ...(Array.isArray(scopes) ? scopes : [scopes]).filter(Boolean),
   ])].sort();
+  const normalizedOriginClientId = normalizeClientId(originClientId);
   const payload = {
     contractVersion: REALTIME_CONTRACT_VERSION,
     type: eventName,
     revision,
     tables: normalizedTables,
     scopes: normalizedScopes,
-    originClientId: originClientId || null,
+    originClientId: normalizedOriginClientId || null,
     occurredAt: new Date().toISOString(),
     metadata: metadata || null,
   };
@@ -205,14 +207,6 @@ const broadcastRealtimeEvent = ({
   }
 
   for (const client of clients.values()) {
-    if (
-      eventName === "data_changed"
-      && originClientId
-      && client.clientId
-      && client.clientId === originClientId
-    ) {
-      continue;
-    }
     const clientPayload = buildClientEventPayload(client, eventName, payload);
     if (clientPayload) writeSseEvent(client, eventName, clientPayload);
   }
@@ -241,7 +235,8 @@ const flushQueuedDatabaseMutations = () => {
 
 const queueDatabaseMutation = ({ tables = [], originClientId = "" } = {}) => {
   for (const tableName of normalizeTables(tables)) pendingMutationTables.add(tableName);
-  if (originClientId) pendingOriginClientIds.add(String(originClientId));
+  const normalizedOriginClientId = normalizeClientId(originClientId);
+  if (normalizedOriginClientId) pendingOriginClientIds.add(normalizedOriginClientId);
   else pendingMutationHasMissingOrigin = true;
   if (!pendingMutationTables.size || mutationFlushTimer) return;
 
@@ -250,6 +245,7 @@ const queueDatabaseMutation = ({ tables = [], originClientId = "" } = {}) => {
 };
 
 const broadcastDatabaseReplacement = ({ originClientId = "", reason = "restore" } = {}) => {
+  const normalizedOriginClientId = normalizeClientId(originClientId);
   if (mutationFlushTimer) {
     clearTimeout(mutationFlushTimer);
     mutationFlushTimer = null;
@@ -262,7 +258,7 @@ const broadcastDatabaseReplacement = ({ originClientId = "", reason = "restore" 
     tables: [],
     scopes: ["database", "auth", "maintenance", "dashboard", "reports"],
     originClientId: "",
-    metadata: { reason, requestedByClientId: originClientId || null },
+    metadata: { reason, requestedByClientId: normalizedOriginClientId || null },
   });
 };
 
@@ -291,7 +287,9 @@ const stopHeartbeatIfIdle = () => {
 
 const registerRealtimeClient = (req, res) => {
   const connectionId = crypto.randomUUID();
-  const clientId = String(req.query?.clientId || req.get("x-ims-client-id") || "").trim().slice(0, 128);
+  const clientId = normalizeClientId(
+    req.query?.clientId || req.get("x-ims-client-id") || ""
+  );
   const userId = req.localAuth?.user?.id || null;
   const ipAddress = String(req.ip || req.socket?.remoteAddress || "unknown").trim().slice(0, 128);
   const userConnectionCount = [...clients.values()].filter((client) => (

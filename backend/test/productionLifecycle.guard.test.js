@@ -4,6 +4,7 @@ const {
   assertDirectCreateAllowed,
   assertDirectUpdateAllowed,
 } = require("../src/modules/production/production.service");
+const { validateProductionBomPayload } = require("../src/modules/production/production.guards");
 
 test("direct create Planning dan Payroll wajib memakai status awal aman", async () => {
   assert.equal(await assertDirectCreateAllowed({
@@ -156,5 +157,30 @@ test("edit catatan Production Order draft tetap diizinkan", () => {
       requirementLines: [],
       materialRequirementLines: [],
     },
+  }), true);
+});
+
+
+test("BOM wajib memiliki tepat satu Tahapan Produksi", async () => {
+  const basePayload = {
+    targetId: "semi-1",
+    materialLines: [{ itemId: "raw-1", qtyPerUnit: 1 }],
+  };
+
+  await assert.rejects(
+    validateProductionBomPayload({ payload: { ...basePayload, stepLines: [] } }),
+    /tepat 1 Tahapan Produksi/,
+  );
+  await assert.rejects(
+    validateProductionBomPayload({
+      payload: {
+        ...basePayload,
+        stepLines: [{ stepId: "step-1" }, { stepId: "step-2" }],
+      },
+    }),
+    /tepat 1 Tahapan Produksi/,
+  );
+  assert.equal(await validateProductionBomPayload({
+    payload: { ...basePayload, stepLines: [{ stepId: "step-1" }] },
   }), true);
 });

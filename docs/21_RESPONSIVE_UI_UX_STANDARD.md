@@ -164,6 +164,12 @@ Setiap halaman yang disentuh wajib diuji dalam kondisi:
 
 Data banyak tidak boleh membuat body horizontal scroll. Pagination, virtualized/local scroll, table wrapper, atau mobile card/list harus dipakai sesuai komponen existing.
 
+Untuk form, modal, dan drawer operasional:
+- panduan umum yang panjang memakai `InfoPopoverButton` atau popover on-demand;
+- definisi singkat, contoh input, dan keterangan opsional satu field memakai tooltip pada label;
+- warning dinamis, alasan field terkunci, guard stok/transaksi, validasi, dan konsekuensi destructive tetap tampil langsung;
+- informasi tidak boleh dihapus hanya demi compact; pindahkan sesuai hierarchy dan pastikan tetap dapat dibuka di desktop maupun mobile.
+
 Untuk workspace admin panjang seperti Maintenance Center:
 - tab utama tidak boleh sticky bila panel mempunyai navigasi internal karena dua navigation bar dapat saling menutup saat scroll;
 - mode internal seperti Backup, Restore, Cakupan Data, dan Detail Teknis memakai selector segmented dengan local horizontal scroll pada mobile;

@@ -7,6 +7,7 @@ const { createAuditLog } = require("../../utils/auditLog");
 const { getRealtimeRuntimeStatus } = require("../realtime/realtime.service");
 const {
   createOfficialSqliteBackup,
+  createOfficialSqliteBackupFromFile,
   getBackupPreview,
   RESTORE_CONFIRM_KEYWORD,
 } = require("../maintenance/backup");
@@ -23,12 +24,17 @@ const {
   getTestingLabWriteActivity,
   getTestingLabWriteLock,
 } = require("./testingLab.runtime");
+const {
+  createSanitizedOperationalSnapshot,
+  getOperationalSourcePreview,
+} = require("./testingLab.operationalClone.service");
 
 const BASELINE_SETTING_KEY = "testing_lab.active_baseline";
 const SESSION_SETTING_KEY = "testing_lab.active_session";
 const LAST_RESULT_SETTING_KEY = "testing_lab.last_result";
 const BASELINE_CONFIRM_KEYWORD = "BUAT BASELINE TESTING";
 const RESET_CONFIRM_KEYWORD = "RESET SANDBOX";
+const OPERATIONAL_CLONE_CONFIRM_KEYWORD = "SALIN DATA OPERASIONAL";
 const MAX_RESULT_BYTES = 750_000;
 
 const TRANSACTION_TABLES = Object.freeze([
@@ -498,8 +504,126 @@ const getTestingLabStatus = async ({ role = "" } = {}) => {
     confirmKeywords: {
       createBaseline: BASELINE_CONFIRM_KEYWORD,
       resetSandbox: RESET_CONFIRM_KEYWORD,
+      cloneOperationalSource: OPERATIONAL_CLONE_CONFIRM_KEYWORD,
     },
   };
+};
+
+
+const previewOperationalSource = async () => {
+  assertTestingLabAvailable();
+  return getOperationalSourcePreview();
+};
+
+const cloneOperationalSourceToSandbox = async ({ confirmKeyword, actor = "system" } = {}) => {
+  assertTestingLabAvailable();
+  if (String(confirmKeyword || "").trim() !== OPERATIONAL_CLONE_CONFIRM_KEYWORD) {
+    throw createHttpError(
+      "Keyword salin data operasional belum sesuai.",
+      400,
+      "TESTING_LAB_OPERATIONAL_CLONE_CONFIRMATION_REQUIRED",
+    );
+  }
+
+  beginTestingLabWriteLock({ actor, reason: "sandbox_clone_operational_source" });
+  let operationalSnapshot = null;
+  try {
+    const db = await getDb();
+    await assertNoActiveTestingSession(db, "mengambil data operasional");
+    const auditHistory = await captureTestingLabAuditHistory(db);
+    const currentSchemaRow = await db.get(
+      "SELECT value FROM schema_meta WHERE key = 'schema_version'",
+    );
+    operationalSnapshot = await createSanitizedOperationalSnapshot();
+
+    const currentSchemaVersion = Number(currentSchemaRow?.value || 0);
+    const sourceSchemaVersion = Number(operationalSnapshot.validation?.schemaVersion || 0);
+    if (!sourceSchemaVersion || !currentSchemaVersion || sourceSchemaVersion !== currentSchemaVersion) {
+      throw createHttpError(
+        "Schema database operasional tidak sama dengan schema aplikasi sandbox. Jalankan mode operasional terbaru lebih dahulu.",
+        409,
+        "TESTING_LAB_OPERATIONAL_SCHEMA_UNSUPPORTED",
+      );
+    }
+
+    const sourceBackup = await createOfficialSqliteBackupFromFile(db, {
+      sourceSqlitePath: operationalSnapshot.snapshotPath,
+      sourceDbPath: `operational-read-only://${operationalSnapshot.source.filename}`,
+      sourceSnapshotMode: "operational_readonly_vacuum_sanitized",
+      type: "test",
+      actor,
+      action: "testing_lab_operational_clone_package_create",
+      notes: "Baseline sandbox dari snapshot read-only database operasional. Session dan histori backup/restore operasional telah dibersihkan.",
+    });
+
+    const restoreResult = await executeRestore({
+      confirmKeyword: RESTORE_CONFIRM_KEYWORD,
+      filename: sourceBackup.filename,
+      actor,
+      preBackupType: "pre-import",
+      preBackupAction: "testing_lab_pre_operational_clone_backup_create",
+      preBackupNotes: `Backup sandbox otomatis sebelum mengambil data operasional ${operationalSnapshot.source.filename}.`,
+      broadcastReason: "testing_lab_operational_clone_completed",
+    });
+    if (!restoreResult?.restored) {
+      throw createHttpError(
+        "Data operasional gagal diterapkan ke sandbox.",
+        409,
+        "TESTING_LAB_OPERATIONAL_CLONE_FAILED",
+      );
+    }
+
+    const restoredDb = await getDb();
+    const registeredSourceBackup = restoreResult.registeredRestoreSourceBackup || null;
+    const baseline = {
+      filename: sourceBackup.filename,
+      backupId: registeredSourceBackup?.id || sourceBackup.id,
+      createdAt: sourceBackup.manifest?.createdAt || new Date().toISOString(),
+      createdBy: actor,
+      schemaVersion: sourceBackup.manifest?.schemaVersion || sourceSchemaVersion,
+      sourceType: "operational_clone",
+      source: operationalSnapshot.source,
+      sanitization: operationalSnapshot.sanitization,
+      validationStatus: "pending",
+    };
+    await writeSetting(restoredDb, BASELINE_SETTING_KEY, baseline);
+    await clearSetting(restoredDb, SESSION_SETTING_KEY);
+    await clearSetting(restoredDb, LAST_RESULT_SETTING_KEY);
+    const restoredHistoryCount = await restoreTestingLabAuditHistory(auditHistory);
+    const validation = await runTestingValidation();
+    baseline.validationStatus = validation.overallStatus;
+    await writeSetting(restoredDb, BASELINE_SETTING_KEY, baseline);
+
+    await createAuditLog({
+      module: "testing_lab",
+      action: "operational_clone_complete",
+      entityType: "backup_log",
+      entityId: baseline.backupId || null,
+      actor,
+      description: "Snapshot read-only database operasional berhasil dijadikan baseline sandbox",
+      metadata: {
+        baseline,
+        sourceChangedDuringSnapshot: Boolean(operationalSnapshot.source.changedDuringSnapshot),
+        preImportBackup: restoreResult.preRestoreBackup?.filename || null,
+        restoredHistoryCount,
+        validationStatus: validation.overallStatus,
+      },
+    });
+
+    return {
+      cloned: true,
+      baseline,
+      validation,
+      preImportBackup: restoreResult.preRestoreBackup || null,
+      restoredHistoryCount,
+      sourceChangedDuringSnapshot: Boolean(operationalSnapshot.source.changedDuringSnapshot),
+      loginRequired: true,
+      reloadRequired: true,
+    };
+  } finally {
+    operationalSnapshot?.cleanup?.();
+    endTestingLabWriteLock();
+  }
 };
 
 const createTestingBaseline = async ({ confirmKeyword, actor = "system" } = {}) => {
@@ -654,6 +778,13 @@ const startTestingSession = async ({ scenarioKey, actor = "system" } = {}) => {
       "TESTING_LAB_BASELINE_REQUIRED",
     );
   }
+  if (baseline.validationStatus === "failed") {
+    throw createHttpError(
+      "Baseline aktif masih memiliki kegagalan validasi. Perbaiki sandbox lalu buat baseline baru.",
+      409,
+      "TESTING_LAB_BASELINE_VALIDATION_FAILED",
+    );
+  }
   const current = await readSetting(db, SESSION_SETTING_KEY, null);
   if (current?.status === "active") {
     throw createHttpError("Masih ada sesi testing aktif. Selesaikan atau batalkan sesi tersebut.", 409, "TESTING_LAB_SESSION_ACTIVE");
@@ -772,7 +903,9 @@ const exportLastTestingResult = async () => {
 
 module.exports = {
   BASELINE_CONFIRM_KEYWORD,
+  OPERATIONAL_CLONE_CONFIRM_KEYWORD,
   RESET_CONFIRM_KEYWORD,
+  cloneOperationalSourceToSandbox,
   cancelTestingSession,
   completeTestingSession,
   createTestingBaseline,
@@ -780,6 +913,7 @@ module.exports = {
   getSandboxGuard,
   getTestingLabRuntimeStatus,
   getTestingLabStatus,
+  previewOperationalSource,
   resetSandboxToBaseline,
   runTestingValidation,
   setActiveTestingBaseline,

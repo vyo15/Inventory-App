@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getSqliteRealtimeStatus,
+  restartSqliteRealtime,
   subscribeSqliteRealtime,
   subscribeSqliteRealtimeStatus,
   SQLITE_REALTIME_FALLBACK_INTERVAL_MS,
@@ -50,7 +51,7 @@ afterEach(() => {
 });
 
 describe("sqliteRealtimeService", () => {
-  it("membuka satu SSE ber-cookie, menerima perubahan client lain, dan mengabaikan echo sendiri", () => {
+  it("membuka satu SSE ber-cookie dan menerima perubahan remote maupun tab pengirim", () => {
     const events = [];
     const statuses = [];
     const unsubscribeEvent = subscribeSqliteRealtime((event) => events.push(event));
@@ -79,14 +80,33 @@ describe("sqliteRealtimeService", () => {
     });
     source.emit("session_expired", { revision: 5 });
 
-    expect(events.map((event) => event.type)).toEqual(["connected", "data_changed", "session_expired"]);
+    expect(events.map((event) => event.type)).toEqual([
+      "connected",
+      "data_changed",
+      "data_changed",
+      "session_expired",
+    ]);
     expect(events[1]).toMatchObject({ revision: 4, scopes: ["customers"] });
+    expect(events[1].isLocalOrigin).toBe(false);
+    expect(events[2]).toMatchObject({ revision: 5, scopes: ["customers"], isLocalOrigin: true });
     expect(statuses.some((item) => item.connected === true)).toBe(true);
     expect(getSqliteRealtimeStatus()).toMatchObject({ connected: true, transport: "server_sent_events" });
 
     unsubscribeEvent();
     unsubscribeStatus();
     expect(source.closed).toBe(true);
+  });
+
+  it("dapat menyambung ulang SSE setelah profil auth berubah", () => {
+    const unsubscribe = subscribeSqliteRealtime(() => {});
+    const firstSource = FakeEventSource.instances[0];
+
+    restartSqliteRealtime();
+
+    expect(firstSource.closed).toBe(true);
+    expect(FakeEventSource.instances).toHaveLength(2);
+    expect(FakeEventSource.instances[1].closed).toBe(false);
+    unsubscribe();
   });
 
   it("fallback polling hanya mengirim refresh ketika revision backend berubah", async () => {

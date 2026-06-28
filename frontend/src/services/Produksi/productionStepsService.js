@@ -42,6 +42,9 @@ export const generateProductionStepCode = async () => generateProductionCode("st
 const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
   const processType = isSupportedProcessType(values.processType) ? values.processType : "raw_to_semi";
   const payrollMode = values.payrollMode === "per_batch" ? "per_batch" : "per_qty";
+  const monitoringMetric = ["petal", "leaf", "stem"].includes(values.monitoringMetric)
+    ? values.monitoringMetric
+    : "none";
   const payrollClassification = getProductionStepPayrollClassification(processType);
   const code = safeTrim(values.code).toUpperCase();
   const actorName = getActorName(currentUser);
@@ -57,6 +60,7 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
     inputPolicy: values.inputPolicy || resolveInputPolicy(processType),
     outputType: values.outputType || resolveOutputType(processType),
     outputUnit: values.outputType === "none" ? "" : safeTrim(values.outputUnit) || "pcs",
+    monitoringMetric,
     payrollMode,
     payrollRate: Number(values.payrollRate || 0),
     payrollOutputBasis: payrollMode === "per_qty" ? values.payrollOutputBasis || "good_qty" : "good_qty",

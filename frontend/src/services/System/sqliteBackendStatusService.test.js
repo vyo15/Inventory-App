@@ -1,10 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 describe("sqliteBackendStatusService client identity", () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("memakai browser ID persisten dan page-instance ID yang stabil dalam satu tab", async () => {
@@ -32,5 +36,73 @@ describe("sqliteBackendStatusService client identity", () => {
 
     expect(second.split(":")[0]).toBe(browserId);
     expect(second).not.toBe(first);
+  });
+
+  it("mempertahankan client ID selama tab aktif walau localStorage dibersihkan", async () => {
+    const service = await import("./sqliteBackendStatusService.js");
+    const first = service.getSqliteClientId();
+
+    window.localStorage.clear();
+    const second = service.getSqliteClientId();
+
+    expect(second).toBe(first);
+  });
+
+  it("memakai volatile browser ID yang stabil bila localStorage tidak tersedia", async () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("storage blocked");
+    });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("storage blocked");
+    });
+
+    const service = await import("./sqliteBackendStatusService.js");
+    const first = service.getSqliteClientId();
+    const second = service.getSqliteClientId();
+
+    expect(first).toBe(second);
+    expect(first).toMatch(/^browser-volatile-.+:page-.+$/);
+  });
+
+  it("fetchSqliteJson menyertakan X-IMS-Client-ID pada request mutation", async () => {
+    const fetchMock = vi.spyOn(window, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, data: { saved: true } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const service = await import("./sqliteBackendStatusService.js");
+    const clientId = service.getSqliteClientId();
+
+    await service.fetchSqliteJson("/api/customers", {
+      method: "POST",
+      headers: { Authorization: "Bearer legacy" },
+      body: JSON.stringify({ name: "Realtime" }),
+    });
+
+    const [, options] = fetchMock.mock.calls[0];
+    expect(options.headers["X-IMS-Client-ID"]).toBe(clientId);
+    expect(options.headers.Authorization).toBe("Bearer legacy");
+    expect(options.credentials).toBe("include");
+  });
+
+  it("import backup direct-fetch tetap menyertakan X-IMS-Client-ID", async () => {
+    const fetchMock = vi.spyOn(window, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, data: { imported: true } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const service = await import("./sqliteBackendStatusService.js");
+    const clientId = service.getSqliteClientId();
+    const file = new File(["backup"], "manual.imsbackup", {
+      type: "application/octet-stream",
+    });
+
+    await service.importSqliteBackendBackup(file);
+
+    const [, options] = fetchMock.mock.calls[0];
+    expect(options.headers["X-IMS-Client-ID"]).toBe(clientId);
+    expect(options.headers["X-IMS-Backup-Filename"]).toBe(encodeURIComponent(file.name));
   });
 });

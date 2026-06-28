@@ -14,7 +14,7 @@ const ProductionBomListView = ({
   groupedFilteredData,
   shouldAutoOpenBomGroups,
 }) => (
-  <Card>
+  <Card className="page-section ims-production-list-surface">
     {/* ===============================================================
         Tabel utama BOM dibuat compact tanpa horizontal scroll besar.
         Detail komposisi tetap tersedia di drawer detail existing.

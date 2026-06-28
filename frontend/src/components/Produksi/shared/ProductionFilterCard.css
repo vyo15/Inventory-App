@@ -1,0 +1,44 @@
+/* =====================================================
+SECTION: Production Data Workspace — AKTIF / UI-ONLY
+Fungsi:
+- menyatukan filter dan daftar yang langsung mengikutinya menjadi satu workspace.
+- mengurangi card bertumpuk tanpa mengubah state filter, query, tabel, atau handler.
+===================================================== */
+.ims-production-filter-card.ant-card {
+  margin-bottom: 0 !important;
+  border-radius: 16px 16px 0 0 !important;
+  border-bottom-color: transparent !important;
+  background: var(--ims-bg-card) !important;
+  box-shadow: none !important;
+}
+
+.ims-production-filter-card.ant-card > .ant-card-body {
+  padding: 14px 16px !important;
+}
+
+.ims-production-filter-card + .page-section {
+  border-top-color: var(--ims-border-color-soft) !important;
+  border-radius: 0 0 16px 16px !important;
+}
+
+.ims-page > .ims-production-filter-card + .page-section {
+  margin-top: -12px;
+}
+
+.ims-production-filter-card + .page-section > .ant-card-body {
+  padding-top: 14px !important;
+}
+
+@media (max-width: 768px) {
+  .ims-production-filter-card.ant-card {
+    border-radius: 14px 14px 0 0 !important;
+  }
+
+  .ims-production-filter-card.ant-card > .ant-card-body {
+    padding: 12px !important;
+  }
+
+  .ims-production-filter-card + .page-section {
+    border-radius: 0 0 14px 14px !important;
+  }
+}

@@ -18,7 +18,6 @@ import {
   Input,
   InputNumber,
   message,
-  Popconfirm,
   Row,
   Select,
   Space,
@@ -35,8 +34,10 @@ import {
 import {
   BASIS_TYPE_MAP,
   DEFAULT_PRODUCTION_STEP_FORM,
+  MONITORING_METRIC_MAP,
   PROCESS_TYPE_MAP,
   PRODUCTION_STEP_BASIS_TYPES,
+  PRODUCTION_STEP_MONITORING_METRICS,
   PRODUCTION_STEP_PAYROLL_MODES,
   PRODUCTION_STEP_PROCESS_TYPES,
   formatProductionStepPayrollPreview,
@@ -54,9 +55,11 @@ import ProductionFilterCard from "../../components/Produksi/shared/ProductionFil
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
+import TableActionMenu from "../../components/Layout/Table/TableActionMenu";
 import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import InfoPopoverButton from "../../components/Layout/Feedback/InfoPopoverButton";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
@@ -191,6 +194,7 @@ const ProductionSteps = () => {
       ...DEFAULT_PRODUCTION_STEP_FORM,
       ...record,
       basisType: record.basisType || DEFAULT_PRODUCTION_STEP_FORM.basisType,
+      monitoringMetric: record.monitoringMetric || DEFAULT_PRODUCTION_STEP_FORM.monitoringMetric,
       payrollMode:
         record.payrollMode === "per_batch"
           ? "per_batch"
@@ -423,12 +427,17 @@ const ProductionSteps = () => {
                 <Tag style={categoryTagStyle}>{categoryLabel}</Tag>
               </Tooltip>
             </Space>
+            {record.description ? (
+              <Typography.Text type="secondary" className="ims-cell-meta" ellipsis={{ tooltip: record.description }}>
+                {record.description}
+              </Typography.Text>
+            ) : null}
           </Space>
         );
       },
     },
     {
-      title: "Produksi",
+      title: "Cara Kerja",
       key: "stepBasis",
       width: "22%",
       responsive: ["md"],
@@ -481,37 +490,38 @@ const ProductionSteps = () => {
     {
       title: "Aksi",
       key: "actions",
-      width: 176,
+      width: 132,
       className: "app-table-action-column",
       render: (_, record) => (
-        <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-          <Button
-            className="ims-action-button"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleOpenDetailDrawer(record)}
-          >
-            Detail
-          </Button>
-          <Button
-            className="ims-action-button"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            Edit
-          </Button>
-          <Popconfirm
-            title={record.isActive ? "Nonaktifkan step ini?" : "Aktifkan step ini?"}
-            onConfirm={() => handleToggleActive(record)}
-            okText="Ya"
-            cancelText="Batal"
-          >
-            <Button className="ims-action-button" size="small">
-              {record.isActive ? "Nonaktifkan" : "Aktifkan"}
-            </Button>
-          </Popconfirm>
-        </Space>
+        <TableActionMenu
+          visibleActions={[
+            {
+              key: "detail",
+              label: "Detail",
+              icon: <EyeOutlined />,
+              onClick: () => handleOpenDetailDrawer(record),
+            },
+          ]}
+          moreActions={[
+            {
+              key: "edit",
+              label: "Edit",
+              icon: <EditOutlined />,
+              onClick: () => handleEdit(record),
+            },
+            {
+              key: "toggle",
+              label: record.isActive ? "Nonaktifkan" : "Aktifkan",
+              danger: record.isActive,
+              confirm: {
+                title: record.isActive ? "Nonaktifkan step ini?" : "Aktifkan step ini?",
+                okText: "Ya",
+                cancelText: "Batal",
+              },
+              onClick: () => handleToggleActive(record),
+            },
+          ]}
+        />
       ),
     },
   ];
@@ -528,12 +538,33 @@ const ProductionSteps = () => {
       { label: "BOM", value: (record) => formatNumber(record.bomCount || 0) },
       { label: "Karyawan", value: (record) => formatNumber(record.employeeCount || 0) },
     ],
-    actions: (record) => (
-      <Space wrap className="ims-action-group">
-        <Button className="ims-action-button" size="small" icon={<EyeOutlined />} onClick={() => handleOpenDetailDrawer(record)}>Detail</Button>
-        <Button className="ims-action-button" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>Edit</Button>
-      </Space>
-    ),
+    primaryActions: (record) => [
+      {
+        key: "detail",
+        label: "Detail",
+        icon: <EyeOutlined />,
+        onClick: () => handleOpenDetailDrawer(record),
+      },
+    ],
+    moreActions: (record) => [
+      {
+        key: "edit",
+        label: "Edit",
+        icon: <EditOutlined />,
+        onClick: () => handleEdit(record),
+      },
+      {
+        key: "toggle",
+        label: record.isActive ? "Nonaktifkan" : "Aktifkan",
+        danger: record.isActive,
+        confirm: {
+          title: record.isActive ? "Nonaktifkan step ini?" : "Aktifkan step ini?",
+          okText: "Ya",
+          cancelText: "Batal",
+        },
+        onClick: () => handleToggleActive(record),
+      },
+    ],
   };
 
   const stepEmployeeMobileCardConfig = {
@@ -608,6 +639,7 @@ const ProductionSteps = () => {
       <PageSection
         title="Daftar Tahapan Produksi"
         subtitle="Referensi step untuk karyawan, BOM, dan upah produksi."
+        extra={<Typography.Text type="secondary">{formatNumber(filteredData.length)} hasil</Typography.Text>}
       >
         {/* =====================================================
             SECTION: Main table render — AKTIF
@@ -695,6 +727,9 @@ Risiko:
                 <Descriptions.Item label="Cara Kerja">
                   {BASIS_TYPE_MAP[selectedStep.basisType] || "-"}
                 </Descriptions.Item>
+                <Descriptions.Item label="Monitoring Profil">
+                  {MONITORING_METRIC_MAP[selectedStep.monitoringMetric || "none"] || "Tidak memakai monitoring profil"}
+                </Descriptions.Item>
                 <Descriptions.Item label="Status">
                   {selectedStep.isActive ? <Badge status="success" text="Aktif" /> : <Badge status="default" text="Nonaktif" />}
                 </Descriptions.Item>
@@ -760,9 +795,19 @@ Risiko:
         }
       >
         <Form form={form} layout="vertical" initialValues={{ ...DEFAULT_PRODUCTION_STEP_FORM, isActive: true }}>
-          <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
-            Gunakan step untuk proses kerja nyata yang dipakai BOM, Work Log, dan upah produksi. Step dibuat universal agar tetap cocok untuk jenis bunga lain.
-          </Typography.Paragraph>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+            <InfoPopoverButton
+              label="Panduan Step"
+              title="Cara menyusun Tahapan Produksi"
+              description="Buat satu step untuk satu proses kerja nyata. Gunakan nama yang universal agar step dapat dipakai lintas jenis bunga."
+              items={[
+                { key: "bom", label: "BOM", value: "Menentukan proses yang dijalankan oleh satu resep produksi." },
+                { key: "work-log", label: "Work Log", value: "Mencatat realisasi operator, hasil, dan penyelesaian proses." },
+                { key: "payroll", label: "Upah", value: "Tarif step dibaca saat Work Log selesai." },
+                { key: "naming", label: "Penamaan", value: "Gunakan nama proses, bukan nama produk atau jenis bunga tertentu." },
+              ]}
+            />
+          </div>
           {/* =====================================================
           SECTION: Production Step internal code hidden from main UI — AKTIF
           Fungsi:
@@ -791,42 +836,72 @@ Risiko:
           <Form.Item
             label="Kategori"
             name="processType"
+            tooltip="Menentukan arah perubahan hasil proses, bukan jenis bunga yang sedang dibuat."
             rules={[{ required: true, message: "Kategori step wajib dipilih" }]}
           >
             <Select options={PRODUCTION_STEP_PROCESS_TYPES} placeholder="Pilih kategori step" />
           </Form.Item>
 
           <Form.Item label="Fungsi / Deskripsi" name="description">
-            <Input.TextArea rows={4} placeholder="Jelaskan fungsi step ini secara singkat" />
+            <Input.TextArea autoSize={{ minRows: 2, maxRows: 4 }} placeholder="Jelaskan fungsi step ini secara singkat" />
           </Form.Item>
 
           <Form.Item
             label="Cara Kerja Step"
             name="basisType"
+            tooltip="Menentukan satuan aktivitas proses. Nilai ini berbeda dari Mode Bayar pada aturan upah."
             rules={[{ required: true, message: "Cara kerja step wajib dipilih" }]}
           >
             <Select options={PRODUCTION_STEP_BASIS_TYPES} placeholder="Pilih cara kerja step" />
           </Form.Item>
 
-          <Divider orientation="left">Aturan Upah Produksi</Divider>
+          <Form.Item
+            label="Monitoring Profil Produksi"
+            name="monitoringMetric"
+            tooltip="Opsional. Pilih jenis hasil hanya jika step memakai Production Profile. Sistem tidak lagi menebak dari nama step."
+          >
+            <Select options={PRODUCTION_STEP_MONITORING_METRICS} />
+          </Form.Item>
 
-          <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
-            Atur tarif operator untuk step ini. Payroll final tetap dibuat dari Work Log yang sudah selesai.
-          </Typography.Paragraph>
+          <Divider orientation="left">Aturan Upah Produksi</Divider>
 
           <Row gutter={12}>
             <Col xs={24} md={12}>
-              <Form.Item label="Mode Bayar" name="payrollMode">
+              <Form.Item
+                label="Mode Bayar"
+                name="payrollMode"
+                tooltip="Pilih tarif per qty hasil atau satu kali untuk setiap batch Work Log."
+              >
                 <Select options={PRODUCTION_STEP_PAYROLL_MODES} placeholder="Pilih mode bayar" />
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
-              <Form.Item label="Tarif Upah" name="payrollRate">
+              <Form.Item
+                label="Tarif Upah"
+                name="payrollRate"
+                tooltip="Tarif operator yang dibaca saat Work Log selesai. Payroll final tetap berasal dari Work Log completed."
+              >
                 <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} placeholder="Contoh: 2000" />
               </Form.Item>
             </Col>
           </Row>
 
+          <Form.Item
+            noStyle
+            shouldUpdate={(previousValues, currentValues) =>
+              previousValues.payrollMode !== currentValues.payrollMode ||
+              previousValues.payrollRate !== currentValues.payrollRate
+            }
+          >
+            {({ getFieldsValue }) => (
+              <Typography.Text
+                type="secondary"
+                style={{ display: "block", marginTop: -8, marginBottom: 16 }}
+              >
+                Ringkasan upah: {formatProductionStepPayrollPreview(getFieldsValue())}
+              </Typography.Text>
+            )}
+          </Form.Item>
 
           <Form.Item label="Status Aktif" name="isActive" valuePropName="checked">
             <Switch checkedChildren="Aktif" unCheckedChildren="Nonaktif" />

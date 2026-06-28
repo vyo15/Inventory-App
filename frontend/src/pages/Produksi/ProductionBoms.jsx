@@ -13,6 +13,7 @@ import ProductionSummaryCards from '../../components/Produksi/shared/ProductionS
 import ProductionFilterCard from '../../components/Produksi/shared/ProductionFilterCard';
 import EditableLineSection from '../../components/Produksi/shared/EditableLineSection';
 import DataTableView from '../../components/Layout/Table/DataTableView';
+import TableActionMenu from '../../components/Layout/Table/TableActionMenu';
 import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
 import ImsNotice from "../../components/Layout/Feedback/ImsNotice";
 import InfoPopoverButton from "../../components/Layout/Feedback/InfoPopoverButton";
@@ -434,12 +435,17 @@ const ProductionBoms = () => {
   // SECTION: modal step line
   // =====================================================
   const openStepModal = (index = null, record = null) => {
+    const currentLines = getFormArrayValue(form, "stepLines");
+    if (!record && currentLines.length >= 1) {
+      message.warning("Satu BOM hanya boleh memiliki 1 Tahapan Produksi. Edit tahapan yang sudah dipilih atau hapus terlebih dahulu.");
+      return;
+    }
+
     setEditingStepIndex(index);
 
     if (record) {
       stepForm.setFieldsValue({ ...DEFAULT_BOM_STEP_LINE, ...record });
     } else {
-      const currentLines = getFormArrayValue(form, "stepLines");
       const nextSequenceNo = getNextSequenceNumber(currentLines);
       stepForm.setFieldsValue({
         ...DEFAULT_BOM_STEP_LINE,
@@ -525,9 +531,10 @@ const ProductionBoms = () => {
         line,
       );
 
-      nextLines.sort(
-        (a, b) => Number(a.sequenceNo || 0) - Number(b.sequenceNo || 0),
-      );
+      if (nextLines.length > 1) {
+        message.error("Satu BOM hanya boleh memiliki tepat 1 Tahapan Produksi.");
+        return;
+      }
 
       form.setFieldValue("stepLines", nextLines);
       setStepModalVisible(false);
@@ -585,6 +592,8 @@ const ProductionBoms = () => {
 
       if (!Array.isArray(values.materialLines) || values.materialLines.length === 0) {
         setFormErrorSummary("Minimal harus ada 1 bahan di Komposisi Bahan.");
+      } else if (!Array.isArray(values.stepLines) || values.stepLines.length !== 1 || !values.stepLines[0]?.stepId) {
+        setFormErrorSummary("BOM wajib memiliki tepat 1 Tahapan Produksi aktif.");
       }
 
       if (fieldErrors.length > 0) {
@@ -616,6 +625,11 @@ const ProductionBoms = () => {
       }
 
       if (!Array.isArray(values.materialLines) || values.materialLines.length === 0) {
+        return;
+      }
+
+      if (!Array.isArray(values.stepLines) || values.stepLines.length !== 1 || !values.stepLines[0]?.stepId) {
+        message.error("BOM wajib memiliki tepat 1 Tahapan Produksi aktif.");
         return;
       }
 
@@ -818,41 +832,38 @@ const ProductionBoms = () => {
     {
       title: "Aksi",
       key: "actions",
-      width: 150,
+      width: 132,
       className: "app-table-action-column",
       render: (_, record) => (
-        <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-          <Button
-            className="ims-action-button"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleViewDetail(record)}
-          >
-            Detail
-          </Button>
-
-          <Button
-            className="ims-action-button"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            Edit
-          </Button>
-
-          <Popconfirm
-            title={
-              record.isActive ? "Nonaktifkan BOM ini?" : "Aktifkan BOM ini?"
-            }
-            onConfirm={() => handleToggleActive(record)}
-            okText="Ya"
-            cancelText="Batal"
-          >
-            <Button className="ims-action-button" size="small">
-              {record.isActive ? "Nonaktifkan" : "Aktifkan"}
-            </Button>
-          </Popconfirm>
-        </Space>
+        <TableActionMenu
+          visibleActions={[
+            {
+              key: "detail",
+              label: "Detail",
+              icon: <EyeOutlined />,
+              onClick: () => handleViewDetail(record),
+            },
+          ]}
+          moreActions={[
+            {
+              key: "edit",
+              label: "Edit",
+              icon: <EditOutlined />,
+              onClick: () => handleEdit(record),
+            },
+            {
+              key: "toggle",
+              label: record.isActive ? "Nonaktifkan" : "Aktifkan",
+              danger: record.isActive,
+              confirm: {
+                title: record.isActive ? "Nonaktifkan BOM ini?" : "Aktifkan BOM ini?",
+                okText: "Ya",
+                cancelText: "Batal",
+              },
+              onClick: () => handleToggleActive(record),
+            },
+          ]}
+        />
       ),
     },
   ];
@@ -893,36 +904,33 @@ const ProductionBoms = () => {
         ? `Overhead: ${formatCurrency(record.overheadCostEstimate || 0)}`
         : null,
     ].filter(Boolean),
-    actions: (record) => (
-      <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-        <Button
-          className="ims-action-button ims-action-button--block"
-          size="small"
-          icon={<EyeOutlined />}
-          onClick={() => handleViewDetail(record)}
-        >
-          Detail
-        </Button>
-        <Button
-          className="ims-action-button ims-action-button--block"
-          size="small"
-          icon={<EditOutlined />}
-          onClick={() => handleEdit(record)}
-        >
-          Edit
-        </Button>
-        <Popconfirm
-          title={record.isActive ? "Nonaktifkan BOM ini?" : "Aktifkan BOM ini?"}
-          onConfirm={() => handleToggleActive(record)}
-          okText="Ya"
-          cancelText="Batal"
-        >
-          <Button className="ims-action-button ims-action-button--block" size="small">
-            {record.isActive ? "Nonaktifkan" : "Aktifkan"}
-          </Button>
-        </Popconfirm>
-      </Space>
-    ),
+    primaryActions: (record) => [
+      {
+        key: "detail",
+        label: "Detail",
+        icon: <EyeOutlined />,
+        onClick: () => handleViewDetail(record),
+      },
+    ],
+    moreActions: (record) => [
+      {
+        key: "edit",
+        label: "Edit",
+        icon: <EditOutlined />,
+        onClick: () => handleEdit(record),
+      },
+      {
+        key: "toggle",
+        label: record.isActive ? "Nonaktifkan" : "Aktifkan",
+        danger: record.isActive,
+        confirm: {
+          title: record.isActive ? "Nonaktifkan BOM ini?" : "Aktifkan BOM ini?",
+          okText: "Ya",
+          cancelText: "Batal",
+        },
+        onClick: () => handleToggleActive(record),
+      },
+    ],
   };
 
   return (
@@ -1185,7 +1193,7 @@ const ProductionBoms = () => {
                       <Form.Item
                         label="Hasil per Produksi"
                         name="batchOutputQty"
-                        extra="Isi jumlah output yang dihasilkan untuk 1 resep BOM ini. Contoh: 1 bunga, 10 tangkai, atau 20 potong komponen."
+                        tooltip="Isi jumlah output yang dihasilkan untuk 1 resep BOM ini. Contoh: 1 bunga, 10 tangkai, atau 20 potong komponen."
                       >
                         <InputNumber min={1} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
                       </Form.Item>
@@ -1196,7 +1204,7 @@ const ProductionBoms = () => {
                         label="Status Aktif"
                         name="isActive"
                         valuePropName="checked"
-                        extra="Biarkan aktif kalau resep ini masih dipakai. Nonaktifkan hanya jika BOM lama sudah tidak digunakan."
+                        tooltip="Biarkan aktif kalau resep ini masih dipakai. Nonaktifkan hanya jika BOM lama sudah tidak digunakan."
                       >
                         <Switch />
                       </Form.Item>
@@ -1309,12 +1317,19 @@ const ProductionBoms = () => {
                   />
 
                   <EditableLineSection
-                    title="Alur Step Produksi"
-                    addButtonText="Tambah Step BOM"
+                    title="Tahapan Pekerjaan"
+                    description="Satu resep/BOM mewakili satu perubahan stok, satu Work Log, dan satu aturan upah. Buat BOM terpisah untuk tahap produksi berikutnya."
+                    alert={stepLines.length > 1 ? {
+                      type: "warning",
+                      message: "BOM lama ini memiliki lebih dari satu tahapan.",
+                      description: "Pilih dan pertahankan satu tahapan yang benar sebelum menyimpan ulang BOM.",
+                    } : undefined}
+                    addButtonText="Pilih Tahapan Produksi"
                     onAdd={() => openStepModal()}
+                    addButtonDisabled={stepLines.length >= 1}
                     dataSource={stepLines}
                     columns={stepColumns}
-                    emptyText="Belum ada step line"
+                    emptyText="Belum ada tahapan produksi"
                   />
                 </>
               );
@@ -1483,7 +1498,7 @@ const ProductionBoms = () => {
               ]}
             />
 
-            <Divider orientation="left">Alur Step Produksi</Divider>
+            <Divider orientation="left">Tahapan Pekerjaan</Divider>
 
             <DataTableView
               rowKey={(record) => record.id}
@@ -1560,7 +1575,7 @@ const ProductionBoms = () => {
                   rules={[
                     { required: true, message: "Jenis bahan wajib dipilih" },
                   ]}
-                  extra={
+                  tooltip={
                     targetType === "product"
                       ? "Produk jadi boleh memakai Semi Finished untuk komponen, dan Raw Material untuk consumable assembly seperti lem tembak."
                       : undefined
@@ -1696,7 +1711,7 @@ const ProductionBoms = () => {
               <Form.Item
                 label="Kebutuhan per Produksi"
                 name="qtyPerBatch"
-                extra="Isi jumlah bahan yang dibutuhkan untuk 1 kali produksi sesuai output BOM ini."
+                tooltip="Isi jumlah bahan yang dibutuhkan untuk 1 kali produksi sesuai output BOM ini."
               >
                 <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
@@ -1705,7 +1720,7 @@ const ProductionBoms = () => {
               <Form.Item
                 label="Satuan Bahan"
                 name="unit"
-                extra="Diambil otomatis dari master bahan yang dipilih."
+                tooltip="Diambil otomatis dari master bahan yang dipilih."
               >
                 <Input disabled />
               </Form.Item>
@@ -1757,7 +1772,7 @@ const ProductionBoms = () => {
               <Form.Item
                 label="Urutan Langkah"
                 name="sequenceNo"
-                extra="Terisi otomatis sesuai urutan penambahan step."
+                tooltip="Terisi otomatis sesuai urutan penambahan step."
               >
                 <InputNumber min={1} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>

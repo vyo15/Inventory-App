@@ -428,7 +428,7 @@ const Returns = () => {
             name="relatedSaleId"
             label="Transaksi Sales"
             rules={[{ required: true, message: "Transaksi Sales wajib dipilih" }]}
-            extra="Return hanya dapat dibuat dari Sales yang sudah tercatat."
+            tooltip="Return hanya dapat dibuat dari Sales yang sudah tercatat."
           >
             <Select
               placeholder="Pilih transaksi Sales"

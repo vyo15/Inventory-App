@@ -9,9 +9,7 @@ const normalizeClientId = (value = "") => String(value || "")
   .slice(0, 128);
 
 const requestContextMiddleware = (req, _res, next) => {
-  const clientId = normalizeClientId(
-    req.get("x-ims-client-id") || req.query?.clientId || ""
-  );
+  const clientId = normalizeClientId(req.get("x-ims-client-id") || "");
 
   requestContextStorage.run({
     clientId,

@@ -1,0 +1,74 @@
+/* =====================================================
+SECTION: Compact Desktop Table Actions — AKTIF / UI-ONLY
+Fungsi:
+- menjaga satu aksi utama tetap terlihat dan memindahkan aksi sekunder ke popover.
+- mengurangi tinggi row tanpa mengubah handler, confirm guard, disabled state, atau business flow.
+===================================================== */
+.ims-table-action-menu {
+  display: inline-flex;
+  max-width: 100%;
+}
+
+.ims-table-action-menu .ant-btn {
+  min-height: 32px;
+  height: 32px;
+  border-radius: 9px;
+  box-shadow: none;
+}
+
+.ims-table-action-menu__primary {
+  min-width: 78px;
+  padding-inline: 11px;
+  font-weight: 650;
+}
+
+.ims-table-action-menu__more {
+  width: 34px;
+  min-width: 34px;
+  padding-inline: 0;
+}
+
+.ims-table-action-menu-popover .ant-popover-inner {
+  min-width: 176px;
+  padding: 6px;
+  border: 1px solid var(--ims-border-color-soft);
+  border-radius: 12px;
+  background: var(--ims-bg-card);
+  box-shadow: var(--ims-shadow-elevated);
+}
+
+.ims-table-action-menu-popover .ant-popover-inner-content {
+  padding: 0;
+}
+
+.ims-table-action-menu__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ims-table-action-menu__panel > .ant-popconfirm,
+.ims-table-action-menu__panel > .ant-btn,
+.ims-table-action-menu__panel .ant-btn {
+  width: 100%;
+}
+
+.ims-table-action-menu__item.ant-btn {
+  min-height: 34px;
+  height: 34px;
+  justify-content: flex-start;
+  padding-inline: 10px;
+  border-radius: 8px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.ims-table-action-menu__item.ant-btn:hover {
+  background: var(--ims-bg-elevated);
+}
+
+@media (max-width: 768px) {
+  .ims-table-action-menu {
+    display: none;
+  }
+}

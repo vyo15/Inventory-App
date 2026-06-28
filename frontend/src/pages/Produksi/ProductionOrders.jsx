@@ -1127,16 +1127,14 @@ const ProductionOrders = () => {
             />
           </Form.Item>
 
-          <div style={{ margin: "16px 0 12px" }}>
+          <div style={{ margin: "16px 0 8px" }}>
             <Typography.Text strong>Target Produksi</Typography.Text>
-            <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-              Tentukan jenis produksi dan target yang ingin dibuat.
-            </Typography.Paragraph>
           </div>
 
           <Form.Item
             label="Jenis Produksi"
             name="targetType"
+            tooltip="Tentukan jenis produksi dan target yang ingin dibuat."
             rules={[{ required: true, message: "Jenis produksi wajib dipilih" }]}
           >
             <Select
@@ -1236,16 +1234,14 @@ const ProductionOrders = () => {
             />
           </Form.Item>
 
-          <div style={{ margin: "20px 0 12px" }}>
+          <div style={{ margin: "20px 0 8px" }}>
             <Typography.Text strong>Detail Produksi</Typography.Text>
-            <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-              Sistem memakai resep aktif sebagai acuan kebutuhan material.
-            </Typography.Paragraph>
           </div>
 
           <Form.Item
             label="Resep Produksi"
             name="bomId"
+            tooltip="Sistem memakai resep aktif sebagai acuan kebutuhan material."
             rules={[{ required: true, message: "Resep produksi wajib dipilih" }]}
             hidden={!shouldShowRecipeSelect}
           >
@@ -1269,11 +1265,8 @@ const ProductionOrders = () => {
             />
           </Form.Item>
 
-          <div style={{ margin: "20px 0 12px" }}>
+          <div style={{ margin: "20px 0 8px" }}>
             <Typography.Text strong>Preview Kebutuhan</Typography.Text>
-            <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-              Isi qty batch untuk melihat kebutuhan material dan kondisi stok.
-            </Typography.Paragraph>
           </div>
 
           {targetVariantOptions.length > 0 ? (
@@ -1283,7 +1276,7 @@ const ProductionOrders = () => {
               rules={[
                 { required: true, message: "Varian target wajib dipilih" },
               ]}
-              extra="Pilih varian target jika ada."
+              tooltip="Pilih varian target jika ada."
             >
               <Select
                 showSearch
@@ -1306,6 +1299,7 @@ const ProductionOrders = () => {
           <Form.Item
             label="Qty Batch Produksi"
             name="orderQty"
+            tooltip="Isi qty batch untuk melihat kebutuhan material dan kondisi stok."
             rules={[{ required: true, message: "Qty order wajib diisi" }]}
           >
             <InputNumber min={1} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />

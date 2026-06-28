@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isAuthProfileRealtimeEvent,
   isGlobalRealtimeReloadEvent,
   REALTIME_ROUTE_SCOPES,
   realtimeEventMatchesScopes,
@@ -14,15 +15,17 @@ describe("realtime route scope coverage", () => {
     expect(missing).toEqual([]);
   });
 
-  it("memproses perubahan auth secara global sebelum filter route", () => {
+  it("memisahkan sinkronisasi profil auth dari reload penuh browser", () => {
     const event = {
       type: "data_changed",
       revision: 12,
       scopes: ["auth", "user_management"],
     };
 
-    expect(isGlobalRealtimeReloadEvent(event)).toBe(true);
-    expect(realtimeEventMatchesScopes(event, ["sales", "stock"])).toBe(true);
+    expect(isAuthProfileRealtimeEvent(event)).toBe(true);
+    expect(isGlobalRealtimeReloadEvent(event)).toBe(false);
+    expect(realtimeEventMatchesScopes(event, ["sales", "stock"])).toBe(false);
+    expect(realtimeEventMatchesScopes(event, ["user_management"])).toBe(true);
   });
 
   it("memisahkan event session biasa dari reload auth global", () => {
