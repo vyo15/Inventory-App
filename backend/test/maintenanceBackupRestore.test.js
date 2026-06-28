@@ -2,6 +2,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { after, before, beforeEach, test } = require("node:test");
+const sqlite3 = require("sqlite3");
+const { open } = require("sqlite");
 const { configureTestDatabase } = require("./helpers/testDatabase");
 
 const testDatabase = configureTestDatabase("maintenance-backup-restore");
@@ -12,6 +14,8 @@ const {
   getMaintenanceStatus,
   importBackupFile,
   listBackups,
+  listInactivePurgeCandidates,
+  purgeInactiveRecord,
 } = require("../src/modules/maintenance/maintenance.service");
 const {
   RESTORE_CONFIRM_KEYWORD,
@@ -21,6 +25,7 @@ const {
   ensureMonthlyBackups,
   getBackupPreview,
   readBackupManifest,
+  validateSqliteFile,
 } = require("../src/utils/sqliteBackup");
 
 const createLocalDate = (year, monthIndex, day, hour = 12) => new Date(year, monthIndex, day, hour, 0, 0, 0);
@@ -47,10 +52,26 @@ const getCategory = async (code) => {
   return db.get("SELECT * FROM categories WHERE code = ?", [code]);
 };
 
+const ensureActiveAdministrator = async () => {
+  const db = await testDatabase.getDb();
+  await db.run(
+    `
+      INSERT INTO users (username, username_lower, display_name, password_hash, role, status)
+      VALUES ('restore-admin', 'restore-admin', 'Restore Admin', 'test-password-hash', 'administrator', 'active')
+      ON CONFLICT(username_lower) DO UPDATE SET
+        display_name = excluded.display_name,
+        role = excluded.role,
+        status = excluded.status,
+        updated_at = CURRENT_TIMESTAMP
+    `
+  );
+};
+
 before(testDatabase.initialize);
 beforeEach(async () => {
   await testDatabase.reset();
   resetBackupDirectory();
+  await ensureActiveAdministrator();
 });
 after(testDatabase.cleanup);
 
@@ -78,6 +99,8 @@ test("backup resmi membuat package, manifest, checksum validation, log, dan audi
 
   const preview = await getBackupPreview(backup);
   assert.equal(preview.validForRestore, true);
+  assert.equal(preview.safeForRestore, true);
+  assert.equal(preview.accountSummary.activeAdministrators, 1);
   assert.equal(preview.validation.valid, true);
 
   const db = await testDatabase.getDb();
@@ -182,6 +205,8 @@ test("restore plan dan keyword salah tidak mengubah database aktif", async () =>
   assert.equal(plan.mode, "preview_only");
   assert.equal(plan.destructiveAllowed, false);
   assert.equal(plan.validForRestore, true);
+  assert.equal(plan.safeForRestore, true);
+  assert.equal(plan.accountSummary.activeAdministrators, 1);
   assert.equal((await getCategory("CAT-RESTORE")).name, "Nama Aktif Terbaru");
 
   const rejected = await executeRestore({
@@ -192,6 +217,87 @@ test("restore plan dan keyword salah tidak mengubah database aktif", async () =>
   assert.equal(rejected.restored, false);
   assert.equal(rejected.destructiveAllowed, false);
   assert.equal((await getCategory("CAT-RESTORE")).name, "Nama Aktif Terbaru");
+});
+
+test("preview menandai backup tanpa administrator aktif dan execute restore menolaknya sebelum pre-restore", async () => {
+  await upsertCategory({ code: "CAT-NO-ADMIN", name: "Snapshot tanpa admin" });
+  const db = await testDatabase.getDb();
+  await db.run("DELETE FROM users");
+  const backup = await createBackup({ type: "test", actor: "account-guard-tester" });
+
+  await ensureActiveAdministrator();
+  await upsertCategory({ code: "CAT-NO-ADMIN", name: "Database aktif tetap aman" });
+  const preRestoreBefore = await db.get(
+    "SELECT COUNT(*) AS count FROM backup_logs WHERE filename LIKE '%pre-restore%'"
+  );
+
+  const plan = await createRestorePlan({
+    filename: backup.filename,
+    actor: "account-guard-tester",
+  });
+
+  assert.equal(plan.validForRestore, true);
+  assert.equal(plan.safeForRestore, false);
+  assert.equal(plan.accountSummary.totalUsers, 0);
+  assert.equal(plan.accountSummary.activeAdministrators, 0);
+  assert.match(plan.restoreSafety.messages.join(" "), /Restore normal diblokir/);
+  assert.doesNotMatch(plan.restoreSafety.messages.join(" "), /Setup Administrator Pertama/);
+  assert.equal(plan.restoreSafety.accountGuardPassed, false);
+  assert.equal(plan.restoreSafety.severity, "blocked");
+
+  await assert.rejects(
+    executeRestore({
+      filename: backup.filename,
+      confirmKeyword: RESTORE_CONFIRM_KEYWORD,
+      actor: "account-guard-tester",
+    }),
+    (error) => error?.errorCode === "RESTORE_ACTIVE_ADMIN_REQUIRED" && error?.statusCode === 409,
+  );
+
+  assert.equal((await getCategory("CAT-NO-ADMIN")).name, "Database aktif tetap aman");
+  assert.equal((await db.get("SELECT COUNT(*) AS count FROM users WHERE role = 'administrator' AND status = 'active'")).count, 1);
+  const preRestoreAfter = await db.get(
+    "SELECT COUNT(*) AS count FROM backup_logs WHERE filename LIKE '%pre-restore%'"
+  );
+  assert.equal(preRestoreAfter.count, preRestoreBefore.count);
+});
+
+test("validasi backup tanpa tabel users tetap read-only dan diblokir secara operasional", async () => {
+  const missingUsersPath = path.join(testDatabase.tempDir, "missing-users.sqlite");
+  const rawDb = await open({ filename: missingUsersPath, driver: sqlite3.Database });
+  try {
+    await rawDb.exec(`
+      CREATE TABLE schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      INSERT INTO schema_meta (key, value) VALUES ('schema_version', '9');
+      CREATE TABLE products (id TEXT PRIMARY KEY);
+    `);
+  } finally {
+    await rawDb.close();
+  }
+
+  const validation = await validateSqliteFile(missingUsersPath);
+  assert.equal(validation.valid, true);
+  assert.equal(validation.accountSummary.usersTableExists, false);
+  assert.equal(validation.accountSummary.activeAdministrators, 0);
+  assert.equal(validation.restoreSafety.accountGuardPassed, false);
+  assert.equal(validation.restoreSafety.severity, "blocked");
+});
+
+test("preview menandai backup awal kosong tanpa user sebagai blocked", async () => {
+  const db = await testDatabase.getDb();
+  await db.run("DELETE FROM users");
+  const backup = await createBackup({ type: "test", actor: "empty-backup-tester" });
+  await ensureActiveAdministrator();
+
+  const plan = await createRestorePlan({
+    filename: backup.filename,
+    actor: "empty-backup-tester",
+  });
+
+  assert.equal(plan.validForRestore, true);
+  assert.equal(plan.safeForRestore, false);
+  assert.equal(plan.restoreSafety.likelyEmptyDatabase, true);
+  assert.equal(plan.restoreSafety.messages.some((message) => message.includes("database awal atau kosong")), true);
 });
 
 test("restore guarded membuat pre-restore backup dan memulihkan snapshot secara utuh", async () => {
@@ -379,10 +485,195 @@ test("status maintenance menampilkan Bearer legacy nonaktif secara default dan t
 
   const status = await getMaintenanceStatus();
 
+  assert.equal(status.maintenanceStatusContractVersion, 3);
+  assert.equal(status.capabilities.sqliteOnlyRuntime, true);
+  assert.equal(status.capabilities.tableCounts, true);
+  assert.equal(status.capabilities.tableRecordStatusCounts, true);
+  assert.equal(status.capabilities.realtimeEvents, true);
+  assert.ok(status.statusGeneratedAt);
+  assert.ok(status.backendStartedAt);
+  assert.ok(status.backendRuntimeInstanceId);
+  assert.equal(typeof status.databaseGeneration, "number");
+  assert.equal(status.databaseConsistency.healthy, true);
+  assert.deepEqual(status.databaseConsistency.missingTables, []);
   assert.equal(status.authCompatibility.legacyBearerEnabled, false);
   assert.equal(status.authCompatibility.removalReady, true);
   assert.equal(status.authCompatibility.manualConfirmationRequired, false);
   assert.equal(status.authCompatibility.migrationEvidence.totalMigrations, 1);
   assert.equal(status.authCompatibility.migrationEvidence.recentMigrations7d, 1);
   assert.ok(status.authCompatibility.migrationEvidence.latestMigrationAt);
+  assert.equal(typeof status.tableCounts.products, "number");
+  assert.equal(status.tableCounts.audit_logs, status.auditCount);
+  assert.equal(typeof status.tableCounts.production_work_logs, "number");
+  assert.equal(status.tableRecordStatusCounts.audit_logs.storedTotal, status.auditCount);
+  assert.equal(typeof status.realtime.revision, "number");
+  assert.equal(status.backupLifecycle.schedulerActive, false);
+  assert.equal(status.backupPolicy.autoDaily, false);
+  assert.equal(status.backupPolicy.autoMonthlyPromotion, false);
+  assert.equal(status.backupPolicy.autoRetention, false);
+  assert.equal(status.backupPolicy.diskSpacePreflight, true);
+  assert.equal(status.backupPolicy.zip64Supported, false);
+});
+
+test("status maintenance membaca perubahan kategori dari koneksi SQLite aktif yang sama", async () => {
+  const db = await testDatabase.getDb();
+  const before = await db.get("SELECT COUNT(*) AS count FROM categories");
+  await upsertCategory({ code: "CAT-LIVE-STATUS", name: "Kategori realtime" });
+
+  const status = await getMaintenanceStatus();
+  const after = await db.get("SELECT COUNT(*) AS count FROM categories");
+
+  assert.equal(after.count, before.count + 1);
+  assert.equal(status.tableCounts.categories, after.count);
+  assert.equal(status.categoryCount, after.count);
+  assert.equal(status.databaseConsistency.healthy, true);
+});
+
+
+test("status maintenance membedakan customer aktif, nonaktif, deleted, dan total tersimpan", async () => {
+  const db = await testDatabase.getDb();
+  await db.run(
+    `INSERT INTO customers (customer_code, name, status)
+     VALUES ('CUS-ACTIVE', 'Customer Aktif', 'active'),
+            ('CUS-INACTIVE', 'Customer Nonaktif', 'inactive'),
+            ('CUS-DELETED', 'Customer Deleted', 'deleted')`
+  );
+
+  const status = await getMaintenanceStatus();
+  assert.deepEqual(status.tableRecordStatusCounts.customers, {
+    storedTotal: 3,
+    active: 1,
+    inactive: 1,
+    deleted: 1,
+    statusAware: true,
+  });
+  assert.equal(status.customerCount, 2);
+  assert.equal(status.tableCounts.customers, 3);
+});
+
+test("purge maintenance hanya menghapus customer nonaktif yang aman setelah backup dan audit snapshot", async () => {
+  const db = await testDatabase.getDb();
+  const insertResult = await db.run(
+    `INSERT INTO customers (customer_code, name, status, notes)
+     VALUES ('CUS-PURGE', 'Customer Purge', 'deleted', 'snapshot audit')`
+  );
+  const customerId = insertResult.lastID;
+
+  const preview = await listInactivePurgeCandidates({
+    entityType: "customer",
+    actorUser: { id: 999, username: "admin" },
+  });
+  const candidate = preview.groups[0].candidates.find((item) => item.id === String(customerId));
+  assert.equal(candidate.safeToDelete, true);
+
+  await assert.rejects(
+    purgeInactiveRecord({
+      entityType: "customer",
+      id: customerId,
+      confirmKeyword: "SALAH",
+      confirmTarget: "CUS-PURGE",
+      actorUser: { id: 999, username: "admin" },
+    }),
+    (error) => error.errorCode === "INACTIVE_PURGE_CONFIRMATION_REQUIRED",
+  );
+
+  const result = await purgeInactiveRecord({
+    entityType: "customer",
+    id: customerId,
+    confirmKeyword: "HAPUS PERMANEN",
+    confirmTarget: "CUS-PURGE",
+    actorUser: { id: 999, username: "admin" },
+  });
+
+  assert.equal(result.purged, true);
+  assert.equal(result.auditSnapshotRetained, true);
+  assert.ok(result.preRepairBackup.filename);
+  assert.equal(await db.get("SELECT id FROM customers WHERE id = ?", [customerId]), undefined);
+
+  const audit = await db.get(
+    "SELECT * FROM audit_logs WHERE action = 'inactive_record_purge' AND entity_id = ? ORDER BY id DESC LIMIT 1",
+    [String(customerId)],
+  );
+  assert.ok(audit);
+  assert.match(audit.metadata_json, /Customer Purge/);
+});
+
+test("purge maintenance memblokir customer yang masih direferensikan transaksi", async () => {
+  const db = await testDatabase.getDb();
+  const insertResult = await db.run(
+    `INSERT INTO customers (customer_code, name, status)
+     VALUES ('CUS-REF', 'Customer Referensi', 'deleted')`
+  );
+  const customerId = insertResult.lastID;
+  await db.run(
+    `INSERT INTO sales (id, code, name, status, is_active, payload_json)
+     VALUES ('SALE-REF', 'SALE-REF', 'Sale Referensi', 'completed', 1, ?)`,
+    [JSON.stringify({ customerId, customerCode: "CUS-REF" })],
+  );
+
+  const preview = await listInactivePurgeCandidates({
+    entityType: "customer",
+    actorUser: { id: 999, username: "admin" },
+  });
+  const candidate = preview.groups[0].candidates.find((item) => item.id === String(customerId));
+  assert.equal(candidate.safeToDelete, false);
+  assert.ok(candidate.blockers.some((item) => item.table === "sales"));
+
+  await assert.rejects(
+    purgeInactiveRecord({
+      entityType: "customer",
+      id: customerId,
+      confirmKeyword: "HAPUS PERMANEN",
+      confirmTarget: "CUS-REF",
+      actorUser: { id: 999, username: "admin" },
+    }),
+    (error) => error.errorCode === "INACTIVE_PURGE_REFERENCE_BLOCKED",
+  );
+  assert.ok(await db.get("SELECT id FROM customers WHERE id = ?", [customerId]));
+});
+
+test("purge mendeteksi nested JSON reference dan mapping legacy sebelum hard delete", async () => {
+  const db = await testDatabase.getDb();
+  const insertResult = await db.run(
+    `INSERT INTO customers (customer_code, name, status)
+     VALUES ('CUS-NESTED', 'Customer Nested', 'deleted')`,
+  );
+  const customerId = insertResult.lastID;
+  await db.run(
+    `INSERT INTO sales (id, code, name, status, is_active, payload_json)
+     VALUES ('SALE-NESTED', 'SALE-NESTED', 'Sale Nested', 'Selesai', 1, ?)`,
+    [JSON.stringify({ customer: { id: customerId, code: "CUS-NESTED" } })],
+  );
+  await db.run(
+    `INSERT INTO migration_identity_map (module_key, legacy_source, legacy_id, sqlite_id, reference_code)
+     VALUES ('customers', 'historical_import', 'legacy-customer', ?, 'CUS-NESTED')`,
+    [String(customerId)],
+  );
+
+  const preview = await listInactivePurgeCandidates({
+    entityType: "customer",
+    actorUser: { id: 999, username: "admin" },
+  });
+  const candidate = preview.groups[0].candidates.find((item) => item.id === String(customerId));
+
+  assert.equal(candidate.safeToDelete, false);
+  assert.ok(candidate.blockers.some((item) => item.table === "sales"));
+  assert.ok(candidate.blockers.some((item) => item.table === "migration_identity_map"));
+});
+
+test("purge user selalu diblokir untuk menjaga identitas histori audit", async () => {
+  const db = await testDatabase.getDb();
+  const result = await db.run(
+    `INSERT INTO users (username, username_lower, display_name, password_hash, role, status)
+     VALUES ('inactive-user', 'inactive-user', 'Inactive User', 'hash', 'user', 'inactive')`,
+  );
+
+  const preview = await listInactivePurgeCandidates({
+    entityType: "user",
+    actorUser: { id: 999, username: "admin" },
+  });
+  const candidate = preview.groups[0].candidates.find((item) => item.id === String(result.lastID));
+
+  assert.equal(candidate.safeToDelete, false);
+  assert.ok(candidate.blockers.some((item) => item.type === "protected_user_history"));
 });

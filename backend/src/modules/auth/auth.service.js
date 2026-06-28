@@ -381,38 +381,41 @@ async function updateUser(userId, payload = {}, actorUser = {}) {
     metadata: { username, role, status, passwordChanged: Boolean(password) },
   });
 
-    return toSafeUser(updated);
+  return toSafeUser(updated);
   });
 }
 
 async function deleteUser(userId, actorUser = {}) {
   return runInTransaction(async (db) => {
-  const current = await db.get("SELECT * FROM users WHERE id = ?", [userId]);
-  if (!current) throw createAuthError("User lokal tidak ditemukan.", "NOT_FOUND", 404);
+    const current = await db.get("SELECT * FROM users WHERE id = ?", [userId]);
+    if (!current) throw createAuthError("User lokal tidak ditemukan.", "NOT_FOUND", 404);
 
-  await assertNotLastActiveAdministrator(db, current.id, "user", "inactive");
+    await assertNotLastActiveAdministrator(db, current.id, current.role, "inactive");
 
-  if (Number(actorUser.id) === Number(current.id)) {
-    throw createAuthError("User aktif tidak boleh menghapus akunnya sendiri.", "SELF_DELETE_BLOCKED");
-  }
+    if (Number(actorUser.id) === Number(current.id)) {
+      throw createAuthError("User aktif tidak boleh menonaktifkan akunnya sendiri.", "SELF_DELETE_BLOCKED");
+    }
 
-  await db.run(
-    "UPDATE local_user_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE user_id = ? AND revoked_at IS NULL",
-    [current.id]
-  );
-  await db.run("DELETE FROM users WHERE id = ?", [current.id]);
+    await db.run(
+      "UPDATE local_user_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE user_id = ? AND revoked_at IS NULL",
+      [current.id]
+    );
+    await db.run(
+      "UPDATE users SET status = 'inactive', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      [current.id]
+    );
 
-  await createAuditLog({
-    module: "auth",
-    action: "user_delete",
-    entityType: "user",
-    entityId: current.id,
-    actor: actorUser.username,
-    description: `User lokal ${current.username} dihapus`,
-    metadata: { username: current.username, role: current.role, status: current.status },
-  });
+    await createAuditLog({
+      module: "auth",
+      action: "user_deactivate",
+      entityType: "user",
+      entityId: current.id,
+      actor: actorUser.username,
+      description: `User lokal ${current.username} dinonaktifkan; record dipertahankan untuk histori`,
+      metadata: { username: current.username, role: current.role, previousStatus: current.status, status: "inactive" },
+    });
 
-    return { id: current.id, deleted: true };
+    return { id: current.id, deleted: false, softDeleted: true, status: "inactive" };
   });
 }
 

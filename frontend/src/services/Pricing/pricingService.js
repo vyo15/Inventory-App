@@ -2,16 +2,10 @@
 
 // SECTION: database lokal pricing adapters
 import * as sqlitePricingRulesAdapter from "../../data/adapters/sqlite/sqlitePricingRulesAdapter";
-
-
-
-const SQLITE_REPOSITORY_MODES = ["sqlite", "sqlite_sidecar", "local_sqlite"];
-const getPricingRulesRepositoryMode = () => String(
-  import.meta.env.VITE_PRICING_RULES_REPOSITORY_MODE || "sqlite"
-).toLowerCase();
+import { isSqliteRepositoryModuleEnabled } from "../../data/repositories/repositoryModeService";
 
 export const isSqlitePricingRulesRepositoryMode = () =>
-  SQLITE_REPOSITORY_MODES.includes(getPricingRulesRepositoryMode());
+  isSqliteRepositoryModuleEnabled();
 
 
 export const subscribePricingRulesFromRepository = (callback, onError) =>
@@ -493,6 +487,8 @@ export const applyPricingRuleToItems = async ({
   items = [],
   rule = {},
   targetType = "",
+  changeSource = "pricing_rule_apply",
+  notes = "",
 }) => {
   const normalizedRule = normalizePricingRule(rule);
 
@@ -560,6 +556,8 @@ export const applyPricingRuleToItems = async ({
       ? await sqlitePricingRulesAdapter.applyPricingRuleBatch(normalizedRule.id, {
         targetType,
         updates,
+        changeSource,
+        notes,
       })
       : { updatedCount: 0 };
 

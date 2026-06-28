@@ -47,6 +47,7 @@ Status saving:
 
 ### 1.5 Efek pembelian
 Saat pembelian disimpan:
+- backend menetapkan status final canonical `Selesai`; payload operasional tidak boleh membuat Purchase berstatus draft, cancel, inactive, atau deleted
 - simpan transaksi ke `purchases`
 - tambah stok item
 - untuk Bahan Baku, hitung `averageActualUnitCost` dengan weighted average dari nilai stok lama dan total biaya aktual pembelian per satuan stok masuk
@@ -162,6 +163,8 @@ Saat retur disimpan:
 - item retur wajib berasal dari item pada Sales tersebut
 - qty retur tidak boleh melebihi qty terjual dikurangi qty yang sudah pernah diretur
 - transaksi masuk ke `returns` dengan `relatedSaleId` dan `saleReference`
+- backend menetapkan status Return canonical `Selesai`; client tidak boleh membuat Return draft, cancel, atau deleted
+- payload `refundAmount`/`refundTotal` ditolak karena Return operasional tidak boleh membuat expense/ledger otomatis
 - stok item/varian bertambah lewat endpoint resmi
 - catat `inventory_logs` dengan type `return_in`
 - tidak membuat `incomes`, `revenues`, atau `expenses`
@@ -308,7 +311,7 @@ Reset destructive/testing lama tidak tersedia di UI operasional. Jalur maintenan
 - Export Data Master read-only.
 - Checklist dan Riwayat resmi.
 
-Audit & Health memeriksa integrity SQLite, foreign key, invariant stok, stock read model, registry backup, dan pasangan kas-ledger. Repair hanya aktif untuk rebuild missing/stale projection serta cleanup orphan dengan backup `pre-repair`, transaction, audit log, dan keyword. Repair stok utama, inventory log, transaksi, finance, production, payroll, HPP, dan reset data tidak tersedia dari Maintenance Center.
+Audit & Health memeriksa integrity SQLite, foreign key, invariant stok, stock read model, registry backup, dan rekonsiliasi kas-ledger. Total issue dihitung penuh, sedangkan contoh UI boleh dibatasi dan harus ditandai bila terpotong. Rekonsiliasi finance mendeteksi pasangan hilang/duplikat, status, nominal, arah, debit-credit, source ID/type, serta orphan ledger. Setiap audit run dicatat ke audit log, tetapi tidak mengubah data bisnis. Repair hanya aktif untuk rebuild missing/stale projection serta cleanup orphan dengan backup `pre-repair`, transaction, audit log, dan keyword. Repair stok utama, inventory log, transaksi, finance, production, payroll, HPP, dan reset data tidak tersedia dari Maintenance Center.
 
 
 ## Tambahan Rule Terkini (Batch Prioritas)
@@ -1256,13 +1259,12 @@ Catatan lock:
 
 ## Update Business Rules — Transaction Side-Effect Repair guarded — 2026-05-23
 
-Status: **AKTIF / GUARDED**.
+Status: **BELUM TERSEDIA / MANUAL REVIEW ONLY**.
 
 - Flow transaksi aktif tetap sama: Sales membuat stock out + inventory log, dan income hanya saat status `Selesai`; Purchases membuat purchase + stock in + inventory log + expense; Return tetap stock-only correction + inventory log tanpa income/expense/revenue otomatis.
-- Menu Reset & Maintenance boleh menjalankan **Repair Side-Effect Transaksi** hanya untuk membuat side-effect yang benar-benar hilang dari transaksi aktif: `incomes` untuk Sales `Selesai`, `expenses` untuk Purchases, dan `inventory_logs` untuk Sales/Purchases/Returns.
-- Repair side-effect tidak boleh mengubah stok master/variant, tidak boleh mengubah dokumen `sales`, `purchases`, atau `returns`, tidak boleh menghapus income/expense/log lama, tidak boleh mengubah payroll/HPP, dan tidak boleh membuat refund Return.
-- Konflik seperti Sales belum `Selesai` tetapi sudah punya income tetap masuk review manual. Sistem tidak melakukan rollback/delete otomatis karena berisiko merusak laporan finance.
-- Repair wajib didahului audit/dry run dan konfirmasi keyword `REPAIR TRANSAKSI`; setelah repair wajib audit ulang dan cek Cash In, Cash Out, Stock Management, Sales Report, Purchases Report, dan Profit Loss.
+- Maintenance saat ini hanya menyediakan audit/read-only untuk mendeteksi masalah data dan rekonsiliasi finance. Tidak ada endpoint atau tombol aktif **Repair Side-Effect Transaksi**.
+- Side-effect transaksi yang hilang harus direview manual berdasarkan source transaction, inventory log, audit log, income/expense, dan ledger. Jangan membuat record pengganti langsung tanpa patch guarded yang disetujui.
+- Repair future, bila disetujui, tidak boleh mengubah stok master/variant, dokumen `sales`/`purchases`/`returns`, payroll/HPP, atau membuat refund Return; wajib dry-run, idempotency, pre-repair backup, keyword, transaction, dan audit ulang.
 
 
 ## SQLite Local DB runtime pilot — Patch A-B — 2026-06-02
@@ -1295,3 +1297,34 @@ Kontrak resmi: `docs/10_OFFLINE_DATABASE_CONTRACT.md`.
 ## Update Rule Finance Manual vs System Idempotency — 2026-06-21
 - Cash In/Cash Out manual dengan `id` atau `code` yang sudah ada wajib ditolak `409 FINANCE_DUPLICATE_MANUAL_REFERENCE`; transaksi manual tidak boleh diam-diam meng-overwrite catatan kas lama.
 - Posting sistem dari Sale/Purchase/Payroll tetap idempotent berdasarkan source ID agar retry tidak membuat ledger duplikat. Guard manual tidak boleh memutus idempotency system side-effect.
+
+## Update 2026-06-28 — Realtime SQLite dan Kebijakan Nonaktif/Purge
+
+Status: **AKTIF / GUARDED**.
+
+### Realtime lintas perangkat
+- Backend memublikasikan invalidasi data melalui Server-Sent Events (SSE) administrator/user yang sudah login. SSE hanya membawa revision, tabel, dan scope; data bisnis tetap dibaca ulang melalui endpoint HTTP ber-role guard.
+- Event perubahan hanya boleh dikirim setelah write/transaction SQLite berhasil commit. Rollback tidak boleh mengirim event.
+- Client asal mutation tidak menerima echo normal jika `X-IMS-Client-ID` cocok. Client lain melakukan refresh silent pada scope route yang relevan.
+- `X-IMS-Client-ID` wajib unik per tab/page instance. Browser ID boleh persisten, tetapi page-instance ID wajib dibuat ulang setiap page load agar tab duplicate tetap menerima event dari tab pengirim.
+- Saat form, modal, drawer, popover, atau input aktif, refresh otomatis harus ditahan dan UI menampilkan `Data baru tersedia` agar pekerjaan user tidak hilang.
+- Jika SSE putus/tidak didukung, satu fallback revision global berjalan 60 detik, tidak overlap, berhenti saat tab tersembunyi, dan langsung catch-up saat tab kembali terlihat. Adapter data tidak boleh membuat polling interval masing-masing; API subscription legacy hanya melakukan initial load.
+- Perubahan profile akses dari tabel `users/roles` wajib diproses global sebelum pencocokan scope route dan memvalidasi ulang session melalui reload aman. Perubahan session login/logout biasa memakai scope `auth_session` dan tidak boleh me-reload seluruh device.
+- Koneksi SSE wajib mengikuti `expiresAt` session. Ketika session habis, backend mengirim `session_expired`, menutup stream, dan frontend melakukan reload agar user kembali melalui auth gate.
+- Revision fallback untuk role `user` hanya boleh berubah pada event yang memang terlihat oleh role tersebut; event audit/maintenance/finance administrator-only tidak boleh memicu wildcard refresh user.
+- Koneksi SSE dibatasi secara defensif per server, user, dan IP. Saat buffer client tidak mampu menerima event, koneksi ditutup agar EventSource reconnect dan fallback revision melakukan catch-up, bukan menahan memory tanpa batas.
+- Restore database wajib mengirim event `database_replaced`; semua client melakukan reload aman dan validasi session ulang.
+
+### Nonaktif sebagai operasi standar
+- Menu operasional tidak boleh melakukan hard-delete master atau user. Aksi regular harus berupa `inactive`, `deleted` logis, atau arsip varian agar histori transaksi, audit, dan kode lama tetap dipertahankan.
+- Tombol dan pesan UI harus memakai istilah `Nonaktifkan` atau `Arsipkan`, bukan `Hapus`, untuk entitas yang record-nya tetap disimpan.
+- Customer, Kategori, Supplier, Aturan Harga, User, Kas Keluar manual, serta master generic memakai soft-delete/nonaktif sesuai guard domain masing-masing.
+- Varian zero-stock yang dikeluarkan dari master dipindahkan ke `archivedVariants` dan mencatat histori; varian berstok/reserved tetap ditolak.
+
+### Hapus permanen hanya dari Maintenance
+- Hard-delete hanya tersedia untuk administrator pada tab `Data Nonaktif` dan hanya untuk allowlist: Customer, Kategori, Supplier, Aturan Harga, dan User yang sudah nonaktif/deleted logis.
+- Stok, inventory log, purchase, sales, return, finance, production, payroll, backup/restore history, serta audit log tidak boleh dipurge dari flow ini.
+- Sebelum purge, backend wajib menjalankan dependency check atas kolom relasi, hierarchy, katalog/histori supplier, dan seluruh payload bisnis yang relevan. Record yang masih direferensikan harus diblokir.
+- Purge wajib memerlukan keyword `HAPUS PERMANEN` dan konfirmasi kedua berupa kode/nama/id target.
+- Sistem wajib membuat backup `pre-repair` sebelum purge, menjalankan hard-delete dalam transaction, dan menyimpan snapshot record yang disanitasi pada audit action `inactive_record_purge`.
+- Password hash user tidak boleh dimasukkan ke snapshot audit. Audit log purge tidak masuk allowlist purge dan harus tetap dipertahankan.

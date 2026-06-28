@@ -164,6 +164,14 @@ Setiap halaman yang disentuh wajib diuji dalam kondisi:
 
 Data banyak tidak boleh membuat body horizontal scroll. Pagination, virtualized/local scroll, table wrapper, atau mobile card/list harus dipakai sesuai komponen existing.
 
+Untuk workspace admin panjang seperti Maintenance Center:
+- tab utama tidak boleh sticky bila panel mempunyai navigasi internal karena dua navigation bar dapat saling menutup saat scroll;
+- mode internal seperti Backup, Restore, Cakupan Data, dan Detail Teknis memakai selector segmented dengan local horizontal scroll pada mobile;
+- info sekunder memakai popover on-demand, bukan alert/banner permanen yang menambah tinggi halaman;
+- mobile boleh memakai horizontal tab scroll lokal, bukan horizontal scroll pada body;
+- status `belum diperiksa` tidak boleh dipadatkan menjadi angka `0`;
+- daftar backup, audit log, dan riwayat wajib memakai pagination atau local scroll yang terlihat.
+
 ## 11. Rundown implementasi UI/UX per halaman
 
 Urutan kerja untuk menjaga konsistensi:

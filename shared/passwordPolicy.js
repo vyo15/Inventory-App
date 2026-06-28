@@ -1,34 +1,8 @@
-import PASSWORD_POLICY_CONFIG from "./passwordPolicy.config.json";
+import config from "./passwordPolicy.config.json" with { type: "json" };
+import { createPasswordPolicy } from "./passwordPolicy.core.js";
 
-export const PASSWORD_POLICY = Object.freeze(PASSWORD_POLICY_CONFIG);
+const policyApi = createPasswordPolicy(config);
 
-const hasLetter = (value = "") => /[A-Za-z]/.test(value);
-const hasNumber = (value = "") => /\d/.test(value);
-
-export const getPasswordPolicyHint = () => PASSWORD_POLICY.hint;
-
-export const validatePasswordStrength = (password = "") => {
-  const value = String(password || "");
-
-  if (value.length < PASSWORD_POLICY.minLength) {
-    return PASSWORD_POLICY.messages.minLength;
-  }
-
-  if (value.length > PASSWORD_POLICY.maxLength) {
-    return PASSWORD_POLICY.messages.maxLength;
-  }
-
-  const normalizedValue = value.trim().toLowerCase();
-  if (PASSWORD_POLICY.commonPasswords.includes(normalizedValue)) {
-    return PASSWORD_POLICY.messages.commonPassword;
-  }
-
-  const letterInvalid = PASSWORD_POLICY.requireLetter && !hasLetter(value);
-  const numberInvalid = PASSWORD_POLICY.requireNumber && !hasNumber(value);
-
-  if (letterInvalid || numberInvalid) {
-    return PASSWORD_POLICY.messages.letterAndNumber;
-  }
-
-  return "";
-};
+export const PASSWORD_POLICY = policyApi.PASSWORD_POLICY;
+export const getPasswordPolicyHint = policyApi.getPasswordPolicyHint;
+export const validatePasswordStrength = policyApi.validatePasswordStrength;

@@ -290,7 +290,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
       try {
         const modeStatus = await getRepositoryModeStatus();
         const useSqliteAdjustments = modeStatus.isSqliteSidecar === true
-          && isSqliteRepositoryModuleEnabled('VITE_STOCK_ADJUSTMENTS_REPOSITORY_MODE');
+          && isSqliteRepositoryModuleEnabled();
         if (disposed) return;
         setIsSqliteStockAdjustmentMode(useSqliteAdjustments);
 

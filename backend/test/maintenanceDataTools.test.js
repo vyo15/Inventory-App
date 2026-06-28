@@ -137,3 +137,83 @@ test("data quality audit read-only mendeteksi projection, backup registry, dan l
   assert.equal(await db.get("SELECT id FROM stock_read_models WHERE id = 'product__product-b'"), undefined);
   assert.ok(await db.get("SELECT id FROM incomes WHERE id = 'income-no-ledger'"));
 });
+
+test("data quality audit menghitung total issue di atas sample limit dan mencatat audit run", async () => {
+  const db = await testDatabase.getDb();
+  for (let index = 1; index <= 55; index += 1) {
+    await db.run(
+      `INSERT INTO products (
+        id, code, name, status, is_active,
+        current_stock, reserved_stock, available_stock, payload_json,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, 'active', 1, 1, 0, 99, '{}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      [`invalid-product-${index}`, `INV-${index}`, `Invalid ${index}`],
+    );
+  }
+  for (let index = 1; index <= 105; index += 1) {
+    await db.run(
+      `INSERT INTO incomes (
+        id, code, name, status, is_active, total_amount, transaction_date,
+        source_type, source_id, payload_json, created_at, updated_at
+      ) VALUES (?, ?, ?, 'Tercatat', 1, 1000, CURRENT_TIMESTAMP,
+        'cash_in_manual', ?, '{}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      [`income-missing-${index}`, `INC-MISSING-${index}`, `Income ${index}`, `income-missing-${index}`],
+    );
+  }
+
+  const audit = await getDataQualityAudit({ actor: "audit-admin" });
+  const byKey = new Map(audit.categories.map((item) => [item.key, item]));
+
+  assert.equal(byKey.get("inventory_invariants").count, 55);
+  assert.equal(byKey.get("inventory_invariants").sampleCount, 50);
+  assert.equal(byKey.get("inventory_invariants").isTruncated, true);
+  assert.equal(byKey.get("finance_ledger_pairs").count, 105);
+  assert.equal(byKey.get("finance_ledger_pairs").sampleCount, 10);
+  assert.equal(byKey.get("finance_ledger_pairs").isTruncated, true);
+
+  const auditLog = await db.get(
+    "SELECT * FROM audit_logs WHERE action = 'data_quality_audit' ORDER BY id DESC LIMIT 1",
+  );
+  assert.equal(auditLog.actor, "audit-admin");
+  assert.match(auditLog.metadata_json, /finance_ledger_pairs/);
+});
+
+test("finance reconciliation mendeteksi nominal, arah, debit-credit, dan orphan ledger", async () => {
+  const db = await testDatabase.getDb();
+  await db.run(
+    `INSERT INTO incomes (
+      id, code, name, status, is_active, total_amount, transaction_date,
+      source_type, source_id, payload_json, created_at, updated_at
+    ) VALUES ('income-mismatch', 'INC-MISMATCH', 'Income mismatch', 'Tercatat', 1, 1000, CURRENT_TIMESTAMP,
+      'cash_in_manual', 'income-mismatch', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+    [JSON.stringify({ sourceModule: "cash_in_manual" })],
+  );
+  await db.run(
+    `INSERT INTO money_movement_ledger (
+      id, code, name, status, is_active, total_amount, transaction_date,
+      source_type, source_id, payload_json, created_at, updated_at
+    ) VALUES ('ledger_income-mismatch', 'LGR-MISMATCH', 'Ledger mismatch', 'Tercatat', 1, 500, CURRENT_TIMESTAMP,
+      'wrong_source', 'wrong-movement-id', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+    [JSON.stringify({ direction: "out", debit: 0, credit: 500 })],
+  );
+  await db.run(
+    `INSERT INTO money_movement_ledger (
+      id, code, name, status, is_active, total_amount, transaction_date,
+      source_type, source_id, payload_json, created_at, updated_at
+    ) VALUES ('ledger_orphan', 'LGR-ORPHAN', 'Ledger orphan', 'Tercatat', 1, 100, CURRENT_TIMESTAMP,
+      'manual', 'missing-movement', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+    [JSON.stringify({ direction: "in", debit: 100, credit: 0 })],
+  );
+
+  const audit = await getDataQualityAudit({ actor: "audit-admin" });
+  const finance = audit.categories.find((item) => item.key === "finance_ledger_pairs");
+  const issueTypes = new Set(finance.samples.map((item) => item.issueType));
+
+  assert.ok(finance.count >= 4);
+  assert.ok(issueTypes.has("amount_mismatch"));
+  assert.ok(issueTypes.has("direction_mismatch"));
+  assert.ok(issueTypes.has("debit_credit_mismatch"));
+  assert.ok(issueTypes.has("source_id_mismatch"));
+  assert.ok(issueTypes.has("source_type_mismatch"));
+  assert.ok(issueTypes.has("orphan_ledger"));
+});

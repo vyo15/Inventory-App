@@ -1439,7 +1439,7 @@ const ProductionWorkLogs = () => {
                 render: (value) => formatCurrency(value),
               },
               buildWorkLogLineActionColumn({
-                deleteTitle: "Hapus material usage ini?",
+                deleteTitle: "Keluarkan pemakaian material dari form ini?",
                 isLocked: Boolean(editingRecord?.productionOrderId),
                 onDelete: handleRemoveMaterialUsage,
                 onEdit: openMaterialModal,
@@ -1482,7 +1482,7 @@ const ProductionWorkLogs = () => {
                 ),
               },
               buildWorkLogLineActionColumn({
-                deleteTitle: "Hapus output ini?",
+                deleteTitle: "Keluarkan output dari form ini?",
                 isLocked: Boolean(editingRecord?.productionOrderId),
                 onDelete: handleRemoveOutput,
                 onEdit: openOutputModal,

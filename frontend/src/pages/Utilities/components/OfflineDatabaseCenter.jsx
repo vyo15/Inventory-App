@@ -1,19 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   App as AntdApp,
   Button,
   Card,
   Col,
+  Collapse,
   Descriptions,
   Input,
+  Pagination,
   Row,
+  Segmented,
   Select,
   Space,
   Statistic,
-  Tabs,
   Tag,
-  Timeline,
   Upload,
   Typography,
 } from "antd";
@@ -29,8 +30,6 @@ import {
   UploadOutlined,
 } from "@ant-design/icons";
 
-import { REPOSITORY_MODES } from "../../../data/repositories/repositoryMode";
-import { getRepositoryModeStatus } from "../../../data/repositories/repositoryModeService";
 import {
   createSqliteBackendBackup,
   createSqliteRestorePlan,
@@ -40,16 +39,31 @@ import {
   getSqliteBackendStatus,
   getSqliteModuleRuntimeStatus,
   importSqliteBackendBackup,
+  MAINTENANCE_STATUS_CONTRACT_VERSION,
 } from "../../../services/System/sqliteBackendStatusService";
 import SqliteBackendStatusPanel from "./SqliteBackendStatusPanel";
 import ImsNotice from "../../../components/Layout/Feedback/ImsNotice";
+import InfoPopoverButton from "../../../components/Layout/Feedback/InfoPopoverButton";
+import {
+  buildDataCoverageGroups,
+  buildRestoreComparisonGroups,
+  getBackupCreatedAt,
+  getBackupRegisteredAt,
+  getImportedSourceFilename,
+  isRestorePlanReady,
+} from "./restorePreviewHelpers";
 import "./OfflineDatabaseCenter.css";
 
 const { Text } = Typography;
 const EXTERNAL_COPY_STORAGE_KEY = "ims.sqlite.externalBackupCopyConfirmedAt";
 const IMS_BACKUP_ACCEPT = ".imsbackup,.imsbak.zip";
+const LIVE_STATUS_REFRESH_INTERVAL_MS = 15_000;
+const BACKUP_PAGE_SIZE = 10;
 
 const formatNumber = (value) => Number(value || 0).toLocaleString("id-ID");
+const formatCount = (value) => (
+  value === null || value === undefined ? "Belum tersedia" : formatNumber(value)
+);
 const formatBytes = (value) => {
   const bytes = Number(value || 0);
   if (!bytes) return "0 B";
@@ -104,7 +118,7 @@ const getBackupStorageClass = (backup = {}) => {
 
 const isBackupInPeriod = (backup, period) => {
   if (period === "all") return true;
-  const date = parseBackupDate(backup.created_at || backup.manifest?.createdAt);
+  const date = parseBackupDate(getBackupCreatedAt(backup));
   if (!date) return false;
 
   const now = new Date();
@@ -165,7 +179,7 @@ const getRuntimeScopeLabel = (scope) => RUNTIME_SCOPE_LABELS[scope] || "Area mod
 const getBackupStatusTone = (backup) => {
   if (!backup) return { color: "red", text: "Belum ada backup" };
   if (backup.fileExists === false) return { color: "red", text: "File backup tidak ditemukan" };
-  const ageDays = getAgeDays(backup.created_at);
+  const ageDays = getAgeDays(getBackupCreatedAt(backup));
   if (ageDays === null) return { color: "orange", text: "Tanggal backup tidak jelas" };
   if (ageDays > 1) return { color: "orange", text: `Backup terakhir ${ageDays} hari lalu` };
   return { color: "green", text: "Backup hari ini aman" };
@@ -174,20 +188,126 @@ const getBackupStatusTone = (backup) => {
 const renderSelectedBackupSummary = (backup) => {
   if (!backup) return null;
   const manifest = backup.manifest || {};
+  const createdAt = getBackupCreatedAt(backup);
+  const registeredAt = getBackupRegisteredAt(backup);
+  const sourceFilename = getImportedSourceFilename(backup.filename);
+  const showRegisteredAt = Boolean(sourceFilename && registeredAt);
+  const verified = backup.status === "verified" || backup.status === "success";
+
   return (
-    <Descriptions size="small" bordered column={{ xs: 1, md: 2 }}>
-      <Descriptions.Item label="Jenis">{getBackupTypeLabel(backup.backupType)}</Descriptions.Item>
-      <Descriptions.Item label="Status"><Tag color={backup.status === "verified" || backup.status === "success" ? "green" : "orange"}>{backup.status || "unknown"}</Tag></Descriptions.Item>
-      <Descriptions.Item label="Tanggal">{formatDateTime(backup.created_at || manifest.createdAt)}</Descriptions.Item>
-      <Descriptions.Item label="Ukuran Paket">{formatBytes(backup.size_bytes || backup.sizeBytes)}</Descriptions.Item>
-      <Descriptions.Item label="Schema">{manifest.schemaVersion || "-"}</Descriptions.Item>
-      <Descriptions.Item label="Integrity">{manifest.integrityCheck || "-"}</Descriptions.Item>
-      <Descriptions.Item label="File" span={{ xs: 1, md: 2 }}>
-        <Text copyable ellipsis style={{ maxWidth: "100%" }}>{backup.filename}</Text>
-      </Descriptions.Item>
-    </Descriptions>
+    <div className="offline-db-selected-backup-summary">
+      <div className="offline-db-selected-backup-main">
+        <Space size={6} wrap>
+          <Text strong>{getBackupTypeLabel(backup.backupType)}</Text>
+          <Tag color={verified ? "green" : "orange"}>{verified ? "Terverifikasi" : "Perlu diperiksa"}</Tag>
+        </Space>
+        <Text type="secondary">
+          {formatDateTime(createdAt)} · {formatBytes(backup.size_bytes || backup.sizeBytes)}
+        </Text>
+      </div>
+      <InfoPopoverButton
+        label="Detail"
+        title="Detail file backup"
+        description="Informasi teknis disembunyikan dari tampilan utama agar daftar backup tetap ringkas."
+        items={[
+          { label: "Nama file", value: backup.filename || "-" },
+          { label: "Schema", value: manifest.schemaVersion || "-" },
+          { label: "Integrity", value: manifest.integrityCheck || "-" },
+          showRegisteredAt ? { label: "Terdaftar", value: formatDateTime(registeredAt) } : null,
+          sourceFilename ? { label: "Sumber import", value: sourceFilename } : null,
+        ]}
+      />
+    </div>
   );
 };
+
+const getDeltaLabel = (delta) => {
+  if (delta === null || delta === undefined) return "Belum tersedia";
+  const normalizedDelta = Number(delta || 0);
+  if (normalizedDelta === 0) return "Tetap";
+  return normalizedDelta > 0 ? `+${formatNumber(normalizedDelta)}` : formatNumber(normalizedDelta);
+};
+
+const getDeltaColor = (delta) => {
+  if (delta === null || delta === undefined) return "default";
+  const normalizedDelta = Number(delta || 0);
+  if (normalizedDelta === 0) return "default";
+  return normalizedDelta > 0 ? "green" : "orange";
+};
+
+const renderCoverageSummary = (groups = [], { comparison = false } = {}) => (
+  <div className="offline-db-coverage-grid">
+    {groups.filter((group) => !group.technical).map((group) => (
+      <div className="offline-db-coverage-card" key={group.key}>
+        <div className="offline-db-coverage-card-heading">
+          <Text strong>{group.label}</Text>
+          {comparison ? (
+            <Tag color={getDeltaColor(group.delta)}>{getDeltaLabel(group.delta)}</Tag>
+          ) : (
+            <Tag color={group.complete ? "blue" : "default"}>{formatCount(group.total)}</Tag>
+          )}
+        </div>
+        <Text type="secondary">{group.description}</Text>
+        {comparison ? (
+          <div className="offline-db-comparison-values">
+            <span><Text type="secondary">Saat ini</Text><Text strong>{formatCount(group.currentTotal)}</Text></span>
+            <span><Text type="secondary">Isi backup</Text><Text strong>{formatCount(group.backupTotal)}</Text></span>
+          </div>
+        ) : null}
+      </div>
+    ))}
+  </div>
+);
+
+const buildCoverageCollapseItems = (groups = [], { comparison = false } = {}) => groups.map((group) => ({
+  key: group.key,
+  label: (
+    <Space size={8} wrap>
+      <Text strong>{group.label}</Text>
+      {group.technical ? <Tag>Teknis</Tag> : null}
+      {comparison ? (
+        <>
+          <Tag color={group.backupTotal === null ? "default" : "blue"}>Backup {formatCount(group.backupTotal)}</Tag>
+          <Tag color={getDeltaColor(group.delta)}>{getDeltaLabel(group.delta)}</Tag>
+        </>
+      ) : (
+        <Tag color={group.complete ? "blue" : "default"}>{formatCount(group.total)}</Tag>
+      )}
+    </Space>
+  ),
+  children: (
+    <div className={`offline-db-detail-counts${comparison ? " offline-db-detail-counts-comparison" : ""}`}>
+      {group.rows.map((row) => (
+        <div className="offline-db-detail-count" key={row.table}>
+          <div className="offline-db-detail-count-main">
+            <Text>{row.label}</Text>
+            <Text type="secondary" code>{row.table}</Text>
+          </div>
+          {comparison ? (
+            <div className="offline-db-detail-count-values">
+              <span><Text type="secondary">Saat ini</Text><Text strong>{formatCount(row.currentCount)}</Text></span>
+              <span><Text type="secondary">Backup</Text><Text strong>{formatCount(row.backupCount)}</Text></span>
+              <Tag color={getDeltaColor(row.delta)}>{getDeltaLabel(row.delta)}</Tag>
+            </div>
+          ) : row.statusAware ? (
+            <div className="offline-db-detail-status-values">
+              <Tag color="green">Aktif {formatCount(row.activeCount)}</Tag>
+              {Number(row.inactiveCount || 0) > 0 ? (
+                <Tag color="orange">Nonaktif {formatCount(row.inactiveCount)}</Tag>
+              ) : null}
+              {Number(row.deletedCount || 0) > 0 ? (
+                <Tag color="default">Arsip histori {formatCount(row.deletedCount)}</Tag>
+              ) : null}
+              <Text strong>{formatCount(row.storedTotal)} tersimpan</Text>
+            </div>
+          ) : (
+            <Text strong>{formatCount(row.count)}</Text>
+          )}
+        </div>
+      ))}
+    </div>
+  ),
+}));
 
 // =====================================================
 // SECTION: OfflineDatabaseCenter — AKTIF / DATABASE CENTER
@@ -205,64 +325,179 @@ const OfflineDatabaseCenter = () => {
   const [restorePlanLoading, setRestorePlanLoading] = useState(false);
   const [restoreExecuteLoading, setRestoreExecuteLoading] = useState(false);
   const [status, setStatus] = useState(null);
+  const [statusError, setStatusError] = useState(null);
+  const [lastStatusUpdatedAt, setLastStatusUpdatedAt] = useState("");
   const [moduleRuntimeStatus, setModuleRuntimeStatus] = useState(null);
   const [restorePlan, setRestorePlan] = useState(null);
   const [backups, setBackups] = useState([]);
   const [selectedBackupFilename, setSelectedBackupFilename] = useState("");
   const [backupTypeFilter, setBackupTypeFilter] = useState("all");
   const [backupPeriodFilter, setBackupPeriodFilter] = useState("all");
+  const [backupPage, setBackupPage] = useState(1);
+  const [activeCenterPanel, setActiveCenterPanel] = useState("backup");
   const [restoreKeyword, setRestoreKeyword] = useState("");
   const [selectedImportBackupFile, setSelectedImportBackupFile] = useState(null);
   const [externalCopyConfirmedAt, setExternalCopyConfirmedAt] = useState(() => {
     if (typeof window === "undefined") return "";
     return window.localStorage.getItem(EXTERNAL_COPY_STORAGE_KEY) || "";
   });
+  const liveStatusRefreshRef = useRef(false);
 
   const statusData = status?.data || {};
+  const backupLifecycle = statusData.backupLifecycle || {};
   const moduleRuntimeData = moduleRuntimeStatus?.data || {};
   const moduleRuntimeModules = moduleRuntimeData.modules || [];
   const moduleRuntimeSummary = moduleRuntimeData.summary || {};
-  const modeTag = useMemo(() => <Tag color="green">Aktif</Tag>, []);
+  const isOnline = Boolean(status?.ok);
+  const statusContractReady = Number(statusData.maintenanceStatusContractVersion || 0)
+    >= MAINTENANCE_STATUS_CONTRACT_VERSION
+    && statusData.capabilities?.tableCounts === true
+    && statusData.capabilities?.tableRecordStatusCounts === true
+    && statusData.capabilities?.realtimeEvents === true
+    && statusData.capabilities?.sqliteOnlyRuntime === true;
+  const currentTableCounts = statusContractReady ? statusData.tableCounts : null;
+  const currentTableRecordStatusCounts = statusContractReady
+    ? statusData.tableRecordStatusCounts
+    : null;
+  const backupTableCounts = restorePlan?.validation?.tables || null;
+  const currentCoverageGroups = buildDataCoverageGroups(currentTableCounts, {
+    sourceAvailable: statusContractReady,
+    tableRecordStatusCounts: currentTableRecordStatusCounts,
+  });
+  const restoreComparisonGroups = buildRestoreComparisonGroups({
+    currentTableCounts,
+    backupTableCounts,
+    currentAvailable: statusContractReady,
+    backupAvailable: Boolean(backupTableCounts),
+  });
+  const coverageComplete = statusContractReady
+    && currentCoverageGroups.every((group) => group.complete);
+  const coverageTotal = coverageComplete
+    ? currentCoverageGroups.reduce((sum, group) => sum + group.total, 0)
+    : null;
+  const databaseConsistency = statusData.databaseConsistency || null;
   const latestBackup = backups[0] || statusData.latestBackup || null;
   const filteredBackups = useMemo(() => backups.filter((backup) => {
     const matchesType = backupTypeFilter === "all" || getBackupStorageClass(backup) === backupTypeFilter;
     return matchesType && isBackupInPeriod(backup, backupPeriodFilter);
   }), [backupPeriodFilter, backupTypeFilter, backups]);
+  const backupPageCount = Math.max(1, Math.ceil(filteredBackups.length / BACKUP_PAGE_SIZE));
+  const paginatedBackups = filteredBackups.slice(
+    (backupPage - 1) * BACKUP_PAGE_SIZE,
+    backupPage * BACKUP_PAGE_SIZE,
+  );
+  const backupVisibleStart = filteredBackups.length ? (backupPage - 1) * BACKUP_PAGE_SIZE + 1 : 0;
+  const backupVisibleEnd = Math.min(backupPage * BACKUP_PAGE_SIZE, filteredBackups.length);
   const backupTone = getBackupStatusTone(latestBackup);
   const selectedBackup = backups.find((backup) => backup.filename === selectedBackupFilename) || latestBackup;
   const restoreKeywordRequired = statusData.restoreConfirmKeyword || restorePlan?.requiredConfirmKeyword || "RESTORE DATABASE";
-  const restoreReady = Boolean(restorePlan?.validForRestore && selectedBackupFilename && restoreKeyword.trim() === restoreKeywordRequired);
+  const restoreReady = isRestorePlanReady({
+    restorePlan,
+    selectedBackupFilename,
+    restoreKeyword,
+    restoreKeywordRequired,
+  });
   const externalCopyAgeDays = externalCopyConfirmedAt ? getAgeDays(externalCopyConfirmedAt) : null;
+
+  useEffect(() => {
+    setBackupPage(1);
+  }, [backupPeriodFilter, backupTypeFilter]);
+
+  useEffect(() => {
+    if (backupPage > backupPageCount) setBackupPage(backupPageCount);
+  }, [backupPage, backupPageCount]);
+
+  const applyLiveStatus = useCallback((nextStatus) => {
+    setStatus(nextStatus);
+    setStatusError(null);
+    setLastStatusUpdatedAt(nextStatus?.data?.statusGeneratedAt || new Date().toISOString());
+  }, []);
+
+  const refreshLiveStatus = useCallback(async ({ notifyOnError = false } = {}) => {
+    if (liveStatusRefreshRef.current) return;
+    liveStatusRefreshRef.current = true;
+    try {
+      applyLiveStatus(await getSqliteBackendStatus());
+    } catch (error) {
+      console.error("Gagal memperbarui status database realtime:", error);
+      setStatusError(error);
+      if (error?.code === "SQLITE_STATUS_CONTRACT_MISMATCH") setStatus(null);
+      if (notifyOnError) appMessage.error(error?.message || "Status database belum bisa diperbarui.");
+    } finally {
+      liveStatusRefreshRef.current = false;
+    }
+  }, [appMessage, applyLiveStatus]);
 
   const loadCenterData = useCallback(async ({ showSuccess = false } = {}) => {
     setLoading(true);
     try {
-      const [modeStatus, nextStatus, nextBackups, nextModuleRuntimeStatus] = await Promise.all([
-        getRepositoryModeStatus(),
+      const [statusResult, backupsResult, runtimeResult] = await Promise.allSettled([
         getSqliteBackendStatus(),
         getSqliteBackendBackups(),
         getSqliteModuleRuntimeStatus(),
       ]);
-      const backupRows = nextBackups?.data || [];
-      void modeStatus;
-      setStatus(nextStatus);
-      setBackups(backupRows);
-      setSelectedBackupFilename((previous) => previous || backupRows[0]?.filename || "");
-      setModuleRuntimeStatus(nextModuleRuntimeStatus);
-      if (showSuccess) appMessage.success("Status Database Center diperbarui.");
+      let successfulRequestCount = 0;
+
+      if (statusResult.status === "fulfilled") {
+        applyLiveStatus(statusResult.value);
+        successfulRequestCount += 1;
+      } else {
+        const error = statusResult.reason;
+        console.error("Gagal memuat status database:", error);
+        setStatusError(error);
+        if (error?.code === "SQLITE_STATUS_CONTRACT_MISMATCH") setStatus(null);
+      }
+
+      if (backupsResult.status === "fulfilled") {
+        const backupRows = backupsResult.value?.data || [];
+        setBackups(backupRows);
+        setSelectedBackupFilename((previous) => previous || backupRows[0]?.filename || "");
+        successfulRequestCount += 1;
+      } else {
+        console.error("Gagal memuat daftar backup:", backupsResult.reason);
+      }
+
+      if (runtimeResult.status === "fulfilled") {
+        setModuleRuntimeStatus(runtimeResult.value);
+        successfulRequestCount += 1;
+      } else {
+        console.error("Gagal memuat status modul:", runtimeResult.reason);
+      }
+
+      if (successfulRequestCount === 0) {
+        throw statusResult.reason || backupsResult.reason || runtimeResult.reason;
+      }
+
+      if (showSuccess) {
+        if (statusResult.status === "fulfilled") appMessage.success("Status Database Center diperbarui.");
+        else appMessage.warning(statusResult.reason?.message || "Data pendukung dimuat, tetapi status database belum tersedia.");
+      }
     } catch (error) {
       console.error("Gagal memuat Database Center:", error);
       appMessage.error(error?.message || "Layanan database belum bisa diakses.");
-      const modeStatus = await getRepositoryModeStatus().catch(() => ({ mode: REPOSITORY_MODES.SQLITE_SIDECAR }));
-      void modeStatus;
     } finally {
       setLoading(false);
     }
-  }, [appMessage]);
+  }, [appMessage, applyLiveStatus]);
 
   useEffect(() => {
     loadCenterData();
   }, [loadCenterData]);
+
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      void refreshLiveStatus();
+    };
+    const timer = window.setInterval(refreshWhenVisible, LIVE_STATUS_REFRESH_INTERVAL_MS);
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [refreshLiveStatus]);
 
   const handleBackup = async () => {
     setBackupLoading(true);
@@ -333,8 +568,13 @@ const OfflineDatabaseCenter = () => {
     try {
       const filename = selectedBackupFilename || selectedBackup?.filename || "";
       const result = await createSqliteRestorePlan(filename ? { filename } : {});
-      setRestorePlan(result?.data || null);
-      appMessage.success(result?.message || "Restore preview berhasil dibuat.");
+      const nextRestorePlan = result?.data || null;
+      setRestorePlan(nextRestorePlan);
+      if (nextRestorePlan?.validForRestore && !nextRestorePlan?.safeForRestore) {
+        appMessage.warning("Backup valid secara teknis, tetapi restore diblokir karena tidak memiliki administrator aktif.");
+      } else {
+        appMessage.success(result?.message || "Restore preview berhasil dibuat.");
+      }
       await loadCenterData();
     } catch (error) {
       appMessage.error(error?.message || "Restore preview gagal dibuat.");
@@ -345,7 +585,10 @@ const OfflineDatabaseCenter = () => {
 
   const handleExecuteRestore = async () => {
     if (!restoreReady) {
-      appMessage.warning("Pilih backup, buat preview valid, lalu ketik keyword konfirmasi dengan benar.");
+      const message = restorePlan?.validForRestore && !restorePlan?.safeForRestore
+        ? "Restore diblokir karena backup tidak memiliki administrator aktif."
+        : "Pilih backup, buat preview aman, lalu ketik keyword konfirmasi dengan benar.";
+      appMessage.warning(message);
       return;
     }
 
@@ -382,142 +625,121 @@ const OfflineDatabaseCenter = () => {
     });
   };
 
-  const statusTab = (
-    <Space direction="vertical" size={16} style={{ width: "100%" }}>
-      <SqliteBackendStatusPanel />
+  const coverageTab = (
+    <Space direction="vertical" size={12} style={{ width: "100%" }}>
+      <div className="offline-db-panel-heading">
+        <div>
+          <Text strong>Cakupan data backup</Text>
+          <br />
+          <Text type="secondary">Ringkasan record dari database SQLite aktif.</Text>
+        </div>
+        <InfoPopoverButton
+          label="Cara membaca"
+          title="Cakupan data backup"
+          description="File backup resmi membawa seluruh tabel, termasuk histori dan metadata teknis yang dibutuhkan saat restore."
+          items={[
+            { label: "Pembaruan", value: `Setiap ${Math.round(LIVE_STATUS_REFRESH_INTERVAL_MS / 1000)} detik saat halaman terlihat` },
+            { label: "Angka aktif", value: "Record yang masih dipakai operasional" },
+            { label: "Arsip histori", value: "Record nonaktif atau dihapus-logis yang tetap disimpan" },
+            { label: "Total", value: "Seluruh record yang tersimpan dalam database" },
+          ]}
+        />
+      </div>
 
-      <Row gutter={[12, 12]}>
-        <Col xs={12} md={6}>
-          <Card size="small" className="offline-db-status-card">
-            <Statistic title="Customers" value={formatNumber(statusData.customerCount)} prefix={<DatabaseOutlined />} />
-          </Card>
-        </Col>
-        <Col xs={12} md={6}>
-          <Card size="small" className="offline-db-status-card">
-            <Statistic title="Categories" value={formatNumber(statusData.categoryCount)} prefix={<DatabaseOutlined />} />
-          </Card>
-        </Col>
-        <Col xs={12} md={6}>
-          <Card size="small" className="offline-db-status-card">
-            <Statistic title="Audit Logs" value={formatNumber(statusData.auditCount)} prefix={<SafetyOutlined />} />
-          </Card>
-        </Col>
-        <Col xs={12} md={6}>
-          <Card size="small" className="offline-db-status-card">
-            <Statistic title="Backup" value={formatNumber(statusData.backupCount)} prefix={<HddOutlined />} />
-          </Card>
-        </Col>
-        <Col xs={12} md={6}>
-          <Card size="small" className="offline-db-status-card">
-            <Statistic title="Restore Plan" value={formatNumber(statusData.restorePlanCount)} prefix={<SafetyOutlined />} />
-          </Card>
-        </Col>
-        <Col xs={12} md={6}>
-          <Card size="small" className="offline-db-status-card">
-            <Statistic title="Modul Aplikasi" value={formatNumber(statusData.moduleRuntimeStatusCount ?? statusData.migrationStatusCount)} prefix={<SwapOutlined />} />
-          </Card>
-        </Col>
-      </Row>
+      {statusError?.code === "SQLITE_STATUS_CONTRACT_MISMATCH" ? (
+        <Alert
+          type="warning"
+          showIcon
+          message="Frontend dan backend belum satu versi"
+          description="Angka nol tidak ditampilkan karena status belum dapat dipercaya. Hentikan layanan dengan Ctrl+C, lalu jalankan kembali npm run dev dari folder project dan klik Refresh."
+        />
+      ) : statusError ? (
+        <Alert
+          type="warning"
+          showIcon
+          message="Pembaruan realtime sementara gagal"
+          description="Angka terakhir yang valid tetap dipertahankan. Pastikan layanan lokal aktif, lalu klik Refresh."
+        />
+      ) : databaseConsistency?.healthy === false ? (
+        <Alert
+          type="error"
+          showIcon
+          message="Struktur database perlu diperiksa"
+          description={`Ditemukan ${databaseConsistency.missingTables?.length || 0} tabel hilang dan ${databaseConsistency.invalidCountTables?.length || 0} jumlah tabel tidak valid. Jangan jalankan restore atau reset sebelum audit selesai.`}
+        />
+      ) : coverageComplete ? (
+        <ImsNotice
+          variant="status"
+          compact
+          title="Ringkasan database sinkron"
+          description={`Terakhir diperbarui ${formatDateTime(lastStatusUpdatedAt)} dari satu database SQLite aktif.`}
+        />
+      ) : (
+        <Alert
+          type="warning"
+          showIcon
+          message="Ringkasan data belum tersedia"
+          description="Sistem tidak menganggap data yang belum terbaca sebagai 0. Klik Refresh atau restart layanan lokal untuk memuat status database terbaru."
+        />
+      )}
 
-      <ImsNotice
-        variant="info"
-        compact
-        title="Satu database logis, beberapa file runtime"
-        description="Saat layanan aktif, SQLite mode WAL dapat menampilkan file .sqlite, .sqlite-wal, dan .sqlite-shm di folder data. Ketiganya adalah satu database yang sama. Setelah layanan dihentikan normal, backend melakukan checkpoint dan menutup koneksi agar file WAL/SHM dilepas. Jangan menghapus file tersebut secara manual."
-      />
+      {renderCoverageSummary(currentCoverageGroups)}
 
-      <Descriptions size="small" bordered column={{ xs: 1, lg: 2 }}>
-        <Descriptions.Item label="Status Layanan">{modeTag}</Descriptions.Item>
-        <Descriptions.Item label="Schema DB">{statusData.schemaVersion || "-"}</Descriptions.Item>
-        <Descriptions.Item label="Restore Mode"><Tag color="orange">{statusData.restoreMode || "preview_only"}</Tag></Descriptions.Item>
-        <Descriptions.Item label="Format Backup"><Tag color="blue">{statusData.backupFormat || "imsbackup"}</Tag></Descriptions.Item>
-        <Descriptions.Item label="Database" span={{ xs: 1, lg: 2 }}>
-          <Text copyable ellipsis style={{ maxWidth: "100%" }}>{statusData.dbPath || "-"}</Text>
-        </Descriptions.Item>
-        <Descriptions.Item label="Backup Folder" span={{ xs: 1, lg: 2 }}>
-          <Text copyable ellipsis style={{ maxWidth: "100%" }}>{statusData.backupDir || "-"}</Text>
-        </Descriptions.Item>
-      </Descriptions>
-    </Space>
-  );
-
-  const modeTab = (
-    <Space direction="vertical" size={16} style={{ width: "100%" }}>
-      <ImsNotice
-        variant="status"
-        compact
-        title="Database aplikasi aktif"
-        description="Semua modul berjalan melalui layanan lokal dan database utama aplikasi."
-      />
-
-      <Card size="small" title="Status layanan" className="offline-db-action-card">
-        <Space direction="vertical" size={8}>
-          <Tag color="green">Aktif</Tag>
-          <Text type="secondary">Mode database lokal aktif.</Text>
-        </Space>
-      </Card>
-
-      <Timeline
-        items={[
-          {
-            color: "green",
-            dot: <CheckCircleOutlined />,
-            children: "Semua modul utama membaca dan menulis melalui layanan database aplikasi.",
-          },
-          {
-            color: "blue",
-            dot: <DatabaseOutlined />,
-            children: "HP/PC lain dapat mengakses aplikasi dari jaringan lokal yang sama.",
-          },
-          {
-            color: "green",
-            dot: <SafetyOutlined />,
-            children: "Backup resmi dibuat sistem dalam paket .imsbackup dengan manifest, checksum, dan integrity check.",
-          },
-        ]}
-      />
+      <div className="offline-db-compact-section">
+        <div className="offline-db-section-heading">
+          <div>
+            <Text strong>Detail seluruh data</Text>
+            <br />
+            <Text type="secondary">
+              Data berstatus aktif, nonaktif, dan dihapus-logis dibedakan. Total tersimpan tetap mencakup histori yang dipertahankan.
+            </Text>
+          </div>
+          <Tag color={coverageComplete ? "blue" : "default"}>
+            {coverageComplete ? `${formatNumber(coverageTotal)} record` : "Belum tersedia"}
+          </Tag>
+        </div>
+        <Collapse
+          size="small"
+          className="offline-db-coverage-collapse"
+          items={buildCoverageCollapseItems(currentCoverageGroups)}
+        />
+      </div>
     </Space>
   );
 
   const backupTab = (
-    <Space direction="vertical" size={12} style={{ width: "100%" }}>
-      <div className="offline-db-status-strip offline-db-status-strip-backup">
-        <div className="offline-db-status-strip-main">
-          <Space size={8} wrap>
-            <Tag color={backupTone.color}>{backupTone.text}</Tag>
-            <Tag color="blue">.imsbackup</Tag>
-          </Space>
-          <Text type="secondary">
-            Setiap backup resmi adalah satu file .imsbackup. Sistem menyimpan daily 60 hari, monthly 12 bulan, dan manual tanpa hapus otomatis.
-          </Text>
-        </div>
-        <Space wrap className="offline-db-status-strip-actions">
-          <Button icon={<ReloadOutlined />} loading={loading} onClick={() => loadCenterData({ showSuccess: true })}>
-            Refresh
-          </Button>
-          <Button type="primary" icon={<HddOutlined />} loading={backupLoading} onClick={handleBackup}>
-            Buat Backup
-          </Button>
-        </Space>
-      </div>
-
+    <Space direction="vertical" size={10} style={{ width: "100%" }}>
       <div className="offline-db-compact-section">
         <div className="offline-db-section-heading">
-          <Text strong>Backup terakhir</Text>
-          <Tag color={externalCopyAgeDays !== null && externalCopyAgeDays <= 7 ? "green" : "orange"}>
-            {externalCopyConfirmedAt
-              ? `Copy eksternal: ${formatDateTime(externalCopyConfirmedAt)}`
-              : "Copy eksternal belum ditandai"}
-          </Tag>
+          <div>
+            <Text strong>Backup terbaru</Text>
+            <br />
+            <Text type="secondary">File terverifikasi yang paling baru tersedia.</Text>
+          </div>
+          <Space size={6} wrap>
+            <Tag color={externalCopyAgeDays !== null && externalCopyAgeDays <= 7 ? "green" : "orange"}>
+              {externalCopyConfirmedAt ? "Salinan eksternal tercatat" : "Belum disalin eksternal"}
+            </Tag>
+            <InfoPopoverButton
+              label="Kebijakan"
+              title="Kebijakan penyimpanan backup"
+              description="Backup lokal tetap berada di laptop server. Simpan salinan terbaru ke media eksternal secara berkala."
+              items={[
+                { label: "Format", value: "Satu file .imsbackup" },
+                { label: "Harian", value: "Disimpan 60 hari" },
+                { label: "Bulanan", value: "Disimpan 12 bulan" },
+                { label: "Manual", value: "Tidak dihapus otomatis" },
+                { label: "Salinan terakhir", value: externalCopyConfirmedAt ? formatDateTime(externalCopyConfirmedAt) : "Belum ditandai" },
+              ]}
+            />
+          </Space>
         </div>
         {latestBackup ? renderSelectedBackupSummary(latestBackup) : (
           <ImsNotice variant="guard" compact title="Belum ada backup database." />
         )}
-        <div className="offline-db-inline-note">
-          <Text type="secondary">
-            Backup lokal masih berada di laptop server. Minimal seminggu sekali, copy backup terbaru ke flashdisk/harddisk eksternal.
-          </Text>
-          <Button size="small" onClick={handleMarkExternalCopy}>Saya sudah copy ke flashdisk</Button>
+        <div className="offline-db-backup-copy-action">
+          <Text type="secondary">Tandai setelah file terbaru benar-benar disalin ke flashdisk atau harddisk eksternal.</Text>
+          <Button size="small" onClick={handleMarkExternalCopy}>Tandai sudah disalin</Button>
         </div>
       </div>
 
@@ -526,10 +748,11 @@ const OfflineDatabaseCenter = () => {
           <div>
             <Text strong>Daftar backup</Text>
             <br />
-            <Text type="secondary">Filter mingguan atau bulanan tanpa membuat folder tambahan.</Text>
+            <Text type="secondary">{filteredBackups.length} backup sesuai filter · menampilkan {backupVisibleStart}-{backupVisibleEnd}</Text>
           </div>
           <Space wrap size={8}>
             <Select
+              size="small"
               value={backupTypeFilter}
               onChange={setBackupTypeFilter}
               style={{ minWidth: 140 }}
@@ -541,6 +764,7 @@ const OfflineDatabaseCenter = () => {
               ]}
             />
             <Select
+              size="small"
               value={backupPeriodFilter}
               onChange={setBackupPeriodFilter}
               style={{ minWidth: 150 }}
@@ -555,25 +779,35 @@ const OfflineDatabaseCenter = () => {
           </Space>
         </div>
         <Space direction="vertical" size={8} style={{ width: "100%" }}>
-          {filteredBackups.slice(0, 50).map((backup) => (
+          {paginatedBackups.map((backup) => (
             <div className="offline-db-backup-list-item" key={backup.id || backup.filename}>
               <div className="offline-db-backup-list-main">
                 <Space wrap size={6}>
-                  <Tag color={backup.status === "verified" || backup.status === "success" ? "green" : "orange"}>{backup.status || "unknown"}</Tag>
-                  <Tag color="blue">{getBackupTypeLabel(backup.backupType)}</Tag>
-                  <Text type="secondary">{formatBytes(backup.size_bytes || backup.sizeBytes)}</Text>
+                  <Text strong>{getBackupTypeLabel(backup.backupType)}</Text>
+                  <Tag color={backup.status === "verified" || backup.status === "success" ? "green" : "orange"}>
+                    {backup.status === "verified" || backup.status === "success" ? "Terverifikasi" : "Perlu diperiksa"}
+                  </Tag>
                 </Space>
-                <Text strong ellipsis>{backup.filename}</Text>
-                <Text type="secondary">{formatDateTime(backup.created_at)} · Schema {backup.manifest?.schemaVersion || "-"}</Text>
+                <Text type="secondary">{formatDateTime(backup.created_at)} · {formatBytes(backup.size_bytes || backup.sizeBytes)}</Text>
               </div>
-              <Button
-                size="small"
-                icon={<DownloadOutlined />}
-                loading={downloadingBackupFilename === backup.filename}
-                onClick={() => handleDownloadBackup(backup)}
-              >
-                Download
-              </Button>
+              <Space size={6}>
+                <InfoPopoverButton
+                  label="Info"
+                  title="Detail backup"
+                  items={[
+                    { label: "Nama file", value: backup.filename || "-" },
+                    { label: "Schema", value: backup.manifest?.schemaVersion || "-" },
+                    { label: "Jenis simpan", value: getBackupStorageClass(backup) },
+                  ]}
+                />
+                <Button
+                  size="small"
+                  icon={<DownloadOutlined />}
+                  loading={downloadingBackupFilename === backup.filename}
+                  onClick={() => handleDownloadBackup(backup)}
+                  aria-label={`Download ${backup.filename}`}
+                />
+              </Space>
             </div>
           ))}
         </Space>
@@ -583,7 +817,17 @@ const OfflineDatabaseCenter = () => {
             compact
             title={backups.length ? "Tidak ada backup yang cocok dengan filter." : "Belum ada backup database."}
           />
-        ) : null}
+        ) : (
+          <Pagination
+            className="offline-db-backup-pagination"
+            current={backupPage}
+            pageSize={BACKUP_PAGE_SIZE}
+            total={filteredBackups.length}
+            showSizeChanger={false}
+            hideOnSinglePage
+            onChange={setBackupPage}
+          />
+        )}
       </div>
     </Space>
   );
@@ -649,20 +893,115 @@ const OfflineDatabaseCenter = () => {
     </Space>
   );
 
+  const statusTechnicalTab = (
+    <Space direction="vertical" size={12} style={{ width: "100%" }}>
+      <SqliteBackendStatusPanel
+        statusData={statusData}
+        isOnline={isOnline}
+        loading={loading}
+        onRefresh={() => loadCenterData({ showSuccess: true })}
+      />
+
+      <ImsNotice
+        variant="info"
+        compact
+        title="Satu database logis, beberapa file runtime"
+        description="Saat layanan aktif, SQLite mode WAL dapat menampilkan file .sqlite, .sqlite-wal, dan .sqlite-shm. Ketiganya adalah satu database yang sama. Hentikan layanan secara normal dan jangan menghapus file WAL/SHM secara manual."
+      />
+
+      <Collapse
+        size="small"
+        className="offline-db-coverage-collapse"
+        items={[
+          {
+            key: "technical",
+            label: "Detail teknis database & backup",
+            children: (
+              <Descriptions size="small" bordered column={{ xs: 1, lg: 2 }}>
+                <Descriptions.Item label="Status Layanan">
+                  <Tag color={isOnline ? "green" : "orange"}>{isOnline ? "Aktif" : "Belum tersambung"}</Tag>
+                </Descriptions.Item>
+                <Descriptions.Item label="Schema DB">{statusData.schemaVersion || "-"}</Descriptions.Item>
+                <Descriptions.Item label="Kontrak Status">
+                  {statusContractReady
+                    ? `v${statusData.maintenanceStatusContractVersion}`
+                    : "Belum cocok"}
+                </Descriptions.Item>
+                <Descriptions.Item label="Status Dihasilkan">
+                  {statusData.statusGeneratedAt ? formatDateTime(statusData.statusGeneratedAt) : "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label="Backend Dimulai">
+                  {statusData.backendStartedAt ? formatDateTime(statusData.backendStartedAt) : "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label="Konsistensi Database">
+                  <Tag color={databaseConsistency?.healthy ? "green" : "orange"}>
+                    {databaseConsistency?.healthy ? "Sinkron" : "Perlu diperiksa"}
+                  </Tag>
+                </Descriptions.Item>
+                <Descriptions.Item label="Realtime Antarperangkat">
+                  <Tag color={statusData.realtime?.enabled ? "green" : "orange"}>
+                    {statusData.realtime?.enabled ? "SSE aktif" : "Fallback refresh"}
+                  </Tag>
+                </Descriptions.Item>
+                <Descriptions.Item label="Client Tersambung">
+                  {formatNumber(statusData.realtime?.connectedClients || 0)}
+                </Descriptions.Item>
+                <Descriptions.Item label="Revision Data">
+                  {formatNumber(statusData.realtime?.revision || 0)}
+                </Descriptions.Item>
+                <Descriptions.Item label="Event Terakhir">
+                  {statusData.realtime?.lastEvent?.occurredAt
+                    ? formatDateTime(statusData.realtime.lastEvent.occurredAt)
+                    : "Belum ada perubahan"}
+                </Descriptions.Item>
+                <Descriptions.Item label="Proteksi Restore">
+                  <Tag color="orange">Restore aman dengan keyword</Tag>
+                </Descriptions.Item>
+                <Descriptions.Item label="Format Backup">
+                  <Tag color="blue">Backup IMS satu file terverifikasi</Tag>
+                </Descriptions.Item>
+                <Descriptions.Item label="Lifecycle Otomatis">
+                  <Tag color={backupLifecycle.schedulerActive ? "green" : "red"}>
+                    {backupLifecycle.schedulerActive ? "Aktif" : "Tidak aktif"}
+                  </Tag>
+                </Descriptions.Item>
+                <Descriptions.Item label="Interval Pemeriksaan">
+                  {backupLifecycle.intervalMs
+                    ? `${formatNumber(Math.round(Number(backupLifecycle.intervalMs) / 60000))} menit`
+                    : "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label="Lifecycle Terakhir">
+                  {backupLifecycle.lastCompletedAt ? formatDateTime(backupLifecycle.lastCompletedAt) : "Belum pernah"}
+                </Descriptions.Item>
+                <Descriptions.Item label="Pemeriksaan Berikutnya">
+                  {backupLifecycle.nextRunAt ? formatDateTime(backupLifecycle.nextRunAt) : "Tidak dijadwalkan"}
+                </Descriptions.Item>
+                {backupLifecycle.lastError ? (
+                  <Descriptions.Item label="Error Lifecycle Terakhir" span={{ xs: 1, lg: 2 }}>
+                    <Text type="danger">{backupLifecycle.lastError}</Text>
+                  </Descriptions.Item>
+                ) : null}
+                <Descriptions.Item label="Lokasi Database" span={{ xs: 1, lg: 2 }}>
+                  <Text copyable ellipsis style={{ maxWidth: "100%" }}>{statusData.dbPath || "-"}</Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="Lokasi Backup" span={{ xs: 1, lg: 2 }}>
+                  <Text copyable ellipsis style={{ maxWidth: "100%" }}>{statusData.backupDir || "-"}</Text>
+                </Descriptions.Item>
+              </Descriptions>
+            ),
+          },
+          {
+            key: "runtime",
+            label: `Status ${formatNumber(moduleRuntimeSummary.total)} modul aplikasi`,
+            children: runtimeTab,
+          },
+        ]}
+      />
+    </Space>
+  );
+
   const restoreTab = (
     <Space direction="vertical" size={12} style={{ width: "100%" }}>
-      <div className="offline-db-status-strip offline-db-status-strip-restore">
-        <div className="offline-db-status-strip-main">
-          <Space size={8} wrap>
-            <Tag color="orange">Guarded restore</Tag>
-            <Tag color="red">Full replace</Tag>
-          </Space>
-          <Text type="secondary">
-            Restore mengganti database aktif. Alur tetap wajib import/pilih backup, preview valid, keyword konfirmasi, dan backup pre-restore otomatis.
-          </Text>
-        </div>
-      </div>
-
       <div className="offline-db-restore-step">
         <div className="offline-db-step-marker">1</div>
         <div className="offline-db-step-content">
@@ -721,7 +1060,7 @@ const OfflineDatabaseCenter = () => {
               }}
               options={backups.map((backup) => ({
                 value: backup.filename,
-                label: `${getBackupTypeLabel(backup.backupType)} - ${formatDateTime(backup.created_at)} - ${backup.status || "unknown"}`,
+                label: `${getBackupTypeLabel(backup.backupType)} - ${formatDateTime(getBackupCreatedAt(backup))} - ${backup.status || "unknown"}`,
               }))}
             />
             {renderSelectedBackupSummary(selectedBackup)}
@@ -729,37 +1068,83 @@ const OfflineDatabaseCenter = () => {
             {restorePlan ? (
               <div className="offline-db-restore-preview">
                 <Descriptions size="small" bordered column={{ xs: 1, md: 2 }}>
-                  <Descriptions.Item label="Mode"><Tag color="orange">{restorePlan.mode}</Tag></Descriptions.Item>
-                  <Descriptions.Item label="Destructive"><Tag color="green">Tidak aktif saat preview</Tag></Descriptions.Item>
-                  <Descriptions.Item label="Backup ditemukan">{restorePlan.backupFound ? "Ya" : "Tidak"}</Descriptions.Item>
-                  <Descriptions.Item label="File backup ada">{restorePlan.backupFileExists ? "Ya" : "Tidak"}</Descriptions.Item>
-                  <Descriptions.Item label="Valid untuk restore">
+                  <Descriptions.Item label="Jenis Preview"><Tag color="blue">Read-only</Tag></Descriptions.Item>
+                  <Descriptions.Item label="Database Aktif"><Tag color="green">Belum diubah</Tag></Descriptions.Item>
+                  <Descriptions.Item label="Validasi File">
                     <Tag color={restorePlan.validForRestore ? "green" : "red"}>{restorePlan.validForRestore ? "Valid" : "Tidak valid"}</Tag>
                   </Descriptions.Item>
+                  <Descriptions.Item label="Guard Akun">
+                    <Tag color={restorePlan.safeForRestore ? "green" : "red"}>{restorePlan.safeForRestore ? "Aman" : "Diblokir"}</Tag>
+                  </Descriptions.Item>
                   <Descriptions.Item label="Integrity">{restorePlan.validation?.integrityCheck || restorePlan.manifest?.integrityCheck || "-"}</Descriptions.Item>
+                  <Descriptions.Item label="Status Akun Setelah Restore">
+                    {restorePlan.accountSummary
+                      ? (restorePlan.safeForRestore
+                        ? "Dapat login dengan akun administrator dari backup"
+                        : "Restore diblokir — pilih backup dengan administrator aktif")
+                      : "Belum dapat diperiksa"}
+                  </Descriptions.Item>
                 </Descriptions>
 
-                {restorePlan.manifest?.tables ? (
-                  <div className="offline-db-table-counts">
-                    {Object.entries(restorePlan.manifest.tables).slice(0, 12).map(([tableName, count]) => (
-                      <div className="offline-db-table-count" key={tableName}>
-                        <Text type="secondary">{tableName}</Text>
-                        <Text strong>{formatNumber(count)}</Text>
+                {restorePlan.accountSummary ? (
+                  <Descriptions title="Akun dalam Backup" size="small" bordered column={{ xs: 1, md: 2 }}>
+                    <Descriptions.Item label="Total User">{formatNumber(restorePlan.accountSummary.totalUsers)}</Descriptions.Item>
+                    <Descriptions.Item label="User Aktif">{formatNumber(restorePlan.accountSummary.activeUsers)}</Descriptions.Item>
+                    <Descriptions.Item label="Total Administrator">{formatNumber(restorePlan.accountSummary.administratorUsers)}</Descriptions.Item>
+                    <Descriptions.Item label="Administrator Aktif">
+                      <Tag color={restorePlan.accountSummary.activeAdministrators > 0 ? "green" : "red"}>
+                        {formatNumber(restorePlan.accountSummary.activeAdministrators)}
+                      </Tag>
+                    </Descriptions.Item>
+                  </Descriptions>
+                ) : null}
+
+                {restorePlan.validation?.tables ? (
+                  <div className="offline-db-compact-section offline-db-restore-comparison-section">
+                    <div className="offline-db-section-heading">
+                      <div>
+                        <Text strong>Perbandingan database saat ini dan isi backup</Text>
+                        <br />
+                        <Text type="secondary">
+                          Nilai negatif berarti record tersebut akan berkurang setelah full restore. Jumlah mencakup histori yang masih tersimpan.
+                        </Text>
                       </div>
-                    ))}
+                    </div>
+                    {renderCoverageSummary(restoreComparisonGroups, { comparison: true })}
+                    <Collapse
+                      size="small"
+                      className="offline-db-coverage-collapse"
+                      items={buildCoverageCollapseItems(restoreComparisonGroups, { comparison: true })}
+                    />
                   </div>
                 ) : null}
 
                 {restorePlan.validationError ? (
                   <Alert type="error" showIcon message="Backup tidak lolos validasi" description={restorePlan.validationError} />
+                ) : !restorePlan.safeForRestore ? (
+                  <Alert
+                    type="error"
+                    showIcon
+                    message="Restore normal diblokir"
+                    description="Backup tidak memiliki administrator aktif. Restore normal tidak dapat dijalankan; pilih backup lain yang memiliki administrator aktif."
+                  />
                 ) : (
                   <ImsNotice
                     variant="info"
                     compact
-                    title="Preview tidak mengubah data."
+                    title="Preview aman dan tidak mengubah data."
                     description={(restorePlan.blockedActions || []).join(" ")}
                   />
                 )}
+
+                {restorePlan.restoreSafety?.likelyEmptyDatabase ? (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    message="Backup tampak seperti database awal atau kosong"
+                    description="Jumlah akun dan data operasional utama di backup ini bernilai nol."
+                  />
+                ) : null}
               </div>
             ) : (
               <Text type="secondary">Pilih backup lalu klik Preview Restore untuk validasi checksum, integrity check, dan ringkasan data.</Text>
@@ -782,7 +1167,7 @@ const OfflineDatabaseCenter = () => {
             value={restoreKeyword}
             onChange={(event) => setRestoreKeyword(event.target.value)}
             placeholder={restoreKeywordRequired}
-            disabled={!restorePlan?.validForRestore}
+            disabled={!restorePlan?.safeForRestore}
           />
           <Button danger type="primary" loading={restoreExecuteLoading} disabled={!restoreReady} onClick={handleExecuteRestore}>
             Restore Database
@@ -793,37 +1178,58 @@ const OfflineDatabaseCenter = () => {
   );
 
 
-  const tabs = [
-    { key: "status", label: "Status", children: statusTab },
-    { key: "mode", label: "Mode", children: modeTab },
-    { key: "backup", label: "Backup", children: backupTab },
-    { key: "restore", label: "Restore", children: restoreTab },
-    { key: "runtime", label: "Modul Aplikasi", children: runtimeTab },
-  ];
+  const centerPanels = {
+    backup: backupTab,
+    restore: restoreTab,
+    coverage: coverageTab,
+    status: statusTechnicalTab,
+  };
 
   return (
     <div className="offline-db-center">
-      <div className="offline-db-toolbar">
-        <div className="offline-db-toolbar-main">
-          <Space size={10} wrap>
-            <SwapOutlined />
-            <Text strong>Database Center</Text>
-            {modeTag}
-          </Space>
-          <Text type="secondary">
-            Database lokal, backup .imsbackup, import, preview restore, dan status modul dalam satu panel compact.
-          </Text>
-        </div>
-        <Space size={8} wrap className="offline-db-toolbar-actions">
-          <Button size="small" icon={<ReloadOutlined />} loading={loading} onClick={() => loadCenterData({ showSuccess: true })}>
-            Refresh
-          </Button>
-          <Tag color={backupTone.color}>{backupTone.text}</Tag>
-          <Tag color="green">Layanan aktif</Tag>
+      <div className="offline-db-center-controls">
+        <Segmented
+          block
+          size="small"
+          value={activeCenterPanel}
+          onChange={setActiveCenterPanel}
+          options={[
+            { label: "Backup", value: "backup" },
+            { label: "Restore", value: "restore" },
+            { label: "Cakupan Data", value: "coverage" },
+            { label: "Detail Teknis", value: "status" },
+          ]}
+        />
+        <Space size={6} wrap className="offline-db-center-actions">
+          <InfoPopoverButton
+            label="Informasi"
+            title="Status Backup & Restore"
+            description="Informasi status dan kebijakan ditampilkan saat dibutuhkan agar workspace tetap bersih."
+            items={[
+              { label: "Backup", value: backupTone.text },
+              { label: "Database", value: statusContractReady && !statusError ? "Sinkron" : "Perlu diperiksa" },
+              { label: "Realtime", value: statusData.realtime?.enabled ? "SSE aktif" : "Fallback refresh" },
+              { label: "Diperbarui", value: lastStatusUpdatedAt ? formatDateTime(lastStatusUpdatedAt) : "Belum tersedia" },
+            ]}
+          />
+          <Button
+            size="small"
+            icon={<ReloadOutlined />}
+            loading={loading}
+            onClick={() => loadCenterData({ showSuccess: true })}
+            aria-label="Refresh Backup & Restore"
+          />
+          {activeCenterPanel === "backup" ? (
+            <Button size="small" type="primary" icon={<HddOutlined />} loading={backupLoading} onClick={handleBackup}>
+              Buat Backup
+            </Button>
+          ) : null}
         </Space>
       </div>
 
-      <Tabs className="offline-db-tabs" items={tabs} />
+      <div className="offline-db-center-content">
+        {centerPanels[activeCenterPanel] || backupTab}
+      </div>
     </div>
   );
 };

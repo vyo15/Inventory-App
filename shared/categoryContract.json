@@ -1,0 +1,21 @@
+{
+  "types": {
+    "PRODUCT_FORM": "product_form",
+    "FLOWER_TYPE": "flower_type",
+    "RAW_MATERIAL_GROUP": "raw_material_group",
+    "SEMI_FINISHED_GROUP": "semi_finished_group"
+  },
+  "aliases": {
+    "general": "product_form",
+    "product": "product_form",
+    "raw_material": "raw_material_group",
+    "semi_finished": "semi_finished_group"
+  },
+  "codePrefixes": {
+    "product_form": "BENTUK",
+    "flower_type": "BUNGA",
+    "raw_material_group": "BAHAN",
+    "semi_finished_group": "KOMPONEN"
+  },
+  "defaultType": "product_form"
+}

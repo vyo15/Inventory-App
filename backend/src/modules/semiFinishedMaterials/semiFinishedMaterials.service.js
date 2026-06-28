@@ -1,4 +1,4 @@
-const { createInventoryMasterRouteGuards } = require("../../utils/sqliteStockEngine");
+const { createInventoryMasterRouteGuards } = require("../stock/engine");
 
 const SEMI_FINISHED_VALUATION_FIELDS = [
   "averageCostPerUnit",

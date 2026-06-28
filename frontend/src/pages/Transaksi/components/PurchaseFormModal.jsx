@@ -285,21 +285,7 @@ const PurchaseFormModal = ({
                     - read-only field memakai class shared agar token warna/border konsisten.
                     - perubahan ini presentational only; tidak mengubah value, validasi, atau payload Purchases.
                 =============================================================== */}
-                <Form.Item
-                  name="quantity"
-                  label="Qty Beli"
-                  rules={[{ required: true, message: "Qty wajib diisi" }]}
-                  extra="Jumlah aktual beli."
-                >
-                  <InputNumber
-                    min={1}
-                    step={1}
-                    precision={0}
-                    className="ims-filter-control"
-                    formatter={(value) => formatNumberId(value)}
-                    parser={parseIntegerIdInput}
-                  />
-                </Form.Item>
+                <PurchaseQuantityField extra="Jumlah aktual beli." />
 
                 <Form.Item
                   label="Satuan Beli"
@@ -390,20 +376,7 @@ const PurchaseFormModal = ({
               </div>
             </>
           ) : (
-            <Form.Item
-              name="quantity"
-              label="Qty Beli"
-              rules={[{ required: true, message: "Qty wajib diisi" }]}
-            >
-              <InputNumber
-                min={1}
-                step={1}
-                precision={0}
-                className="ims-filter-control"
-                formatter={(value) => formatNumberId(value)}
-                parser={parseIntegerIdInput}
-              />
-            </Form.Item>
+            <PurchaseQuantityField />
           )}
 
           {/* ===============================================================
@@ -605,3 +578,4 @@ const PurchaseFormModal = ({
 );
 
 export default PurchaseFormModal;
+import PurchaseQuantityField from "./PurchaseQuantityField";

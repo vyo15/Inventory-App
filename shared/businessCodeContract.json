@@ -1,0 +1,10 @@
+{
+  "customer": {
+    "prefix": "CUS",
+    "pattern": "^CUS-\\d{8}-\\d{3,}$"
+  },
+  "supplier": {
+    "prefix": "SUP",
+    "pattern": "^SUP-\\d{8}-\\d{3,}$"
+  }
+}

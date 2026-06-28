@@ -32,7 +32,7 @@ import {
   listenPurchaseRecords,
 } from "../../services/Transaksi/purchasesService";
 import { parseShopeePurchaseOcrText } from "../../utils/purchases/shopeePurchaseOcrParser";
-import { compareRecordsByDateDesc, compareRecordsByNameAsc, upsertRecordById, upsertRecordsById } from "../../utils/state/recordCollectionState";
+import { compareRecordsByDateDesc, mergeInventoryMutationResults, upsertRecordById } from "../../utils/state/recordCollectionState";
 import {
   buildShopeeOcrDetailRows,
   normalizePurchaseNoteText,
@@ -47,6 +47,7 @@ import {
   buildShopeeOcrPurchaseMeta,
   calculateSupplierReferenceTotal,
   calculateSupplierSubtotal,
+  buildPurchaseFormDefaults,
 } from "./helpers/purchasesPageHelpers";
 
 const { Text } = Typography;
@@ -852,7 +853,7 @@ const Purchases = () => {
     supplierSubtotalBaselineRef.current = { itemId: "", supplierId: "", supplierItemPrice: 0, subtotalItems: 0 };
 
     form.resetFields();
-    form.setFieldsValue({
+    form.setFieldsValue(buildPurchaseFormDefaults({
       type: nextType,
       itemId: itemIdFromQuery,
       supplierId: supplierIdFromQuery,
@@ -860,22 +861,7 @@ const Purchases = () => {
       productLink,
       materialVariantId: searchParams.get("variantKey") || undefined,
       productVariantKey: searchParams.get("variantKey") || undefined,
-      quantity: 1,
-      subtotalItems: 0,
-      shippingCost: 0,
-      shippingDiscount: 0,
-      voucherDiscount: 0,
-      serviceFee: 0,
-      purchaseType: "online",
-      totalActualPurchase: 0,
-      actualUnitCost: 0,
-      restockReferencePrice: 0,
-      totalReferencePurchase: 0,
-      purchaseSaving: 0,
-      priceVerified: false,
-      priceVerifiedAt: undefined,
-      verifiedCatalogPrice: 0,
-    });
+    }));;
     setIsModalOpen(true);
   }, [form, searchParams]);
 
@@ -898,28 +884,7 @@ const Purchases = () => {
     setShopeeOcrState(SHOPEE_OCR_IDLE_STATE);
     setShopeeOcrApplyFeedback(null);
     form.resetFields();
-    form.setFieldsValue({
-      type: "material",
-      materialVariantId: undefined,
-      productVariantKey: undefined,
-      quantity: 1,
-      subtotalItems: 0,
-      shippingCost: 0,
-      shippingDiscount: 0,
-      voucherDiscount: 0,
-      serviceFee: 0,
-      purchaseType: "online",
-      totalActualPurchase: 0,
-      actualUnitCost: 0,
-      restockReferencePrice: 0,
-      totalReferencePurchase: 0,
-      purchaseSaving: 0,
-      productLink: '',
-      catalogOfferId: undefined,
-      priceVerified: false,
-      priceVerifiedAt: undefined,
-      verifiedCatalogPrice: 0,
-    });
+    form.setFieldsValue(buildPurchaseFormDefaults());;
     setIsModalOpen(true);
   };
 
@@ -1165,20 +1130,8 @@ const Purchases = () => {
         comparator: compareRecordsByDateDesc,
       }));
       const mutationResults = Array.isArray(result?.mutationResults) ? result.mutationResults : [];
-      setProducts((current) => upsertRecordsById(
-        current,
-        mutationResults
-          .filter((item) => item?.stockReadModel?.sourceType === "product")
-          .map((item) => item.item),
-        { comparator: compareRecordsByNameAsc },
-      ));
-      setMaterials((current) => upsertRecordsById(
-        current,
-        mutationResults
-          .filter((item) => item?.stockReadModel?.sourceType === "raw_material")
-          .map((item) => item.item),
-        { comparator: compareRecordsByNameAsc },
-      ));
+      setProducts((current) => mergeInventoryMutationResults(current, mutationResults, "product"));
+      setMaterials((current) => mergeInventoryMutationResults(current, mutationResults, "raw_material"));
       if (result?.catalogVerification?.catalogOfferId) {
         setSuppliers((current) => current.map((supplier) => {
           if (String(supplier.id) !== String(result.catalogVerification.supplierId)) return supplier;

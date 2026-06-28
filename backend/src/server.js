@@ -3,8 +3,14 @@ const cors = require("cors");
 const env = require("./config/env");
 const { runMigrations } = require("./db/migrate");
 const { closeDb, getDbPath } = require("./db/connection");
-const { ensureDailyBackupForToday } = require("./utils/sqliteBackup");
+const {
+  BACKUP_LIFECYCLE_INTERVAL_MS,
+  runBackupLifecycleMaintenance,
+  startBackupLifecycleScheduler,
+  stopBackupLifecycleScheduler,
+} = require("./modules/maintenance/backup");
 const requestLogger = require("./middlewares/requestLogger");
+const { requestContextMiddleware } = require("./middlewares/requestContext");
 const securityHeaders = require("./middlewares/securityHeaders");
 const { createCorsOptionsDelegate, enforceTrustedOrigin } = require("./middlewares/corsOptions");
 const { errorHandler, notFoundHandler } = require("./middlewares/errorHandler");
@@ -31,6 +37,8 @@ const financeRoutes = require("./modules/finance/finance.routes");
 const productionRoutes = require("./modules/production/production.routes");
 const reportsRoutes = require("./modules/reports/reports.routes");
 const openApiRoutes = require("./modules/openApi/openApi.routes");
+const realtimeRoutes = require("./modules/realtime/realtime.routes");
+const { stopRealtimeService } = require("./modules/realtime/realtime.service");
 const authService = require("./modules/auth/auth.service");
 const { getBootstrapCodeForConsole } = require("./modules/auth/authBootstrapGuard");
 
@@ -41,6 +49,7 @@ app.use(securityHeaders);
 app.use(enforceTrustedOrigin);
 app.use(cors(createCorsOptionsDelegate));
 app.use(express.json({ limit: "1mb" }));
+app.use(requestContextMiddleware);
 app.use(requestLogger);
 
 app.get("/api", (_req, res) => success(res, "IMS layanan lokal API aktif", {
@@ -74,6 +83,7 @@ app.use("/api/finance", financeRoutes);
 app.use("/api/production", productionRoutes);
 app.use("/api/reports", reportsRoutes);
 app.use("/api/openapi.json", openApiRoutes);
+app.use("/api/realtime", realtimeRoutes);
 app.use("/api/maintenance", maintenanceRoutes);
 app.use("/api/audit-logs", auditLogsRoutes);
 app.use("/api/module-runtime-status", migrationStatusRoutes);
@@ -161,17 +171,25 @@ const performStartup = async () => {
   }
 
   try {
-    const dailyBackup = await ensureDailyBackupForToday();
-    if (dailyBackup.created) {
-      logger.info("daily_backup_created", { filename: dailyBackup.backup.filename });
-    }
+    const lifecycle = await runBackupLifecycleMaintenance({ trigger: "startup" });
+    const summary = {
+      dailyCreated: lifecycle.daily?.created === true,
+      monthlyCreatedCount: Number(lifecycle.monthly?.created?.length || 0),
+      retentionDeletedCount: Number(lifecycle.retention?.deleted?.length || 0),
+      errorCount: Number(lifecycle.errors?.length || 0),
+    };
+    const logMethod = summary.errorCount > 0 ? logger.warn : logger.info;
+    logMethod("backup_lifecycle_startup_completed", summary);
   } catch (error) {
-    logger.warn("daily_backup_failed", { error });
+    logger.warn("backup_lifecycle_startup_failed", { error });
   }
 
   if (shutdownRequested) return null;
 
   const server = await listenForRequests();
+  if (!shutdownRequested) {
+    startBackupLifecycleScheduler({ intervalMs: BACKUP_LIFECYCLE_INTERVAL_MS });
+  }
   const address = server.address();
   const activePort = typeof address === "object" && address ? address.port : env.port;
   logger.info("ims_local_server_started", {
@@ -202,6 +220,7 @@ const shutdownServer = ({ reason = "manual", exitCode = 0, exitProcess = false }
 
   shutdownPromise = (async () => {
     logger.info("ims_local_server_shutdown_started", { reason });
+    stopBackupLifecycleScheduler();
     let finalExitCode = exitCode;
     let forceTimer = null;
 
@@ -224,6 +243,8 @@ const shutdownServer = ({ reason = "manual", exitCode = 0, exitProcess = false }
         logger.warn("ims_local_startup_settled_during_shutdown", { reason, error });
       }
     }
+    stopBackupLifecycleScheduler();
+    stopRealtimeService();
 
     try {
       await closeHttpServer();

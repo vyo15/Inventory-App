@@ -1,5 +1,5 @@
 const { failure, success } = require("../../utils/response");
-const { createSqliteJsonRecordRouter } = require("../../shared/sqliteJsonRecordRoutes");
+const { createSqliteJsonRecordRouter } = require("../../infrastructure/http/sqliteJsonRecordRouter");
 const {
   commitPurchase,
   commitReturn,

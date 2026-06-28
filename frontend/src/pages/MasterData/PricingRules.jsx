@@ -27,7 +27,7 @@ import {
 import {
   PlusOutlined,
   EditOutlined,
-  DeleteOutlined,
+  StopOutlined,
   EyeOutlined,
   CheckOutlined,
 } from "@ant-design/icons";
@@ -319,15 +319,15 @@ const PricingRules = () => {
     }
   };
 
-  // SECTION: hapus rule
-  const handleDeleteRule = async (ruleId) => {
+  // SECTION: nonaktifkan rule
+  const handleDeactivateRule = async (ruleId) => {
     try {
       await removePricingRuleFromRepository(ruleId);
       setRules((current) => removeRecordById(current, ruleId));
-      message.success("Pricing rule berhasil dihapus.");
+      message.success("Pricing rule berhasil dinonaktifkan.");
     } catch (error) {
-      console.error("Gagal menghapus pricing rule:", error);
-      message.error("Gagal menghapus pricing rule.");
+      console.error("Gagal menonaktifkan pricing rule:", error);
+      message.error("Gagal menonaktifkan pricing rule.");
     }
   };
 
@@ -510,7 +510,7 @@ const PricingRules = () => {
       className: "app-table-action-column",
       render: (_, record) => (
         <div className="ims-action-group ims-action-group--vertical">
-          {/* AKTIF / GUARDED: action Pricing Rules tetap Detail/Edit/Hapus; hanya layout table yang dipadatkan. */}
+          {/* AKTIF / GUARDED: action Pricing Rules tetap Detail/Edit/Nonaktifkan; hanya layout table yang dipadatkan. */}
           <Button
             className="ims-action-button ims-action-button--block"
             size="small"
@@ -525,14 +525,14 @@ const PricingRules = () => {
           </Button>
 
           <Popconfirm
-            title="Hapus pricing rule?"
-            description="Rule yang dihapus tidak bisa dikembalikan."
+            title="Nonaktifkan pricing rule?"
+            description="Rule tetap tersimpan sebagai histori dan dapat ditinjau dari Maintenance."
             okText="Ya"
             cancelText="Batal"
-            onConfirm={() => handleDeleteRule(record?.id)}
+            onConfirm={() => handleDeactivateRule(record?.id)}
           >
-            <Button className="ims-action-button ims-action-button--block" size="small" danger icon={<DeleteOutlined />}>
-              Hapus
+            <Button className="ims-action-button ims-action-button--block" size="small" danger icon={<StopOutlined />}>
+              Nonaktifkan
             </Button>
           </Popconfirm>
         </div>
@@ -650,14 +650,14 @@ const PricingRules = () => {
           Edit
         </Button>
         <Popconfirm
-          title="Hapus pricing rule?"
-          description="Rule yang dihapus tidak bisa dikembalikan."
+          title="Nonaktifkan pricing rule?"
+          description="Rule tetap tersimpan sebagai histori dan dapat ditinjau dari Maintenance."
           okText="Ya"
           cancelText="Batal"
-          onConfirm={() => handleDeleteRule(record?.id)}
+          onConfirm={() => handleDeactivateRule(record?.id)}
         >
-          <Button className="ims-action-button ims-action-button--block" size="small" danger icon={<DeleteOutlined />}>
-            Hapus
+          <Button className="ims-action-button ims-action-button--block" size="small" danger icon={<StopOutlined />}>
+            Nonaktifkan
           </Button>
         </Popconfirm>
       </div>

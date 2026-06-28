@@ -9,7 +9,7 @@ import {
   Tag,
   message,
 } from "antd";
-import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
+import { StopOutlined, PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
@@ -26,8 +26,8 @@ import { createCashOutTransaction, deleteCashOutTransaction, listenCashOutRecord
 import { compareRecordsByDateDesc, removeRecordById, upsertRecordById } from "../../utils/state/recordCollectionState";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import CashTransactionFormFields from "./components/CashTransactionFormFields";
+import FinancePeriodYearMonthFilter from "./components/FinancePeriodYearMonthFilter";
 import {
-  buildFinanceMonthOptions,
   buildFinanceRecordYearOptions,
   filterFinanceRecordsByPeriod,
   getCurrentFinanceYear,
@@ -42,13 +42,12 @@ import {
 
 const { Option } = Select;
 
-const MONTH_OPTIONS = buildFinanceMonthOptions();
 
 // =========================
 // SECTION: Sumber expense
 // Fungsi:
 // - membedakan pengeluaran manual vs pengeluaran turunan dari modul lain
-// - membantu user memahami apakah row boleh dihapus atau hanya dibaca
+// - membantu user memahami apakah row boleh dinonaktifkan atau hanya dibaca
 // Status:
 // - aktif dipakai di UI Cash Out
 // - kandidat cleanup hanya jika nanti ada source registry global untuk expenses
@@ -110,13 +109,13 @@ const renderCashOutActions = (record = {}, onDelete) => {
   return (
     <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
       <Popconfirm
-        title="Yakin hapus transaksi ini?"
+        title="Nonaktifkan transaksi ini?"
         onConfirm={() => onDelete(record.id)}
         okText="Ya"
         cancelText="Tidak"
       >
-        <Button className="ims-action-button" danger icon={<DeleteOutlined />}>
-          Hapus
+        <Button className="ims-action-button" danger icon={<StopOutlined />}>
+          Nonaktifkan
         </Button>
       </Popconfirm>
     </Space>
@@ -282,10 +281,10 @@ const CashOut = () => {
     try {
       await deleteCashOutTransaction(id);
       setCashOuts((current) => removeRecordById(current, id));
-      message.success("Transaksi berhasil dihapus.");
+      message.success("Transaksi berhasil dinonaktifkan.");
     } catch (error) {
-      console.error("Gagal menghapus transaksi:", error);
-      message.error(error?.message || "Gagal menghapus transaksi.");
+      console.error("Gagal menonaktifkan transaksi:", error);
+      message.error(error?.message || "Gagal menonaktifkan transaksi.");
     }
   };
 
@@ -374,7 +373,7 @@ const CashOut = () => {
       },
       {
         // IMS NOTE [AKTIF/GUARDED] - Action button ledger Cash Out.
-        // Fungsi blok: menampilkan aksi hapus dalam layout vertical agar sejajar dengan tabel lain.
+        // Fungsi blok: menampilkan aksi nonaktifkan dalam layout vertical agar sejajar dengan tabel lain.
         // Hubungan flow: hanya UI; Popconfirm dan handler delete tetap sama.
         title: "Aksi",
         key: "action",
@@ -474,38 +473,13 @@ const CashOut = () => {
         title="Filter Pengeluaran"
         subtitle="Filter periode."
       >
-        <FilterBar>
-          <Col xs={24} md={6}>
-            <Select
-              value={selectedYear}
-              onChange={setSelectedYear}
-              className="ims-filter-control"
-              placeholder="Pilih tahun"
-            >
-              {yearOptions.map((year) => (
-                <Option key={year} value={year}>
-                  {year}
-                </Option>
-              ))}
-            </Select>
-          </Col>
-
-          <Col xs={24} md={6}>
-            <Select
-              value={selectedMonth}
-              onChange={setSelectedMonth}
-              className="ims-filter-control"
-              placeholder="Pilih bulan"
-            >
-              <Option value="all">Semua Bulan</Option>
-              {MONTH_OPTIONS.map((monthOption) => (
-                <Option key={monthOption.value} value={monthOption.value}>
-                  {monthOption.label}
-                </Option>
-              ))}
-            </Select>
-          </Col>
-        </FilterBar>
+        <FinancePeriodYearMonthFilter
+          selectedYear={selectedYear}
+          selectedMonth={selectedMonth}
+          yearOptions={yearOptions}
+          onYearChange={setSelectedYear}
+          onMonthChange={setSelectedMonth}
+        />
       </PageSection>
 
       <PageSection

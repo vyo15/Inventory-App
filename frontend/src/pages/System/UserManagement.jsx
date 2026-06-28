@@ -16,7 +16,6 @@ import {
   PlusOutlined,
   StopOutlined,
   CheckCircleOutlined,
-  DeleteOutlined,
   LockOutlined,
 } from "@ant-design/icons";
 import useAuth from "../../hooks/useAuth";
@@ -33,7 +32,6 @@ import {
   DELETE_PROFILE_NOT_FOUND_ERROR_CODE,
   DELETE_PROFILE_PERMISSION_ERROR_CODE,
   createManualUserProfile,
-  deleteSystemUserProfile,
   isUsernameAlreadyUsedError,
   listSystemUsers,
   updateSystemUserProfile,
@@ -82,23 +80,6 @@ const getStatusColor = (status) => {
   return status === USER_STATUS.ACTIVE ? "green" : "default";
 };
 
-// Alasan disable aksi hapus; service tetap menjadi guard utama.
-const getDeleteGuardReason = ({ canManage, isLastActiveAdministrator, isSelfProfile }) => {
-  if (isSelfProfile) {
-    return "Profile yang sedang dipakai login tidak boleh dihapus.";
-  }
-
-  if (isLastActiveAdministrator) {
-    return "Administrator aktif terakhir tidak boleh dihapus.";
-  }
-
-  if (!canManage) {
-    return "Role aktif tidak boleh menghapus profile ini.";
-  }
-
-  return "";
-};
-
 const getUserManagementActionErrorMessage = (error = {}) => {
   const errorCode = error.code || error.errorCode;
 
@@ -127,9 +108,6 @@ const UserManagement = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formMode, setFormMode] = useState(FORM_MODE.CREATE);
   const [selectedUser, setSelectedUser] = useState(null);
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [isDeletingProfile, setIsDeletingProfile] = useState(false);
   const [statusChangeRequest, setStatusChangeRequest] = useState(null);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
@@ -163,7 +141,7 @@ const UserManagement = () => {
     return Promise.reject(new Error("Username sudah terdaftar."));
   };
 
-  // UI guard: jangan hapus administrator aktif terakhir.
+  // UI guard: jangan nonaktifkan administrator aktif terakhir.
   const activeAdministratorCount = useMemo(() => {
     return users.filter(
       (userProfile) =>
@@ -266,26 +244,6 @@ const UserManagement = () => {
     }
   };
 
-  // Alasan guard per baris untuk feedback UI; service tetap validasi ulang.
-  const getDeleteGuardReasonForRecord = (userRecord = {}) => {
-    const canManage = canManageUserProfile({
-      actorRole,
-      targetRole: userRecord.role,
-      targetUid: userRecord.authUid,
-      actorUid,
-    });
-    const isSelfProfile = Boolean(actorUid && userRecord.authUid === actorUid);
-    const isLastActiveAdministrator =
-      userRecord.role === ROLES.ADMINISTRATOR &&
-      userRecord.status === USER_STATUS.ACTIVE &&
-      activeAdministratorCount <= 1;
-
-    return getDeleteGuardReason({
-      canManage,
-      isLastActiveAdministrator,
-      isSelfProfile,
-    });
-  };
 
   const handleOpenStatusModal = (userRecord) => {
     const canManage = canManageUserProfile({
@@ -340,44 +298,6 @@ const UserManagement = () => {
     }
   };
 
-  // Modal konfirmasi sebelum hapus akun lokal; guard utama tetap di service.
-  const handleOpenDeleteModal = (userRecord) => {
-    const deleteGuardReason = getDeleteGuardReasonForRecord(userRecord);
-
-    if (deleteGuardReason) {
-      message.warning(deleteGuardReason);
-      return;
-    }
-
-    setDeleteTarget(userRecord);
-    setIsDeleteModalOpen(true);
-  };
-
-  const handleCloseDeleteModal = () => {
-    if (isDeletingProfile) return;
-
-    setIsDeleteModalOpen(false);
-    setDeleteTarget(null);
-  };
-
-  const handleConfirmDeleteProfile = async () => {
-    if (!deleteTarget?.authUid && !deleteTarget?.id) return;
-
-    setIsDeletingProfile(true);
-
-    try {
-      await deleteSystemUserProfile(deleteTarget, profile);
-      message.success("Akun lokal berhasil dihapus.");
-      setIsDeleteModalOpen(false);
-      setDeleteTarget(null);
-      await loadUsers();
-    } catch (error) {
-      console.error("[UserManagement] Gagal menghapus profile user.", error);
-      message.error(getUserManagementActionErrorMessage(error));
-    } finally {
-      setIsDeletingProfile(false);
-    }
-  };
 
   // Satu renderer dipakai tabel desktop dan mobile card agar guard aksi selalu konsisten.
   const renderUserActions = (record) => {
@@ -389,15 +309,16 @@ const UserManagement = () => {
     });
     const isSelfProfile = Boolean(actorUid && record.authUid === actorUid);
     const isLastActiveAdministrator =
-      record.role === ROLES.ADMINISTRATOR &&
-      record.status === USER_STATUS.ACTIVE &&
-      activeAdministratorCount <= 1;
-    const deleteGuardReason = getDeleteGuardReason({
-      canManage,
-      isLastActiveAdministrator,
-      isSelfProfile,
-    });
-    const canDelete = !deleteGuardReason;
+      record.role === ROLES.ADMINISTRATOR
+      && record.status === USER_STATUS.ACTIVE
+      && activeAdministratorCount <= 1;
+    const statusGuardReason = record.status === USER_STATUS.ACTIVE && isSelfProfile
+      ? "Akun yang sedang dipakai tidak boleh dinonaktifkan."
+      : record.status === USER_STATUS.ACTIVE && isLastActiveAdministrator
+        ? "Administrator aktif terakhir tidak boleh dinonaktifkan."
+        : !canManage
+          ? "Role aktif tidak boleh mengubah status akun ini."
+          : "";
 
     return (
       <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
@@ -409,36 +330,22 @@ const UserManagement = () => {
         >
           Edit
         </Button>
-        <Button
-          className="ims-action-button"
-          icon={
-            record.status === USER_STATUS.ACTIVE ? (
-              <StopOutlined />
-            ) : (
-              <CheckCircleOutlined />
-            )
-          }
-          disabled={!canManage}
-          danger={record.status === USER_STATUS.ACTIVE}
-          loading={
-            isUpdatingStatus &&
-            statusChangeRequest?.userRecord?.authUid === record.authUid
-          }
-          onClick={() => handleOpenStatusModal(record)}
-        >
-          {record.status === USER_STATUS.ACTIVE ? "Nonaktifkan" : "Aktifkan"}
-        </Button>
-        <Tooltip title={deleteGuardReason || "Hapus user."}>
+        <Tooltip title={statusGuardReason || (record.status === USER_STATUS.ACTIVE
+          ? "Nonaktifkan akun tanpa menghapus histori."
+          : "Aktifkan kembali akun lokal.")}>
           <span style={{ display: "block", width: "100%" }}>
             <Button
               className="ims-action-button"
-              danger
-              icon={<DeleteOutlined />}
-              disabled={!canDelete}
-              loading={isDeletingProfile && deleteTarget?.authUid === record.authUid}
-              onClick={() => handleOpenDeleteModal(record)}
+              icon={record.status === USER_STATUS.ACTIVE ? <StopOutlined /> : <CheckCircleOutlined />}
+              disabled={Boolean(statusGuardReason)}
+              danger={record.status === USER_STATUS.ACTIVE}
+              loading={
+                isUpdatingStatus
+                && statusChangeRequest?.userRecord?.authUid === record.authUid
+              }
+              onClick={() => handleOpenStatusModal(record)}
             >
-              Hapus Akun
+              {record.status === USER_STATUS.ACTIVE ? "Nonaktifkan" : "Aktifkan"}
             </Button>
           </span>
         </Tooltip>
@@ -710,27 +617,6 @@ const UserManagement = () => {
         </Space>
       </Modal>
 
-      <Modal
-        title={`Hapus akun ${deleteTarget?.displayName || "user"}?`}
-        open={isDeleteModalOpen}
-        onCancel={handleCloseDeleteModal}
-        onOk={handleConfirmDeleteProfile}
-        confirmLoading={isDeletingProfile}
-        okText="Hapus Akun"
-        okButtonProps={{ danger: true }}
-        cancelText="Batal"
-        destroyOnHidden
-      >
-        <Space direction="vertical" size={8}>
-          <Text>
-            Target: <Text strong>{deleteTarget?.displayName || "User IMS"}</Text>{" "}
-            (<Text code>@{deleteTarget?.username || "-"}</Text>)
-          </Text>
-          <Text type="warning">
-            Akun dan session lokal target akan dihapus.
-          </Text>
-        </Space>
-      </Modal>
     </div>
   );
 };

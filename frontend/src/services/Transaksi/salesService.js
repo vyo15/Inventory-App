@@ -47,7 +47,7 @@ export const validateSaleStockAvailability = async (saleItems = []) => {
   return { isValid: errors.length === 0, errors };
 };
 
-export const createSaleTransaction = async ({ values, saleItems = [] } = {}) => {
+export const createSaleTransaction = async ({ values = {}, saleItems = [] } = {}) => {
   const items = (saleItems.length ? saleItems : values.items || []).map((item) => ({
     ...item,
     sourceType: item.sourceType || (item.collectionName === "raw_materials" ? "raw_material" : "product"),

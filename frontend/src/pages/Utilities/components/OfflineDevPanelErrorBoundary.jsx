@@ -22,7 +22,7 @@ class OfflineDevPanelErrorBoundary extends Component {
 
   render() {
     const { error } = this.state;
-    const { children, title = "Panel offline gagal dimuat" } = this.props;
+    const { children, title = "Panel gagal dimuat" } = this.props;
 
     if (!error) return children;
 
@@ -32,7 +32,7 @@ class OfflineDevPanelErrorBoundary extends Component {
           <Alert
             type="warning"
             showIcon
-            message="Panel offline dinonaktifkan sementara agar halaman Reset Maintenance tidak white screen."
+            message="Panel mengalami error dan ditahan agar halaman Maintenance tetap dapat digunakan."
             description={error?.message || "Terjadi error aplikasi pada panel maintenance."}
           />
           <Button icon={<ReloadOutlined />} onClick={this.handleReset}>

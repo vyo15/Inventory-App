@@ -142,6 +142,7 @@ Purchase form
 → buka link dan verifikasi harga aktual
 → POST /api/transactions/purchases/commit
 → backend cocokkan supplier/item/varian/penawaran
+→ backend normalisasi status Purchase menjadi `Selesai` dan menolak draft/cancel/deleted
 → update harga katalog + histori toko bila berubah
 → stock-in Product/Raw Material
 → expense/finance side effect
@@ -185,7 +186,8 @@ Return form
 → backend validasi item ada pada Sales
 → backend validasi qty <= qty terjual - qty sudah diretur
 → stock restore
-→ refund/finance guard sesuai backend
+→ status Return dipaksa `Selesai` oleh backend
+→ refund payload ditolak; tidak ada expense/ledger otomatis dari Return
 → audit log
 → return/report update
 ```
@@ -274,14 +276,25 @@ Database Center UI
 Backup lifecycle:
 
 ```text
-backend start / hourly lifecycle check
-→ ensure daily verified maksimal satu per hari
+backend start
+→ runBackupLifecycleMaintenance() satu kali sebelum layanan siap
+→ startBackupLifecycleScheduler() setelah HTTP server aktif
+→ pemeriksaan ulang setiap 1 jam selama backend hidup
 → promote daily terakhir bulan sebelumnya menjadi monthly
-→ verify package/checksum/integrity
 → cleanup daily > 60 hari jika monthly bulan terkait tersedia
+→ ensure daily verified maksimal satu per hari
+→ verify package/checksum/integrity
 → simpan maksimal 12 monthly
 → audit log setiap promosi/cleanup
 ```
+
+Ketiga fase monthly, retention, dan daily ditangani terpisah. Kegagalan satu fase tidak boleh menghentikan fase lain. Status scheduler aktual, waktu run terakhir, run berikutnya, error terakhir, dan ringkasan hasil tersedia di `/api/maintenance/status`; UI tidak boleh menyimpulkan lifecycle aktif hanya dari kebijakan statis.
+
+`/api/maintenance/status` memakai kontrak versi eksplisit dan capability flag untuk `sqliteOnlyRuntime`, `tableCounts`, live refresh, dan pemeriksaan konsistensi tabel. Frontend memvalidasi kontrak tersebut sebelum menampilkan count. Count yang hilang atau response backend lama harus ditampilkan sebagai `belum tersedia`, bukan `0`. Database Center melakukan refresh status setiap 15 detik ketika halaman terlihat serta saat window kembali fokus.
+
+Semua modul runtime menggunakan satu backend Express dan satu koneksi SQLite dari `backend/src/db/connection.js`. Environment repository mode lama tidak boleh mengalihkan Finance, Pricing, Stock Adjustment, atau modul lain ke sumber data berbeda. Audit strict harus memeriksa seluruh tabel pada `backend/src/db/schema.js`, seluruh route utama pada `backend/src/server.js`, sisa runtime Firebase/Firestore/IndexedDB, dan override mode non-SQLite pada file environment frontend.
+
+Sebelum snapshot, packaging, import, atau ekstraksi preview/restore, backend memeriksa ruang kosong pada filesystem target. Operasi dibatalkan dengan error yang jelas jika kapasitas tidak cukup. Paket `.imsbackup` memakai ZIP klasik tanpa ZIP64; satu entry database harus di bawah 4 GB.
 
 Folder aktif hanya `daily`, `monthly`, dan `manual`. Backup manual, import, pre-repair, serta pre-restore masuk storage class `manual`; jenis aslinya tetap dicatat di manifest.
 
@@ -315,3 +328,92 @@ Dilarang:
 - Menampilkan technical database ID sebagai referensi audit UI.
 - Mengubah route/menu/role guard tanpa approval.
 - Mengubah stock, sales, purchase, return, finance, production, payroll, HPP, backup/restore, reset, atau audit flow tanpa audit dan approval eksplisit.
+
+## Canonical architecture path setelah cleanup C0–C16
+
+```text
+Stock/Purchase/Sales/Return/Production
+→ backend/src/modules/stock/engine
+→ inventory log + stock read model + audit
+
+Finance side effect
+→ backend/src/modules/finance/finance.engine.js
+→ income/expense + ledger + audit
+
+Backup/Maintenance
+→ backend/src/modules/maintenance/backup
+→ package/validation/lifecycle
+→ guarded restore service
+
+Generic JSON endpoint
+→ backend/src/infrastructure/http/sqliteJsonRecordRouter
+→ domain guard/service
+```
+
+File lama pada `backend/src/utils/sqlite*` dan `backend/src/shared/sqliteJsonRecordRoutes.js` hanya compatibility facade. Internal module tidak boleh melewati canonical path atau domain guard.
+
+Shared cross-runtime contract aktif:
+
+- auth, category, dan business-code JSON contract;
+- canonical password core;
+- canonical Supplier pricing core.
+
+Frontend boleh memakai shared pure contract untuk konsistensi tampilan/validasi awal, tetapi backend tetap melakukan enforcement final.
+
+## Audit kualitas data dan reconciliation — 2026-06-28
+
+```text
+Maintenance Center → Audit & Health
+→ GET /api/maintenance/data-audit
+→ integrity/foreign key/invariant/read-model/backup/finance checks
+→ total issue penuh + sample terbatas
+→ audit_logs.data_quality_audit
+```
+
+- Audit tidak mengubah data bisnis, tetapi mencatat actor dan ringkasan run ke audit log existing.
+- Finance reconciliation memeriksa pasangan hilang/terhapus/duplikat, nominal, direction, debit-credit, source ID/type, orphan ledger, dan status movement.
+- Finance tetap manual-review; Transaction Side-Effect Repair otomatis belum tersedia.
+- Audit dijalankan on-demand. Scheduler otomatis tidak aktif agar tidak overlap dengan transaksi, backup, restore, atau maintenance lain sebelum review performa terpisah.
+
+## Realtime SQLite lintas perangkat — 2026-06-28
+
+```text
+Client A POST/PUT/DELETE
+→ fetchSqliteJson mengirim X-IMS-Client-ID
+→ requestContextMiddleware
+→ service/domain transaction SQLite
+→ COMMIT berhasil
+→ connection.js mengumpulkan tabel yang berubah
+→ realtime.service broadcast data_changed via SSE
+→ Client B LiveRouteRefresh mencocokkan scope route
+→ refetch/remount page saat aman
+```
+
+Kontrak aktif:
+- Endpoint: `GET /api/realtime/events`, protected oleh cookie session dan origin guard existing.
+- Transport: native Server-Sent Events, satu koneksi per tab melalui `SqliteRealtimeProvider`.
+- Payload hanya metadata: `revision`, `tables`, `scopes`, `originClientId`, dan timestamp.
+- Client identity: browser ID persisten + page-instance ID in-memory. Identitas legacy `sessionStorage ims.sqlite.clientId` dibersihkan agar duplicate tab tidak berbagi origin ID.
+- `database_replaced` dari restore memaksa reload seluruh client; event normal hanya me-refresh route terkait.
+- Event scope `auth` dari perubahan `users/roles` diproses global sebelum route filtering dan memicu validasi ulang session. Mutation `local_user_sessions` memakai scope terpisah `auth_session` agar login/logout biasa tidak mereload client lain.
+- Session expiry: `registerRealtimeClient` memakai `req.localAuth.expiresAt`, mengirim event `session_expired`, lalu menutup stream. Frontend memperlakukan event ini sebagai global reload untuk kembali ke auth gate.
+- Jika editor/modal/input sedang aktif, refresh ditunda dan user diberi tombol `Muat Ulang Data`.
+- Fallback: satu polling revision global 60 detik hanya saat SSE disconnected dan tab terlihat, memakai in-flight guard serta catch-up saat visibility kembali aktif. Subscription adapter lama hanya melakukan initial load dan tidak membuat `setInterval` masing-masing.
+- Revision fallback dikembalikan sesuai role. Administrator melihat revision global; user operasional hanya melihat revision event yang lolos filter scope user.
+- Resource guard: maksimal 100 koneksi total, 12 per user, dan 30 per IP. Backpressure menutup stream agar native reconnect/fallback melakukan resync.
+- Tabel-to-scope berada terpusat pada `backend/src/modules/realtime/realtime.service.js`; route-to-scope berada pada `frontend/src/config/realtimeRouteScopes.js`.
+
+## Data Nonaktif dan purge guarded — 2026-06-28
+
+```text
+Maintenance Center → Data Nonaktif
+→ GET /api/maintenance/inactive-data
+→ preview active dependency blockers
+→ admin memilih candidate safe
+→ keyword + exact target confirmation
+→ backup pre-repair
+→ transaction DELETE allowlisted record
+→ audit_logs.inactive_record_purge + sanitized snapshot
+```
+
+Allowlist purge eksekusi hanya Customer, Kategori, Supplier, dan Aturan Harga yang sudah nonaktif serta lolos dependency check. User tetap dapat muncul pada preview, tetapi hard purge User selalu diblokir agar username/identitas histori audit tidak ambigu. Dependency check mencakup direct reference, nested JSON alias yang dikenal, hierarchy/katalog/history, dan `migration_identity_map`. Semua transaksi/stok/finance/production/payroll/backup/restore/audit tetap protected. Runtime hard-delete di luar Maintenance dianggap blocker oleh `backend/scripts/audit-sqlite-cutover-readiness.cjs --strict`.

@@ -4,7 +4,7 @@ const {
   commitStockMutation,
   loadSourceItem,
   upsertJsonRecord,
-} = require("../../utils/sqliteStockEngine");
+} = require("../stock/engine");
 const {
   calculateRequirementLines,
   normalizeSourceType,

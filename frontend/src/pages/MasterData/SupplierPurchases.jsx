@@ -20,7 +20,7 @@ import {
   message,
 } from 'antd';
 import {
-  DeleteOutlined,
+  StopOutlined,
   EditOutlined,
   EyeOutlined,
   HistoryOutlined,
@@ -44,7 +44,7 @@ import FilterBar from '../../components/Layout/Filters/FilterBar';
 import PageHeader from '../../components/Layout/Page/PageHeader';
 import PageSection from '../../components/Layout/Page/PageSection';
 import DataTableView from '../../components/Layout/Table/DataTableView';
-import MobileDetailDrawer from '../../components/Layout/Mobile/MobileDetailDrawer';
+import SupplierDetailDrawer from './components/SupplierDetailDrawer';
 import ResponsiveFormSection from '../../components/Layout/Mobile/ResponsiveFormSection';
 import RupiahInputNumber from '../../components/Layout/Forms/RupiahInputNumber';
 import ImsNotice from '../../components/Layout/Feedback/ImsNotice';
@@ -509,7 +509,7 @@ const SupplierPurchases = () => {
             okText="Nonaktifkan"
             cancelText="Batal"
           >
-            <Button className="ims-action-button ims-action-button--block" danger size="small" icon={<DeleteOutlined />}>
+            <Button className="ims-action-button ims-action-button--block" danger size="small" icon={<StopOutlined />}>
               Nonaktifkan
             </Button>
           </Popconfirm>
@@ -657,100 +657,7 @@ const SupplierPurchases = () => {
     ),
   };
 
-  const drawerTabs = selectedSupplier ? [
-    {
-      key: 'summary',
-      label: 'Ringkasan',
-      children: (
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
-          <Card size="small">
-            <Space direction="vertical" size={10} style={{ width: '100%' }}>
-              <Space wrap>
-                <Text strong>{getSupplierDisplayName(selectedSupplier)}</Text>
-                <Tag color={selectedSupplier.isActive === false ? 'default' : 'green'}>
-                  {selectedSupplier.isActive === false ? 'Nonaktif' : 'Aktif'}
-                </Tag>
-                <Tag>{(selectedSupplier.catalogOffers || []).filter((offer) => offer.isActive !== false).length} penawaran</Tag>
-              </Space>
-              <Space wrap>
-                {getSupplierStoreLink(selectedSupplier) ? (
-                  <Button type="primary" icon={<LinkOutlined />} href={getSupplierStoreLink(selectedSupplier)} target="_blank" rel="noreferrer">
-                    Buka Toko
-                  </Button>
-                ) : null}
-                <Button icon={<EditOutlined />} onClick={() => openEditSupplier(selectedSupplier)}>Edit Toko</Button>
-              </Space>
-            </Space>
-          </Card>
-          <Card size="small" title="Informasi Toko">
-            <Descriptions bordered column={1} size="small">
-              <Descriptions.Item label="Nama Toko">{getSupplierDisplayName(selectedSupplier)}</Descriptions.Item>
-              <Descriptions.Item label="Kontak">{selectedSupplier.contact || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Alamat">{selectedSupplier.address || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Catatan">{selectedSupplier.notes || '-'}</Descriptions.Item>
-            </Descriptions>
-          </Card>
-        </Space>
-      ),
-    },
-    {
-      key: 'catalog',
-      label: 'Katalog',
-      children: (
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
-          <Space style={{ width: '100%', justifyContent: 'space-between' }} wrap>
-            <div>
-              <div className="ims-cell-title">Katalog Barang</div>
-              <div className="ims-cell-meta">Harga terbaru untuk operasional. Riwayat perubahan berada di tab Histori.</div>
-            </div>
-            <Button icon={<PlusOutlined />} onClick={() => openEditSupplier(selectedSupplier)}>Kelola Katalog</Button>
-          </Space>
-          <DataTableView
-            className="app-data-table"
-            rowKey={(record) => record.id || record.catalogOfferId}
-            dataSource={selectedSupplier.catalogOffers || []}
-            columns={catalogColumns}
-            pagination={{ pageSize: 8, hideOnSinglePage: true }}
-            size="small"
-            tableLayout="fixed"
-            showRefreshIndicator={false}
-            locale={{ emptyText: <Empty description="Belum ada katalog barang di toko ini" /> }}
-          />
-        </Space>
-      ),
-    },
-    {
-      key: 'history',
-      label: (
-        <Space size={5}>
-          <HistoryOutlined />
-          Histori Toko
-        </Space>
-      ),
-      children: (
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
-          <ImsNotice
-            compact
-            variant="info"
-            title={`Histori khusus ${getSupplierDisplayName(selectedSupplier)}`}
-            description="Harga lama, waktu pengecekan, perubahan link, dan verifikasi pembelian hanya ditampilkan di sini agar katalog utama tetap ringkas."
-          />
-          <DataRefreshIndicator loading={historyLoading} dataSource={supplierHistory} />
-          <DataTableView
-            className="app-data-table"
-            rowKey="id"
-            dataSource={supplierHistory}
-            columns={historyColumns}
-            pagination={{ pageSize: 12, hideOnSinglePage: true }}
-            size="small"
-            tableLayout="fixed"
-            showRefreshIndicator={false}
-            locale={{ emptyText: getDataTableEmptyText(historyLoading, 'Belum ada histori untuk toko ini.') }}
-          />
-        </Space>
-      ),
-    },
-  ] : [];
+
 
   return (
     <div className="page-container">
@@ -856,7 +763,7 @@ const SupplierPurchases = () => {
                       size="small"
                       style={{ marginBottom: 12 }}
                       title={`Penawaran ${index + 1}`}
-                      extra={<Button danger type="text" onClick={() => remove(name)}>Hapus</Button>}
+                      extra={<Button danger type="text" onClick={() => remove(name)}>Nonaktifkan Penawaran</Button>}
                     >
                       <Form.Item {...restField} name={[name, 'id']} hidden><Input /></Form.Item>
                       <Row gutter={[12, 0]}>
@@ -1077,21 +984,23 @@ const SupplierPurchases = () => {
         </Form>
       </Modal>
 
-      <MobileDetailDrawer
-        title={selectedSupplier ? getSupplierDisplayName(selectedSupplier) : 'Detail Supplier'}
+      <SupplierDetailDrawer
+        selectedSupplier={selectedSupplier}
         open={drawerVisible}
+        activeTab={drawerTab}
+        onTabChange={handleDrawerTabChange}
         onClose={() => {
           setDrawerVisible(false);
           setSelectedSupplier(null);
           setSupplierHistory([]);
           setHistoryLoadedSupplierId(null);
         }}
-        width={920}
-      >
-        {selectedSupplier ? (
-          <Tabs activeKey={drawerTab} onChange={handleDrawerTabChange} items={drawerTabs} />
-        ) : null}
-      </MobileDetailDrawer>
+        onEditSupplier={openEditSupplier}
+        catalogColumns={catalogColumns}
+        supplierHistory={supplierHistory}
+        historyColumns={historyColumns}
+        historyLoading={historyLoading}
+      />
 
       <Modal
         title={`Cek Harga: ${priceCheckOffer?.itemName || ''}`}

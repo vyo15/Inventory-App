@@ -93,3 +93,75 @@ test("return tanpa relatedSaleId ditolak sebelum mutasi stok", async () => {
   assert.equal(product.current_stock, 10);
   assert.equal(inventoryLogCount.count, 0);
 });
+
+test("return menolak status deleted sebelum mutasi stok", async () => {
+  await seedProduct();
+  await commitSale({
+    actor: "tester",
+    payload: {
+      referenceNumber: "SALE-RETURN-STATUS",
+      status: "Diproses",
+      totalAmount: 0,
+      items: [{ sourceType: "product", sourceId: "product-return", quantity: 2 }],
+    },
+  });
+
+  await assert.rejects(
+    commitReturn({
+      actor: "tester",
+      payload: {
+        referenceNumber: "RET-DELETED",
+        relatedSaleId: "SALE-RETURN-STATUS",
+        status: "deleted",
+        items: [{ sourceType: "product", sourceId: "product-return", quantity: 1 }],
+      },
+    }),
+    (error) => error.code === "INVALID_RETURN_STATUS",
+  );
+
+  const db = await testDatabase.getDb();
+  const state = await db.get(`
+    SELECT
+      (SELECT current_stock FROM products WHERE id = 'product-return') AS stock,
+      (SELECT COUNT(*) FROM returns) AS return_count,
+      (SELECT COUNT(*) FROM inventory_logs
+        WHERE json_extract(payload_json, '$.reason') = 'return') AS return_log_count
+  `);
+  assert.deepEqual(state, { stock: 8, return_count: 0, return_log_count: 0 });
+});
+
+test("return menolak refund payload dan tidak membuat expense atau ledger", async () => {
+  await seedProduct();
+  await commitSale({
+    actor: "tester",
+    payload: {
+      referenceNumber: "SALE-RETURN-REFUND",
+      status: "Diproses",
+      totalAmount: 0,
+      items: [{ sourceType: "product", sourceId: "product-return", quantity: 2 }],
+    },
+  });
+
+  await assert.rejects(
+    commitReturn({
+      actor: "tester",
+      payload: {
+        referenceNumber: "RET-REFUND",
+        relatedSaleId: "SALE-RETURN-REFUND",
+        refundAmount: 100000,
+        items: [{ sourceType: "product", sourceId: "product-return", quantity: 1 }],
+      },
+    }),
+    (error) => error.code === "RETURN_REFUND_NOT_SUPPORTED",
+  );
+
+  const db = await testDatabase.getDb();
+  const state = await db.get(`
+    SELECT
+      (SELECT current_stock FROM products WHERE id = 'product-return') AS stock,
+      (SELECT COUNT(*) FROM returns) AS return_count,
+      (SELECT COUNT(*) FROM expenses) AS expense_count,
+      (SELECT COUNT(*) FROM money_movement_ledger) AS ledger_count
+  `);
+  assert.deepEqual(state, { stock: 8, return_count: 0, expense_count: 0, ledger_count: 0 });
+});

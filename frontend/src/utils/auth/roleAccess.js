@@ -1,3 +1,5 @@
+import authContract from "../../../../shared/authContract.json";
+
 // =========================
 // SECTION: Auth Role Constants — AKTIF / GUARDED
 // Fungsi:
@@ -12,8 +14,8 @@
 // - compatibility role lama sudah dihapus dari role aktif; data historis wajib sudah dibersihkan sebelum patch ini dipakai.
 // =========================
 export const ROLES = {
-  ADMINISTRATOR: "administrator",
-  USER: "user",
+  ADMINISTRATOR: authContract.roles[0],
+  USER: authContract.roles[1],
 };
 
 export const ROLE_LABELS = {
@@ -25,8 +27,8 @@ export const ACTIVE_ROLES = [ROLES.ADMINISTRATOR, ROLES.USER];
 export const ALL_ROLES = ACTIVE_ROLES;
 
 export const USER_STATUS = {
-  ACTIVE: "active",
-  INACTIVE: "inactive",
+  ACTIVE: authContract.userStatuses[0],
+  INACTIVE: authContract.userStatuses[1],
 };
 
 export const USER_STATUS_LABELS = {

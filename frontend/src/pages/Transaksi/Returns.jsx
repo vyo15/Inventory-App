@@ -16,10 +16,10 @@ import dayjs from "dayjs";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
+import CompactCell, { CompactCellText } from "../../components/Layout/Table/CompactCell";
 import ResponsiveFormSection from "../../components/Layout/Mobile/ResponsiveFormSection";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import {
-  buildVariantOptionsFromItem,
   findVariantByKey,
   getItemStockSnapshot,
   inferHasVariants,
@@ -27,12 +27,14 @@ import {
 import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numberId";
 import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
-import { compareRecordsByDateDesc, compareRecordsByNameAsc, upsertRecordById, upsertRecordsById } from "../../utils/state/recordCollectionState";
+import { compareRecordsByDateDesc, mergeInventoryMutationResults, upsertRecordById } from "../../utils/state/recordCollectionState";
 import {
+  buildReturnableItemsForSale,
   createReturnTransaction,
   listenReturnProducts,
   listenReturnRawMaterials,
   listenReturnRecords,
+  listenReturnSales,
 } from "../../services/Transaksi/returnsService";
 
 
@@ -54,12 +56,12 @@ const Returns = () => {
   // SECTION: State utama
   // =========================
   const [returnRecords, setReturnRecords] = useState([]);
+  const [salesRecords, setSalesRecords] = useState([]);
   const [products, setProducts] = useState([]);
   const [materials, setMaterials] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedItemType, setSelectedItemType] = useState("product");
 
   // =========================
   // SECTION: Submit loading guard
@@ -69,29 +71,33 @@ const Returns = () => {
   // =========================
   const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
 
-  const selectedItemId = Form.useWatch("itemId", form);
-  const selectedVariantKey = Form.useWatch("variantKey", form);
+  const selectedSaleId = Form.useWatch("relatedSaleId", form);
+  const selectedSaleItemKey = Form.useWatch("saleItemKey", form);
 
   // =========================
-  // SECTION: Semua item
+  // SECTION: Item retur resmi dari Sales
   // =========================
-  const allItems = useMemo(() => {
-    return [...products, ...materials];
-  }, [products, materials]);
-
-  const selectedItemsByType = selectedItemType === "product" ? products : materials;
-  const selectedItem = useMemo(
-    () => selectedItemsByType.find((item) => item.id === selectedItemId) || null,
-    [selectedItemId, selectedItemsByType],
+  const selectedSale = useMemo(
+    () => salesRecords.find((sale) => String(sale.id) === String(selectedSaleId)) || null,
+    [salesRecords, selectedSaleId],
   );
+  const returnableItems = useMemo(
+    () => buildReturnableItemsForSale({ sale: selectedSale, returnRecords }),
+    [returnRecords, selectedSale],
+  );
+  const selectedReturnItem = useMemo(
+    () => returnableItems.find((item) => item.key === selectedSaleItemKey) || null,
+    [returnableItems, selectedSaleItemKey],
+  );
+  const selectedItem = useMemo(() => {
+    if (!selectedReturnItem) return null;
+    const source = selectedReturnItem.sourceType === "raw_material" ? materials : products;
+    return source.find((item) => String(item.id) === String(selectedReturnItem.sourceId)) || null;
+  }, [materials, products, selectedReturnItem]);
   const selectedItemHasVariants = inferHasVariants(selectedItem || {});
-  const variantOptions = useMemo(
-    () => (selectedItemHasVariants ? buildVariantOptionsFromItem(selectedItem) : []),
-    [selectedItem, selectedItemHasVariants],
-  );
   const selectedVariant = useMemo(
-    () => (selectedItemHasVariants ? findVariantByKey(selectedItem, selectedVariantKey) : null),
-    [selectedItem, selectedItemHasVariants, selectedVariantKey],
+    () => (selectedItemHasVariants ? findVariantByKey(selectedItem, selectedReturnItem?.variantKey) : null),
+    [selectedItem, selectedItemHasVariants, selectedReturnItem?.variantKey],
   );
 
   // =========================
@@ -110,6 +116,17 @@ const Returns = () => {
         setLoadError("Gagal memuat data retur.");
         setIsLoading(false);
         message.error("Gagal memuat data retur.");
+      },
+    );
+
+    const unsubscribeSales = listenReturnSales(
+      (nextSalesRecords) => {
+        setSalesRecords(nextSalesRecords);
+      },
+      (error) => {
+        console.error("Gagal memuat Sales untuk retur:", error);
+        setSalesRecords([]);
+        message.error("Gagal memuat daftar Sales untuk retur.");
       },
     );
 
@@ -135,18 +152,19 @@ const Returns = () => {
 
     return () => {
       unsubscribeReturns();
+      unsubscribeSales();
       unsubscribeProducts();
       unsubscribeMaterials();
     };
   }, []);
 
   useEffect(() => {
-    form.setFieldsValue({ itemId: undefined, variantKey: undefined });
-  }, [form, selectedItemType]);
+    form.setFieldsValue({ saleItemKey: undefined, quantity: 1 });
+  }, [form, selectedSaleId]);
 
   useEffect(() => {
-    form.setFieldsValue({ variantKey: undefined });
-  }, [form, selectedItemId]);
+    form.setFieldsValue({ quantity: 1 });
+  }, [form, selectedSaleItemKey]);
 
   // =========================
   // SECTION: Modal Helpers
@@ -154,13 +172,11 @@ const Returns = () => {
   const resetReturnFormState = () => {
     form.resetFields();
     setIsModalOpen(false);
-    setSelectedItemType("product");
   };
 
   const openCreateReturnModal = () => {
     form.resetFields();
-    form.setFieldsValue({ date: dayjs(), type: "product" });
-    setSelectedItemType("product");
+    form.setFieldsValue({ date: dayjs(), quantity: 1 });
     setIsModalOpen(true);
   };
 
@@ -183,27 +199,16 @@ const Returns = () => {
     try {
       const result = await createReturnTransaction({
         values,
-        allItems,
+        returnableItems,
+        selectedSale,
       });
 
       setReturnRecords((current) => upsertRecordById(current, result, {
         comparator: compareRecordsByDateDesc,
       }));
       const mutationResults = Array.isArray(result?.mutationResults) ? result.mutationResults : [];
-      setProducts((current) => upsertRecordsById(
-        current,
-        mutationResults
-          .filter((item) => item?.stockReadModel?.sourceType === "product")
-          .map((item) => item.item),
-        { comparator: compareRecordsByNameAsc },
-      ));
-      setMaterials((current) => upsertRecordsById(
-        current,
-        mutationResults
-          .filter((item) => item?.stockReadModel?.sourceType === "raw_material")
-          .map((item) => item.item),
-        { comparator: compareRecordsByNameAsc },
-      ));
+      setProducts((current) => mergeInventoryMutationResults(current, mutationResults, "product"));
+      setMaterials((current) => mergeInventoryMutationResults(current, mutationResults, "raw_material"));
 
       message.success("Retur berhasil ditambahkan!");
       resetReturnFormState();
@@ -244,14 +249,10 @@ const Returns = () => {
           allowTechnicalId: false,
         });
         return (
-          <div style={{ minWidth: 0 }}>
-            <div className="ims-cell-title">{dateText}</div>
-            <Tooltip title={referenceText}>
-              <div className="ims-cell-meta" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {referenceText}
-              </div>
-            </Tooltip>
-          </div>
+          <CompactCell>
+            <CompactCellText value={dateText} strong tooltip={false} />
+            <CompactCellText value={referenceText} secondary />
+          </CompactCell>
         );
       },
     },
@@ -269,17 +270,13 @@ const Returns = () => {
         );
 
         return (
-          <div style={{ minWidth: 0 }}>
-            <Tooltip title={itemName}>
-              <div className="ims-cell-title" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {itemName}
-              </div>
-            </Tooltip>
+          <CompactCell>
+            <CompactCellText value={itemName} strong />
             <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
               {typeTag}
               {variantTag}
             </div>
-          </div>
+          </CompactCell>
         );
       },
     },
@@ -302,11 +299,7 @@ const Returns = () => {
       render: (value) => {
         const noteText = value || "-";
         return (
-          <Tooltip title={noteText}>
-            <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {noteText}
-            </span>
-          </Tooltip>
+          <CompactCellText value={noteText} />
         );
       },
     },
@@ -421,7 +414,7 @@ const Returns = () => {
         >
           <ResponsiveFormSection
             title="Data Retur"
-            subtitle="Pilih item, varian bila ada, lalu isi jumlah barang kembali."
+            subtitle="Pilih Sales terkait, item yang dikembalikan, lalu isi qty sesuai sisa retur."
           >
           <Form.Item
             name="date"
@@ -432,55 +425,57 @@ const Returns = () => {
           </Form.Item>
 
           <Form.Item
-            name="type"
-            label="Jenis Item"
-            rules={[{ required: true, message: "Jenis wajib dipilih" }]}
+            name="relatedSaleId"
+            label="Transaksi Sales"
+            rules={[{ required: true, message: "Transaksi Sales wajib dipilih" }]}
+            extra="Return hanya dapat dibuat dari Sales yang sudah tercatat."
           >
             <Select
-              placeholder="Pilih jenis item"
-              onChange={(value) => setSelectedItemType(value)}
+              placeholder="Pilih transaksi Sales"
+              showSearch
+              optionFilterProp="children"
+              notFoundContent="Tidak ada Sales yang dapat diretur"
             >
-              <Option value="product">Produk</Option>
-              <Option value="material">Bahan Baku</Option>
+              {salesRecords
+                .filter((sale) => String(sale.status || "").toLowerCase() !== "deleted")
+                .map((sale) => {
+                  const reference = resolveDisplayReference(sale, {
+                    fields: ["saleNumber", "code", "referenceNumber"],
+                    fallback: "Sales tanpa referensi",
+                    allowTechnicalId: false,
+                  });
+                  return (
+                    <Option key={sale.id} value={sale.id}>
+                      {reference}{sale.customerName ? ` — ${sale.customerName}` : ""}
+                    </Option>
+                  );
+                })}
             </Select>
           </Form.Item>
 
           <Form.Item
-            name="itemId"
-            label="Nama Item"
-            rules={[{ required: true, message: "Item wajib dipilih" }]}
+            name="saleItemKey"
+            label="Item dari Sales"
+            rules={[{ required: true, message: "Item Sales wajib dipilih" }]}
+            extra={selectedSale && returnableItems.length === 0
+              ? "Semua item pada Sales ini sudah selesai diretur."
+              : "Qty maksimal mengikuti sisa item Sales yang belum diretur."}
           >
-            <Select placeholder="Pilih item" showSearch optionFilterProp="children">
-              {selectedItemType === "product"
-                ? products.map((item) => (
-                    <Option key={item.id} value={item.id}>
-                      {item.name}
-                    </Option>
-                  ))
-                : materials.map((item) => (
-                    <Option key={item.id} value={item.id}>
-                      {item.name}
-                    </Option>
-                  ))}
+            <Select
+              placeholder={selectedSale ? "Pilih item yang dikembalikan" : "Pilih Sales terlebih dahulu"}
+              disabled={!selectedSale}
+              showSearch
+              optionFilterProp="children"
+            >
+              {returnableItems.map((item) => (
+                <Option key={item.key} value={item.key}>
+                  {item.itemName}
+                  {item.variantLabel ? ` — ${item.variantLabel}` : ""}
+                  {` — sisa ${formatNumberId(item.remainingQuantity)} ${item.unit || ""}`}
+                </Option>
+              ))}
             </Select>
           </Form.Item>
-
-          {selectedItemHasVariants ? (
-            <Form.Item
-              name="variantKey"
-              label={selectedItem?.variantLabel || "Varian"}
-              rules={[{ required: true, message: "Varian wajib dipilih" }]}
-              extra="Item bervarian wajib pilih varian."
-            >
-              <Select placeholder="Pilih varian" showSearch optionFilterProp="children">
-                {variantOptions.map((item) => (
-                  <Option key={item.value} value={item.value}>
-                    {item.label} - Stok: {formatNumberId(item.raw?.currentStock || 0)}
-                  </Option>
-                ))}
-              </Select>
-            </Form.Item>
-          ) : null}
 
           {selectedItem ? (
             /* IMS NOTE [AKTIF/GUARDED] - Snapshot stok Returns.
@@ -520,7 +515,7 @@ const Returns = () => {
                     </span>
                     {selectedItemHasVariants ? (
                       <span style={{ color: "var(--ims-text-secondary)" }}>
-                        {` — ${selectedVariant?.variantLabel || selectedVariant?.name || "Pilih varian"}`}
+                        {` — ${selectedReturnItem?.variantLabel || selectedVariant?.variantLabel || selectedVariant?.name || "Varian"}`}
                       </span>
                     ) : null}
                   </div>
@@ -548,7 +543,7 @@ const Returns = () => {
 
                   {selectedItemHasVariants ? (
                     <div className="ims-readonly-panel-note">
-                      Item bervarian wajib memilih varian agar retur masuk ke varian yang benar.
+                      Varian mengikuti item pada Sales sehingga retur masuk ke stok varian yang benar.
                     </div>
                   ) : null}
                 </div>
@@ -559,9 +554,30 @@ const Returns = () => {
           <Form.Item
             name="quantity"
             label="Jumlah"
-            rules={[{ required: true, message: "Jumlah wajib diisi" }]}
+            rules={[
+              { required: true, message: "Jumlah wajib diisi" },
+              {
+                validator: (_, value) => {
+                  if (!selectedReturnItem || Number(value || 0) <= Number(selectedReturnItem.remainingQuantity || 0)) {
+                    return Promise.resolve();
+                  }
+                  return Promise.reject(new Error(`Maksimal ${selectedReturnItem.remainingQuantity} ${selectedReturnItem.unit || ""}.`));
+                },
+              },
+            ]}
+            extra={selectedReturnItem
+              ? `Terjual ${formatNumberId(selectedReturnItem.soldQuantity)}, sudah diretur ${formatNumberId(selectedReturnItem.returnedQuantity)}, sisa ${formatNumberId(selectedReturnItem.remainingQuantity)} ${selectedReturnItem.unit || ""}.`
+              : "Pilih item Sales untuk melihat sisa qty retur."}
           >
-            <InputNumber min={1} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
+            <InputNumber
+              min={1}
+              max={selectedReturnItem?.remainingQuantity || undefined}
+              step={1}
+              precision={0}
+              parser={parseIntegerIdInput}
+              disabled={!selectedReturnItem}
+              style={{ width: "100%" }}
+            />
           </Form.Item>
 
           <Form.Item name="note" label="Catatan">

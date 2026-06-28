@@ -32,7 +32,7 @@ import {
   Typography,
 } from "antd";
 import {
-  DeleteOutlined,
+  StopOutlined,
   EditOutlined,
   EyeOutlined,
   PlusOutlined,
@@ -1182,11 +1182,11 @@ const SemiFinishedMaterials = () => {
                         <Button
                           danger
                           size="small"
-                          icon={<DeleteOutlined />}
+                          icon={<StopOutlined />}
                           disabled={fields.length === 1 || isGuardedVariantStock(field.name)}
                           onClick={() => remove(field.name)}
                         >
-                          Hapus Varian
+                          Arsipkan Varian
                         </Button>
                       ) : null
                     }

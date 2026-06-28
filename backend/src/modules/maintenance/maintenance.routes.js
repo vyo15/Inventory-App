@@ -15,7 +15,9 @@ const {
   importBackupController,
   rebuildStockReadModelsController,
   listBackupsController,
+  listInactivePurgeCandidatesController,
   listRestoreLogsController,
+  purgeInactiveRecordController,
 } = require("./maintenance.controller");
 
 const router = express.Router();
@@ -32,6 +34,8 @@ router.get("/stock-read-model-audit", ...requireAdmin, getStockReadModelAuditCon
 router.post("/stock-read-model-rebuild", ...requireAdmin, rebuildStockReadModelsController);
 router.post("/stock-read-model-orphan-cleanup", ...requireAdmin, deleteOrphanStockReadModelsController);
 router.get("/master-data-export", ...requireAdmin, exportMasterDataController);
+router.get("/inactive-data", ...requireAdmin, listInactivePurgeCandidatesController);
+router.post("/inactive-data/purge", ...requireAdmin, purgeInactiveRecordController);
 router.post("/backup", ...requireAdmin, createBackupController);
 router.get("/backups/:filename/download", ...requireAdmin, downloadBackupController);
 router.post("/backups/import", ...requireAdmin, backupImportParser, importBackupController);

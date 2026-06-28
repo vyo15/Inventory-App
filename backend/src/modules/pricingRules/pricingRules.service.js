@@ -4,7 +4,7 @@ const {
   sanitizeInventoryMasterUpdate,
   upsertJsonRecord,
   upsertStockReadModel,
-} = require("../../utils/sqliteStockEngine");
+} = require("../stock/engine");
 const { createAuditLog } = require("../../utils/auditLog");
 const { safeJsonParse } = require("../../utils/jsonUtils");
 const {
@@ -395,6 +395,8 @@ const applyPricingRuleBatch = async (id, body = {}, actor = "system") => {
       );
     }
     const config = PRICING_TARGET_CONFIG[targetType];
+    const changeSource = normalizeText(body.changeSource || "pricing_rule_apply");
+    const notes = normalizeText(body.notes || "");
     const updatedItems = [];
 
     for (const update of updates) {
@@ -458,6 +460,8 @@ const applyPricingRuleBatch = async (id, body = {}, actor = "system") => {
           targetType,
           oldPrice,
           newPrice: update.newPrice,
+          changeSource,
+          notes,
         },
       });
       updatedItems.push({

@@ -65,6 +65,12 @@ Source aktual memakai backend Node.js + SQLite sebagai runtime utama. Dokumen in
 - Bila harga berubah, update katalog dan insert histori dilakukan di transaction yang sama dengan purchase, stock-in, inventory log, expense, dan ledger.
 - Pembelian lama tetap memakai snapshot supplier, item, link, konversi, dan harga aktual yang tersimpan pada transaksi.
 
+### Transaction commit trust boundary
+
+- Purchase status ditentukan backend dan commit operasional hanya menghasilkan status `Selesai`; draft/cancel/deleted dari client ditolak sebelum stock/finance mutation.
+- Return wajib terkait Sales, item/qty divalidasi ulang oleh backend, status dipaksa `Selesai`, dan `refundAmount`/`refundTotal` ditolak. Return tidak membuat income, expense, revenue, atau ledger otomatis.
+- UI boleh melakukan preview, tetapi source of truth validasi status, stock, cumulative return, dan finance side effect tetap backend transaction.
+
 ## Raw Material master contract
 
 - Relasi sumber restock menggunakan `supplier_catalog_offers`; master `raw_materials` tidak mengunci satu supplier. Snapshot supplier lama tetap dibaca untuk compatibility tetapi tidak menjadi source UI/flow baru.
@@ -182,7 +188,9 @@ Restore resmi harus:
 
 ## Maintenance data integrity contract
 
-- `GET /api/maintenance/data-audit` bersifat administrator-only dan read-only. Audit boleh membaca integrity SQLite, foreign key, invariant stok, stock read model, backup registry, dan pasangan kas-ledger.
+- `GET /api/maintenance/data-audit` bersifat administrator-only dan read-only terhadap data bisnis. Audit membaca integrity SQLite, foreign key, invariant stok, stock read model, backup registry, dan full finance reconciliation; total issue dihitung penuh, sample boleh dibatasi, dan ringkasan run ditulis ke `audit_logs`.
+- Finance reconciliation tidak memiliki auto-repair. Repair side-effect transaksi tetap manual-review sampai ada patch guarded terpisah.
+- Purge Maintenance memblokir User, nested reference yang dikenal, dan `migration_identity_map`; hard delete transaksi/stok/finance/production/audit tidak tersedia.
 - `GET /api/maintenance/stock-read-model-audit` wajib membedakan `missing`, `stale`, dan `orphan`.
 - Rebuild hanya boleh menulis `stock_read_models` dari master Product/Raw Material/Semi Finished, setelah backup `pre-repair`, di dalam transaction, dan dengan audit log.
 - Cleanup orphan wajib keyword `BERSIHKAN DATA STOK`, backup `pre-repair`, transaction, dan audit log.
@@ -229,3 +237,16 @@ Restore resmi harus:
 - Script clean ZIP wajib menjalankan guard sebelum `git archive`, lalu memverifikasi central directory ZIP aktual dan menolak runtime/generated output, path backslash, entry duplikat, atau struktur source yang tidak lengkap.
 - Verifier archive wajib tersedia melalui mode `--archive-only` agar ZIP hasil build dapat dicek terpisah sebelum dibagikan atau di-merge.
 - Guard source hanya menghapus artifact dari Git index; backup lokal yang masih dibutuhkan tidak boleh dihapus secara destructive.
+
+## Architecture ownership setelah cleanup C0–C16
+
+Cleanup tidak mengubah schema atau format data. Ownership implementasi dikunci sebagai berikut:
+
+- Stock persistence, variant reconciliation, inventory master guard, dan mutation commit berada di `backend/src/modules/stock/engine/`.
+- Finance posting berada di `backend/src/modules/finance/finance.engine.js`.
+- Backup codec, validation, create, path, dan lifecycle berada di `backend/src/modules/maintenance/backup/`; restore destructive tetap melalui service Maintenance guarded.
+- Generic JSON route infrastructure berada di `backend/src/infrastructure/http/sqliteJsonRecordRouter/` dan tidak menggantikan domain service/guard.
+- Compatibility facade lama hanya re-export dan tidak boleh menyimpan state atau business rule.
+- HPP mutation tetap hanya dilakukan backend Production.
+
+Perpindahan file tidak boleh dianggap sebagai migrasi database. Seluruh database, transaction, audit, stock, finance, dan backup contract pada dokumen ini tetap berlaku.

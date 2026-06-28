@@ -42,3 +42,28 @@ export const buildShopeeOcrPurchaseMeta = (purchaseRecord = {}) => {
     dateText,
   };
 };
+
+
+export const buildPurchaseFormDefaults = (overrides = {}) => ({
+  type: "material",
+  materialVariantId: undefined,
+  productVariantKey: undefined,
+  quantity: 1,
+  subtotalItems: 0,
+  shippingCost: 0,
+  shippingDiscount: 0,
+  voucherDiscount: 0,
+  serviceFee: 0,
+  purchaseType: "online",
+  totalActualPurchase: 0,
+  actualUnitCost: 0,
+  restockReferencePrice: 0,
+  totalReferencePurchase: 0,
+  purchaseSaving: 0,
+  productLink: "",
+  catalogOfferId: undefined,
+  priceVerified: false,
+  priceVerifiedAt: undefined,
+  verifiedCatalogPrice: 0,
+  ...overrides,
+});

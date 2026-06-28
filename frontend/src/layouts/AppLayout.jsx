@@ -19,6 +19,7 @@ import {
   THEME_LIGHT_VALUE,
 } from "../theme/themeMode";
 import { ActionResultModalHost } from "../utils/feedback/actionResultFeedback";
+import { SqliteRealtimeProvider } from "../context/SqliteRealtimeContext.jsx";
 import "../App.css";
 
 const { Header, Content } = Layout;
@@ -64,7 +65,8 @@ const AppLayout = () => {
   return (
     <ConfigProvider theme={antdThemeConfig}>
       <AntdApp component={false}>
-        <div className={`app-shell ${isDarkTheme ? "dark" : "light"}`}>
+        <SqliteRealtimeProvider>
+          <div className={`app-shell ${isDarkTheme ? "dark" : "light"}`}>
           <DesktopModuleDock darkTheme={isDarkTheme} />
 
           <Layout className="app-layout">
@@ -136,8 +138,9 @@ const AppLayout = () => {
             toggleTheme={handleToggleTheme}
           />
 
-          <ActionResultModalHost />
-        </div>
+            <ActionResultModalHost />
+          </div>
+        </SqliteRealtimeProvider>
       </AntdApp>
     </ConfigProvider>
   );

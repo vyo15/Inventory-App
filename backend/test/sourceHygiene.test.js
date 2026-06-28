@@ -309,3 +309,74 @@ test("git archive aktual tidak membawa data, backup, dan log runtime", () => {
     fs.rmSync(tempRepo, { recursive: true, force: true });
   }
 });
+
+test("core engine tidak kembali diimplementasikan di utils dan internal backend memakai canonical path", () => {
+  const facadeFiles = new Set([
+    "backend/src/utils/sqliteStockEngine.js",
+    "backend/src/utils/sqliteFinanceEngine.js",
+    "backend/src/utils/sqliteBackup.js",
+    "backend/src/shared/sqliteJsonRecordRoutes.js",
+  ]);
+  const forbiddenLegacyImports = [
+    "utils/sqliteStockEngine",
+    "utils/sqliteFinanceEngine",
+    "utils/sqliteBackup",
+    "shared/sqliteJsonRecordRoutes",
+  ];
+  const violations = [];
+
+  const backendSourceRoot = path.join(ROOT_DIR, "backend", "src");
+  const pending = [backendSourceRoot];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const fullPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        pending.push(fullPath);
+        continue;
+      }
+      if (!entry.isFile() || path.extname(entry.name) !== ".js") continue;
+      const relativePath = path.relative(ROOT_DIR, fullPath).replaceAll("\\", "/");
+      if (facadeFiles.has(relativePath)) continue;
+      const source = fs.readFileSync(fullPath, "utf8");
+      forbiddenLegacyImports.forEach((legacyImport) => {
+        if (source.includes(legacyImport)) violations.push(`${relativePath}: ${legacyImport}`);
+      });
+    }
+  }
+
+  assert.deepEqual(violations, []);
+
+  for (const relativePath of facadeFiles) {
+    const source = readRootFile(relativePath);
+    const nonBlankLines = source.split(/\r?\n/).filter((line) => line.trim()).length;
+    assert.ok(nonBlankLines <= 6, `${relativePath} harus tetap compatibility facade tipis`);
+  }
+});
+
+test("canonical security dan pricing wrapper tidak kembali menyalin business rule", () => {
+  const passwordEsm = readRootFile("shared/passwordPolicy.js");
+  const passwordCjs = readRootFile("shared/passwordPolicy.cjs");
+  const supplierEsm = readRootFile("shared/supplierCatalogPricing.js");
+  const supplierCjs = readRootFile("shared/supplierCatalogPricing.cjs");
+
+  assert.match(passwordEsm, /passwordPolicy\.core\.js/);
+  assert.match(passwordCjs, /passwordPolicy\.core\.js/);
+  assert.doesNotMatch(passwordEsm, /\.cjs["']/);
+  assert.doesNotMatch(passwordEsm, /commonPasswords\.includes/);
+  assert.doesNotMatch(passwordCjs, /commonPasswords\.includes/);
+  assert.match(supplierEsm, /supplierCatalogPricing\.core\.js/);
+  assert.match(supplierCjs, /supplierCatalogPricing\.core\.js/);
+  assert.doesNotMatch(supplierEsm, /\.cjs["']/);
+  assert.doesNotMatch(supplierEsm, /estimatedShippingCost\s*\+/);
+  assert.doesNotMatch(supplierCjs, /estimatedShippingCost\s*\+/);
+});
+
+test("frontend production helper tidak mengambil kembali authority commit HPP", () => {
+  const helperSource = readRootFile("frontend/src/services/Produksi/helpers/productionWorkLogsServiceHelpers.js");
+  [
+    "buildOutputHppReconcilePayload",
+    "reconcileAverageUnitCost",
+    "calculateWeightedVariantUnitCost",
+  ].forEach((symbol) => assert.equal(helperSource.includes(symbol), false, `${symbol} tidak boleh kembali`));
+});

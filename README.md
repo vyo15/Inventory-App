@@ -29,6 +29,8 @@ Alamat default:
 
 ## Quality gate
 
+Backend test berjalan dengan database, backup, dan log temporary yang terisolasi. Mode test tidak boleh membuka atau mereset database runtime di `data/`; guard `TEST_DATABASE_*` harus dianggap blocking bila muncul.
+
 Sebelum merge atau push:
 
 ```powershell

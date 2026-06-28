@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Col, Input, Select, Tag, Typography, message } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -84,8 +84,8 @@ const MoneyMovementLedger = () => {
 
   const yearOptions = useMemo(() => buildYearOptions(), []);
 
-  const fetchLedgerRows = async () => {
-    setLoading(true);
+  const fetchLedgerRows = useCallback(async ({ isActive = () => true } = {}) => {
+    if (isActive()) setLoading(true);
 
     try {
       const data = await getMoneyMovementLedger({
@@ -96,53 +96,22 @@ const MoneyMovementLedger = () => {
         search: searchKeyword,
         limit: selectedLimit,
       });
-
-      setLedgerRows(data);
+      if (isActive()) setLedgerRows(data);
     } catch (error) {
       console.error("Gagal memuat Buku Besar Kas:", error);
-      message.error("Gagal memuat Buku Besar Kas.");
+      if (isActive()) message.error("Gagal memuat Buku Besar Kas.");
     } finally {
-      setLoading(false);
+      if (isActive()) setLoading(false);
     }
-  };
+  }, [searchKeyword, selectedDirection, selectedLimit, selectedMonth, selectedSource, selectedYear]);
 
   useEffect(() => {
-    let isActive = true;
-
-    const loadLedgerRows = async () => {
-      setLoading(true);
-
-      try {
-        const data = await getMoneyMovementLedger({
-          year: selectedYear,
-          month: selectedMonth,
-          direction: selectedDirection,
-          source: selectedSource,
-          search: searchKeyword,
-          limit: selectedLimit,
-        });
-
-        if (isActive) {
-          setLedgerRows(data);
-        }
-      } catch (error) {
-        console.error("Gagal memuat Buku Besar Kas:", error);
-        if (isActive) {
-          message.error("Gagal memuat Buku Besar Kas.");
-        }
-      } finally {
-        if (isActive) {
-          setLoading(false);
-        }
-      }
-    };
-
-    loadLedgerRows();
-
+    let active = true;
+    fetchLedgerRows({ isActive: () => active });
     return () => {
-      isActive = false;
+      active = false;
     };
-  }, [searchKeyword, selectedDirection, selectedLimit, selectedMonth, selectedSource, selectedYear]);
+  }, [fetchLedgerRows]);
 
   const summary = useMemo(() => {
     return ledgerRows.reduce(

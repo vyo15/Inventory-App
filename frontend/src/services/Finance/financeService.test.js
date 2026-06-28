@@ -4,16 +4,11 @@ const mocks = vi.hoisted(() => ({
   commitCashIn: vi.fn(),
   commitCashOut: vi.fn(),
   deleteCashOut: vi.fn(),
-  getRepositoryModeStatus: vi.fn(),
-  isSqliteRepositoryModuleEnabled: vi.fn(),
+  subscribeExpenses: vi.fn(),
+  subscribeIncomes: vi.fn(),
   listExpenses: vi.fn(),
   listIncomes: vi.fn(),
   listLedger: vi.fn(),
-}));
-
-vi.mock("../../data/repositories/repositoryModeService", () => ({
-  getRepositoryModeStatus: mocks.getRepositoryModeStatus,
-  isSqliteRepositoryModuleEnabled: mocks.isSqliteRepositoryModuleEnabled,
 }));
 
 vi.mock("../../data/adapters/sqlite/sqliteFinanceAdapter", () => ({
@@ -23,6 +18,8 @@ vi.mock("../../data/adapters/sqlite/sqliteFinanceAdapter", () => ({
   listExpenses: mocks.listExpenses,
   listIncomes: mocks.listIncomes,
   listLedger: mocks.listLedger,
+  subscribeExpenses: mocks.subscribeExpenses,
+  subscribeIncomes: mocks.subscribeIncomes,
 }));
 
 import {
@@ -38,43 +35,43 @@ import {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.getRepositoryModeStatus.mockResolvedValue({ isSqliteSidecar: true });
-  mocks.isSqliteRepositoryModuleEnabled.mockReturnValue(true);
 });
 
 describe("financeService", () => {
-  it("listener cash-in membaca SQLite, mengurutkan tanggal terbaru, dan membersihkan timer", async () => {
+  it("listener cash-in memakai subscription SQLite dan mengurutkan tanggal terbaru", () => {
     const older = { id: "old", date: { toDate: () => new Date("2026-06-20T10:00:00Z") } };
     const newer = { id: "new", date: { toDate: () => new Date("2026-06-21T10:00:00Z") } };
-    mocks.listIncomes.mockResolvedValue([older, newer]);
+    const unsubscribeAdapter = vi.fn();
+    mocks.subscribeIncomes.mockImplementation((onNext) => {
+      onNext([older, newer]);
+      return unsubscribeAdapter;
+    });
     const onNext = vi.fn();
     const onError = vi.fn();
-    const setIntervalSpy = vi.spyOn(window, "setInterval").mockReturnValue(77);
-    const clearIntervalSpy = vi.spyOn(window, "clearInterval").mockImplementation(() => {});
 
     const unsubscribe = listenCashInRecords(onNext, onError);
-    await vi.waitFor(() => expect(onNext).toHaveBeenCalledTimes(1));
 
     expect(onNext).toHaveBeenCalledWith([newer, older]);
     expect(onError).not.toHaveBeenCalled();
-    expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 15000);
-
+    expect(mocks.subscribeIncomes).toHaveBeenCalledWith(expect.any(Function), onError, { limit: 1000 });
     unsubscribe();
-    expect(clearIntervalSpy).toHaveBeenCalledWith(77);
+    expect(unsubscribeAdapter).toHaveBeenCalledTimes(1);
   });
 
-  it("listener melaporkan konfigurasi finance nonaktif tanpa membuat polling", async () => {
-    mocks.getRepositoryModeStatus.mockResolvedValue({ isSqliteSidecar: false });
+  it("listener cash-out meneruskan error subscription SQLite", () => {
+    const subscribeError = new Error("Layanan finance belum tersedia");
+    mocks.subscribeExpenses.mockImplementation((_onNext, onError) => {
+      onError(subscribeError);
+      return vi.fn();
+    });
     const onNext = vi.fn();
     const onError = vi.fn();
-    const setIntervalSpy = vi.spyOn(window, "setInterval");
 
     const unsubscribe = listenCashOutRecords(onNext, onError);
-    await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
 
     expect(onNext).not.toHaveBeenCalled();
-    expect(onError.mock.calls[0][0].message).toContain("Mode finance belum aktif");
-    expect(setIntervalSpy).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(subscribeError);
+    expect(mocks.subscribeExpenses).toHaveBeenCalledWith(expect.any(Function), onError, { limit: 1000 });
     unsubscribe();
   });
 

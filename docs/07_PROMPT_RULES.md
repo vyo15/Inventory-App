@@ -109,3 +109,13 @@ Setelah patch, selalu sertakan:
 7. Plan file-by-file jika perlu patch.
 8. Test checklist.
 9. Keputusan.
+
+## Guard cleanup architecture aktif
+
+- Implementasi baru tidak boleh menaruh core stock, finance, atau backup engine di `backend/src/utils/`.
+- Internal backend wajib memakai canonical domain path. File legacy engine hanya compatibility facade dan tidak boleh diberi logic baru.
+- Password policy dan formula katalog Supplier wajib memakai canonical shared core; jangan copy-paste frontend/backend.
+- Frontend tidak boleh menghitung atau meng-commit HPP sebagai authority.
+- Refactor arsitektur tidak boleh sekaligus mengubah schema, route, role guard, status flow, formula stok/HPP, atau format backup.
+- Komponen UI shared hanya memusatkan presentasi/state yang benar-benar identik; business page Cash In/Cash Out, Purchase/Sales/Return, dan modul guarded tetap terpisah.
+- Detail lengkap struktur hasil cleanup ada di `docs/22_CLEANUP_ARCHITECTURE.md`.

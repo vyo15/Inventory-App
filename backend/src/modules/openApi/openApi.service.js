@@ -14,6 +14,7 @@ const buildOpenApiDocument = ({ baseUrl = "http://localhost:3001" } = {}) => ({
     { name: "Finance" },
     { name: "Production" },
     { name: "Maintenance" },
+    { name: "Realtime" },
   ],
   components: {
     securitySchemes: {
@@ -68,6 +69,12 @@ const buildOpenApiDocument = ({ baseUrl = "http://localhost:3001" } = {}) => ({
     "/api/production/orders/commit": {
       post: { tags: ["Production"], summary: "Buat Production Order dari Planning", security: [{ localSessionCookie: [] }], responses: { 200: { description: "PO dan Planning diperbarui atomic" } } },
     },
+    "/api/realtime/status": {
+      get: { tags: ["Realtime"], summary: "Revision realtime untuk fallback saat SSE terputus", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Status transport dan revision saat ini" } } },
+    },
+    "/api/realtime/events": {
+      get: { tags: ["Realtime"], summary: "Stream SSE perubahan database lintas client", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Stream event connected, data_changed, database_replaced, dan heartbeat" }, 401: { description: "Session tidak valid" } } },
+    },
     "/api/maintenance/status": {
       get: { tags: ["Maintenance"], summary: "Status database, queue, logger, backup, dan auth compatibility", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Status maintenance" } } },
     },
@@ -88,6 +95,12 @@ const buildOpenApiDocument = ({ baseUrl = "http://localhost:3001" } = {}) => ({
     },
     "/api/maintenance/stock-read-model-orphan-cleanup": {
       post: { tags: ["Maintenance"], summary: "Cleanup orphan stock read model dengan keyword dan backup", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Orphan projection dibersihkan" }, 400: { description: "Keyword konfirmasi salah" } } },
+    },
+    "/api/maintenance/inactive-data": {
+      get: { tags: ["Maintenance"], summary: "Preview kandidat data nonaktif dan dependency blocker", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Daftar kandidat purge allowlisted tanpa perubahan data" } } },
+    },
+    "/api/maintenance/inactive-data/purge": {
+      post: { tags: ["Maintenance"], summary: "Purge permanen data nonaktif dengan backup, konfirmasi ganda, transaction, dan audit snapshot", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Satu record allowlisted dihapus permanen" }, 409: { description: "Masih memiliki dependency/histori protected" } } },
     },
     "/api/maintenance/restore-plan": {
       post: { tags: ["Maintenance"], summary: "Preview restore tanpa write", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Restore plan" } } },

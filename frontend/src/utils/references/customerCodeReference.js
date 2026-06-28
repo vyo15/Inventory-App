@@ -1,5 +1,7 @@
-const CUSTOMER_CODE_PREFIX = "CUS";
-const CUSTOMER_CODE_PATTERN = /^CUS-\d{8}-\d{3,}$/;
+import businessCodeContract from "../../../../shared/businessCodeContract.json";
+
+const CUSTOMER_CODE_PREFIX = businessCodeContract.customer.prefix;
+const CUSTOMER_CODE_PATTERN = new RegExp(businessCodeContract.customer.pattern);
 
 export { CUSTOMER_CODE_PREFIX, CUSTOMER_CODE_PATTERN };
 

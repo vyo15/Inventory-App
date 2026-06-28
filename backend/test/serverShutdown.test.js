@@ -264,3 +264,54 @@ test("shutdown yang diminta saat startup menunggu startup settle lalu menutup da
   assert.equal(fs.existsSync(`${dbPath}-wal`), false);
   assert.equal(fs.existsSync(`${dbPath}-shm`), false);
 });
+
+test("server mengaktifkan scheduler lifecycle dan menghentikannya saat shutdown", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "ims-server-backup-scheduler-"));
+  const dbPath = path.join(tempDir, "data", "ims-test.sqlite");
+  const backendRoot = path.resolve(__dirname, "..");
+  const serverPath = path.join(backendRoot, "src", "server.js");
+  const backupPath = path.join(backendRoot, "src", "modules", "maintenance", "backup");
+  const script = `
+    const { startServer, shutdownServer } = require(${JSON.stringify(serverPath)});
+    const { getBackupLifecycleRuntimeStatus } = require(${JSON.stringify(backupPath)});
+    (async () => {
+      await startServer();
+      console.log("SCHEDULER_ACTIVE=" + getBackupLifecycleRuntimeStatus().schedulerActive);
+      await shutdownServer({ reason: "test_backup_scheduler", exitProcess: false });
+      console.log("SCHEDULER_STOPPED=" + !getBackupLifecycleRuntimeStatus().schedulerActive);
+    })()
+      .then(() => process.exit(0))
+      .catch((error) => {
+        console.error(error);
+        process.exit(1);
+      });
+  `;
+  const child = spawn(process.execPath, ["-e", script], {
+    cwd: backendRoot,
+    env: {
+      ...process.env,
+      NODE_ENV: "test",
+      HOST: "127.0.0.1",
+      PORT: "0",
+      IMS_AUTH_BOOTSTRAP_CODE: "SCHEDULERTEST8421",
+      IMS_LOG_TO_FILE: "false",
+      IMS_SQLITE_DB_PATH: dbPath,
+      IMS_SQLITE_BACKUP_DIR: path.join(tempDir, "backups"),
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let output = "";
+  child.stdout.on("data", (chunk) => { output += chunk.toString(); });
+  child.stderr.on("data", (chunk) => { output += chunk.toString(); });
+
+  t.after(() => {
+    if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  const [code, exitSignal] = await waitForExit(child);
+  assert.equal(code, 0, output);
+  assert.equal(exitSignal, null);
+  assert.match(output, /SCHEDULER_ACTIVE=true/);
+  assert.match(output, /SCHEDULER_STOPPED=true/);
+});

@@ -95,3 +95,22 @@ export const removeRecordById = (records = [], recordId = '') => {
     (item) => getComparableRecordId(item) !== normalizedId,
   );
 };
+
+
+export const getInventoryMutationItems = (mutationResults = [], sourceType = "") => (
+  (Array.isArray(mutationResults) ? mutationResults : [])
+    .filter((entry) => entry?.stockReadModel?.sourceType === sourceType)
+    .map((entry) => entry?.item)
+    .filter(Boolean)
+);
+
+export const mergeInventoryMutationResults = (
+  records = [],
+  mutationResults = [],
+  sourceType = "",
+  { comparator = compareRecordsByNameAsc } = {},
+) => upsertRecordsById(
+  records,
+  getInventoryMutationItems(mutationResults, sourceType),
+  { comparator },
+);

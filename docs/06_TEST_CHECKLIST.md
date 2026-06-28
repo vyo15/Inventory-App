@@ -64,7 +64,14 @@ Coverage aktif saat ini:
 - Auth concurrency: dua perubahan admin paralel tetap menyisakan satu administrator aktif.
 - Password policy: maksimum 128 karakter aktif pada backend dan frontend shared policy.
 
-Test memakai database SQLite temporary di folder sistem dan tidak menunjuk ke database operasional `data/`.
+Test memakai database SQLite temporary di folder sistem dan tidak menunjuk ke database operasional `data/`. Runner selalu menimpa path database/backup/log ke suite temporary, helper integration test memverifikasi marker serta path aktif sebelum `DELETE FROM`, dan `db/connection` menolak membuka database di luar temporary ketika `NODE_ENV=test`.
+
+Guard anti-regression wajib:
+
+- [ ] `backend/test/testDatabaseIsolation.test.js` lulus.
+- [ ] Semua file yang memakai `configureTestDatabase()` memanggilnya sebelum import module `backend/src`.
+- [ ] Kegagalan `TEST_DATABASE_IMPORT_ORDER_VIOLATION`, `TEST_DATABASE_PATH_MISMATCH`, atau `TEST_DATABASE_RUNTIME_PATH_UNSAFE` menghentikan test tanpa menyentuh `data/`.
+- [ ] Sebelum dan sesudah `npm test`, timestamp/checksum database runtime tidak berubah karena test.
 
 ## 1A.1 Concurrent write dan runtime counter
 
@@ -305,6 +312,11 @@ Referensi detail: `docs/21_RESPONSIVE_UI_UX_STANDARD.md`.
 - [ ] Backend dependency audit lockfile tidak memiliki vulnerability aktif.
 - [ ] Frontend lockfile tidak memuat registry internal dan tidak lagi membawa `@ant-design/charts`.
 - [ ] Purchase/Sales/Return frontend test memastikan commit endpoint resmi dan validation guard tetap aktif.
+- [ ] Submit Sales dari halaman mengirim object `values` canonical dan `saleItems` ke service; request commit memuat customer/channel/status/date/reference yang benar.
+- [ ] Return UI wajib memilih Sales, hanya menampilkan item Sales dengan `remainingQuantity > 0`, dan tidak menyediakan pemilihan item master bebas.
+- [ ] Backend menolak Return dengan status selain `Selesai`, menolak `refundAmount`/`refundTotal`, dan tidak membuat expense/ledger.
+- [ ] Backend menolak Purchase commit dengan status draft/cancel/deleted sebelum stock-in dan finance.
+- [ ] Preview Production Order menghasilkan requirement, snapshot available stock, shortage, dan summary dari BOM dengan kontrak helper yang sama seperti halaman.
 - [ ] Production adapter dan service test memastikan Start/Complete/Payroll lifecycle memakai endpoint atomic resmi.
 - [ ] Completion Work Log mengirim Good Qty/operator/catatan dalam satu request complete tanpa direct update pendahuluan.
 - [ ] Restore frontend test memastikan preview dan execute guarded memakai cookie credentials.
@@ -312,3 +324,47 @@ Referensi detail: `docs/21_RESPONSIVE_UI_UX_STANDARD.md`.
 - [ ] `npm run check:bundle` lulus setelah frontend build.
 - [ ] `IMS_FRONTEND_MAX_JS_BYTES` non-numerik, nol, atau pecahan ditolak oleh bundle guard.
 - [ ] Tidak ada import/usage tersisa ke `productionCodeGenerator.js` setelah file dihapus.
+
+## 15. Realtime SQLite dan Data Nonaktif — 2026-06-28
+
+### Realtime dua client
+- [ ] Buka IMS di laptop dan HP dengan session valid; hanya satu koneksi SSE dibuat per tab.
+- [ ] Tambah Customer di client A; daftar Customer dan Cakupan Data client B berubah tanpa reload manual.
+- [ ] Ubah Supplier/Kategori/Produk dari client B; hanya route yang relevan pada client A yang refresh.
+- [ ] Mutation client asal tidak memicu remount berulang karena `X-IMS-Client-ID`.
+- [ ] Duplicate tab pada browser yang sama menghasilkan page-instance ID berbeda; mutation tab A tetap diterima tab B.
+- [ ] Write dalam transaction hanya mengirim event setelah commit; rollback tidak mengirim event.
+- [ ] Burst beberapa write menghasilkan event ter-debounce dan request refresh tidak overlap.
+- [ ] Batch debounce yang mencampur mutation client dan mutation system tidak menekan event system ke client asal.
+- [ ] Tidak ada `setInterval` polling 15 detik pada adapter; subscription legacy hanya initial load.
+- [ ] Tab tersembunyi tidak menjalankan fallback polling; saat kembali terlihat pemeriksaan revision langsung catch-up tanpa request overlap.
+- [ ] Form/modal/drawer aktif tidak di-reset; notice `Data baru tersedia` muncul dan manual refresh bekerja.
+- [ ] SSE disconnect menampilkan status reconnect dan fallback 60 detik tetap bekerja.
+- [ ] Event administrator-only tidak mengubah revision fallback user operasional.
+- [ ] Ubah role user saat user berada di route Sales/Stock; tab user reload, `/api/auth/me` divalidasi ulang, dan route guard baru berlaku.
+- [ ] Nonaktifkan user aktif; session dicabut, stream lama berhenti setelah reload, dan halaman kembali ke Login.
+- [ ] Gunakan session dengan expiry pendek; event `session_expired` dikirim, stream ditutup, dan frontend kembali ke auth gate.
+- [ ] Login/logout session biasa hanya menghasilkan scope `auth_session` dan tidak mereload seluruh client lain.
+- [ ] Restore sukses mengirim `database_replaced`, me-reload semua client, dan session divalidasi ulang.
+- [ ] Logout/shutdown menutup stream dan tidak meninggalkan koneksi backend menggantung.
+- [ ] Lebih dari 12 tab untuk satu user atau 30 koneksi dari satu IP ditolak `429 REALTIME_CONNECTION_LIMITED` tanpa mengganggu koneksi yang sudah aktif.
+
+### Soft-delete dan purge
+- [ ] Tombol regular master/user/kas keluar memakai `Nonaktifkan`; varian memakai `Arsipkan`.
+- [ ] Nonaktifkan dua Customer: halaman aktif menjadi 0, Maintenance menampilkan active 0 dan deleted/nonaktif 2, total tersimpan 2.
+- [ ] Kode record soft-deleted tidak digunakan ulang.
+- [ ] `Data Nonaktif` hanya dapat dibuka administrator.
+- [ ] Purge record yang masih direferensikan transaksi, nested JSON payload, hierarchy, katalog, histori supplier, atau `migration_identity_map` diblokir.
+- [ ] Seluruh hard purge User diblokir; akun nonaktif tetap dipertahankan sebagai identitas histori audit.
+- [ ] Purge memerlukan keyword `HAPUS PERMANEN` dan exact target confirmation.
+- [ ] Backup `pre-repair` tercipta sebelum purge.
+- [ ] Gagal purge/rollback tidak menghapus record dan tidak membuat audit sukses palsu.
+- [ ] Purge sukses menghapus tepat satu record allowlisted dan menulis audit `inactive_record_purge` dengan snapshot tanpa password hash.
+- [ ] Strict SQLite cutover audit gagal bila hard-delete runtime baru muncul di luar Maintenance allowlist.
+
+### Audit kualitas data dan finance reconciliation
+- [ ] Buat lebih dari 50 issue inventory; total count tetap penuh dan sample ditandai terpotong.
+- [ ] Buat lebih dari 100 issue finance; total count tetap penuh tanpa membebani UI dengan seluruh detail.
+- [ ] Deteksi missing/deleted/duplicate ledger, amount mismatch, direction mismatch, debit-credit mismatch, source ID/type mismatch, orphan ledger, dan ledger aktif untuk movement deleted.
+- [ ] Menjalankan audit tidak mengubah data bisnis tetapi membuat audit log `data_quality_audit` dengan actor dan ringkasan kategori.
+- [ ] Finance issue tetap manual-review; tidak ada tombol auto-repair side-effect transaksi.

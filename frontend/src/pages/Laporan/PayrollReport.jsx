@@ -25,6 +25,7 @@ import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
+import { CompactCellText } from "../../components/Layout/Table/CompactCell";
 import {
   PAYROLL_CLASSIFICATION_MAP,
   PAYROLL_MODE_MAP,
@@ -42,6 +43,7 @@ import { formatNumberId } from "../../utils/formatters/numberId";
 import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 import { normalizeReportDateRange } from "../../utils/reports/reportDateRange";
+import { tallyPayrollStatus } from "./helpers/payrollReportHelpers";
 
 const { RangePicker } = DatePicker;
 
@@ -72,37 +74,14 @@ const renderPayrollStatusTags = (record = {}) => (
 // Risiko:
 // - Jika style ellipsis/tooltip diubah sembarangan, nilai payroll penting bisa terpotong tanpa akses baca penuh.
 // =====================================================
-const compactCellLineStyle = {
-  display: "block",
-  maxWidth: "100%",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-};
-
-const compactMetaLineStyle = {
-  ...compactCellLineStyle,
-  color: "var(--ims-text-secondary)",
-  fontSize: "var(--ims-font-size-meta)",
-};
-
-const renderCompactLine = (value, options = {}) => {
-  const { fallback = "-", strong = false, muted = false } = options;
-  const displayValue = value || fallback;
-
-  return (
-    <Tooltip title={displayValue}>
-      <span
-        style={{
-          ...(muted ? compactMetaLineStyle : compactCellLineStyle),
-          fontWeight: strong ? "var(--ims-font-weight-semibold)" : undefined,
-        }}
-      >
-        {displayValue}
-      </span>
-    </Tooltip>
-  );
-};
+const renderCompactLine = (value, options = {}) => (
+  <CompactCellText
+    value={value}
+    fallback={options.fallback}
+    strong={options.strong}
+    secondary={options.muted}
+  />
+);
 
 // =====================================================
 // ACTIVE / FINAL
@@ -255,11 +234,6 @@ const PayrollReport = () => {
     const totals = filteredPayrolls.reduce(
       (acc, item) => {
         const amount = Number(item.finalAmount || 0);
-        if (item.status === "draft") acc.totalDraft += 1;
-        if (item.status === "confirmed") acc.totalConfirmed += 1;
-        if (item.status === "paid") acc.totalPaid += 1;
-        if (item.status === "cancelled") acc.totalCancelled += 1;
-        if (item.status !== "cancelled") acc.totalNominal += amount;
         if (item.payrollClassification === "support_fulfillment") acc.totalSupport += amount;
         else acc.totalDirect += amount;
         if (item.includePayrollInHpp !== false) acc.totalInHpp += amount;
@@ -269,11 +243,7 @@ const PayrollReport = () => {
         return acc;
       },
       {
-        totalDraft: 0,
-        totalConfirmed: 0,
-        totalPaid: 0,
-        totalCancelled: 0,
-        totalNominal: 0,
+        ...tallyPayrollStatus(filteredPayrolls),
         totalDirect: 0,
         totalSupport: 0,
         totalInHpp: 0,
@@ -576,24 +546,11 @@ const PayrollReport = () => {
       if (!acc[key]) {
         acc[key] = {
           operator: item.workerName || "-",
-          totalLines: 0,
-          totalDraft: 0,
-          totalConfirmed: 0,
-          totalPaid: 0,
-          totalCancelled: 0,
-          totalNominal: 0,
+          items: [],
         };
       }
 
-      acc[key].totalLines += 1;
-      if (item.status === "draft") acc[key].totalDraft += 1;
-      if (item.status === "confirmed") acc[key].totalConfirmed += 1;
-      if (item.status === "paid") acc[key].totalPaid += 1;
-      if (item.status === "cancelled") acc[key].totalCancelled += 1;
-      if (item.status !== "cancelled") {
-        acc[key].totalNominal += Number(item.finalAmount || 0);
-      }
-
+      acc[key].items.push(item);
       return acc;
     }, {});
 
@@ -606,15 +563,18 @@ const PayrollReport = () => {
         `Periode: ${formatDateId(dateRange?.[0]?.toDate?.(), false)} - ${formatDateId(dateRange?.[1]?.toDate?.(), false)}`,
         `Status: ${statusFilter === "all" ? "Semua" : PAYROLL_STATUS_MAP[statusFilter] || statusFilter}`,
       ],
-      data: Object.values(recapMap).map((item) => ({
-        Operator: item.operator,
-        "Total Line": formatNumberId(item.totalLines),
-        Draft: formatNumberId(item.totalDraft),
-        Confirmed: formatNumberId(item.totalConfirmed),
-        Paid: formatNumberId(item.totalPaid),
-        Cancelled: formatNumberId(item.totalCancelled),
-        "Total Nominal": formatCurrencyId(item.totalNominal),
-      })),
+      data: Object.values(recapMap).map((item) => {
+        const totals = tallyPayrollStatus(item.items);
+        return {
+          Operator: item.operator,
+          "Total Line": formatNumberId(item.items.length),
+          Draft: formatNumberId(totals.totalDraft),
+          Confirmed: formatNumberId(totals.totalConfirmed),
+          Paid: formatNumberId(totals.totalPaid),
+          Cancelled: formatNumberId(totals.totalCancelled),
+          "Total Nominal": formatCurrencyId(totals.totalNominal),
+        };
+      }),
     });
     message.success("Rekap payroll per operator berhasil diekspor ke Excel.");
   };

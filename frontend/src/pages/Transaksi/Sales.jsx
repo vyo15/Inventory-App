@@ -23,7 +23,7 @@ import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import DataTableView from "../../components/Layout/Table/DataTableView";
-import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
+import CompactCell, { CompactCellText } from "../../components/Layout/Table/CompactCell";
 import ResponsiveFormSection from "../../components/Layout/Mobile/ResponsiveFormSection";
 import { SALES_CHANNEL_OPTIONS, buildSalesChannelSummary } from "../../constants/salesChannelOptions";
 import {
@@ -48,6 +48,13 @@ import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numb
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
+import SalesDetailDrawer from './components/SalesDetailDrawer';
+import SalesChannelDetailDrawer from './components/SalesChannelDetailDrawer';
+import {
+  getSaleDisplayReference,
+  getSaleExternalReference,
+  getSalesStatusColor,
+} from './helpers/salesPageHelpers';
 
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
@@ -63,22 +70,6 @@ const { Text } = Typography;
 // SECTION: Daftar channel penjualan
 // =========================
 const salesChannels = SALES_CHANNEL_OPTIONS;
-
-const getSaleDisplayReference = (sale) =>
-  sale.saleNumber || sale.code || sale.referenceNumber || sale.sourceRef || "Tanpa ref";
-
-const getSaleExternalReference = (sale) =>
-  sale.externalReferenceNumber || "-";
-
-const getSalesStatusColor = (status) => {
-  const statusColors = {
-    Selesai: "green",
-    Dikirim: "orange",
-    Diproses: "blue",
-  };
-
-  return statusColors[status] || "default";
-};
 
 // IMS NOTE [AKTIF] - Filter sumber item Sales.
 // Fungsi blok: menyediakan pilihan Jenis Item per line agar Produk Jadi dan Bahan Baku tidak tercampur dalam satu dropdown panjang.
@@ -421,16 +412,23 @@ const Sales = () => {
       const selectedCustomer = resolveSalesCustomerReference(customers, customerId);
 
       await createSaleTransaction({
+        values: {
+          salesChannel,
+          status: finalSaleStatus,
+          date,
+          transactionDate: date,
+          referenceNumber: isReferenceNumberEnabledChannel(salesChannel)
+            ? referenceNumber
+            : null,
+          note,
+          notes: note,
+          customerId: selectedCustomer?.id || customerId || "",
+          customerCode: selectedCustomer?.customerCode || selectedCustomer?.code || "",
+          customerName: selectedCustomer?.name || "",
+          totalAmount: totalSaleValue,
+          total: totalSaleValue,
+        },
         saleItems,
-        salesChannel,
-        finalSaleStatus,
-        saleDate: date,
-        referenceNumber: isReferenceNumberEnabledChannel(salesChannel)
-          ? referenceNumber
-          : null,
-        note,
-        selectedCustomer,
-        totalSaleValue,
       });
 
       message.success("Penjualan berhasil ditambahkan!");
@@ -705,14 +703,10 @@ const Sales = () => {
       render: (_, record) => {
         const referenceText = record.saleNumber || record.code || record.referenceNumber || "Tanpa ref";
         return (
-          <div style={{ minWidth: 0 }}>
-            <div className="ims-cell-title">{record.date || "-"}</div>
-            <Tooltip title={referenceText}>
-              <div className="ims-cell-meta" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {referenceText}
-              </div>
-            </Tooltip>
-          </div>
+          <CompactCell>
+            <CompactCellText value={record.date || "-"} strong tooltip={false} />
+            <CompactCellText value={referenceText} secondary />
+          </CompactCell>
         );
       },
     },
@@ -724,14 +718,10 @@ const Sales = () => {
         const customerName = record.customerName || "-";
         const channel = record.salesChannel || "-";
         return (
-          <div style={{ minWidth: 0 }}>
-            <Tooltip title={customerName}>
-              <div className="ims-cell-title" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {customerName}
-              </div>
-            </Tooltip>
+          <CompactCell>
+            <CompactCellText value={customerName} strong />
             <Tag style={{ marginTop: 4 }}>{channel}</Tag>
-          </div>
+          </CompactCell>
         );
       },
     },
@@ -764,14 +754,10 @@ const Sales = () => {
 
         return (
           <Tooltip title={tooltipContent}>
-            <div style={{ minWidth: 0 }}>
-              <div className="ims-cell-title" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {primaryLabel}
-              </div>
-              <div className="ims-cell-meta">
-                {saleItems.length} item transaksi
-              </div>
-            </div>
+            <CompactCell>
+              <CompactCellText value={primaryLabel} strong tooltip={false} />
+              <CompactCellText value={`${saleItems.length} item transaksi`} secondary tooltip={false} />
+            </CompactCell>
           </Tooltip>
         );
       },
@@ -1200,130 +1186,20 @@ const Sales = () => {
         />
       </PageSection>
 
-      <MobileDetailDrawer
-        title="Detail Penjualan"
-        open={Boolean(selectedSaleDetail)}
-        onClose={closeSaleDetail}
-        width="min(100vw, 440px)"
-      >
-        {selectedSaleDetail ? (
-          <Space direction="vertical" size={14} style={{ width: "100%" }}>
-            <div className="ims-cell-stack">
-              <Text type="secondary">Referensi</Text>
-              <Text strong>{getSaleDisplayReference(selectedSaleDetail)}</Text>
-              {getSaleExternalReference(selectedSaleDetail) !== "-" ? (
-                <Text type="secondary">Order marketplace: {getSaleExternalReference(selectedSaleDetail)}</Text>
-              ) : null}
-            </div>
-            <div className="ims-cell-stack">
-              <Text type="secondary">Tanggal / Customer</Text>
-              <Text strong>{selectedSaleDetail.date || "-"}</Text>
-              <Text>{selectedSaleDetail.customerName || "Customer tidak tercatat"}</Text>
-            </div>
-            <Space wrap>
-              <Tag>{selectedSaleDetail.salesChannel || "Channel tidak tercatat"}</Tag>
-              <Tag color={getSalesStatusColor(selectedSaleDetail.status)}>{selectedSaleDetail.status || "-"}</Tag>
-            </Space>
-            <div className="ims-cell-stack">
-              <Text type="secondary">Total</Text>
-              <Text strong>{formatCurrencyId(selectedSaleDetail.total || 0)}</Text>
-            </div>
-            <div className="ims-cell-stack">
-              <Text type="secondary">Item</Text>
-              {Array.isArray(selectedSaleDetail.items) && selectedSaleDetail.items.length > 0 ? (
-                <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                  {selectedSaleDetail.items.map((item, index) => (
-                    <div key={`${item.itemId || item.itemName || "item"}-${index}`} className="ims-cell-stack ims-cell-stack-tight">
-                      <Text strong>
-                        {item.itemName || "Item"}{item.variantLabel ? ` - ${item.variantLabel}` : ""}
-                      </Text>
-                      <Text type="secondary">
-                        {formatNumberId(item.quantity)} x {formatCurrencyId(item.pricePerUnit || 0)} = {formatCurrencyId(item.subtotal || 0)}
-                      </Text>
-                    </div>
-                  ))}
-                </Space>
-              ) : (
-                <Text type="secondary">Item belum tercatat.</Text>
-              )}
-            </div>
-          </Space>
-        ) : null}
-      </MobileDetailDrawer>
+      <SalesDetailDrawer sale={selectedSaleDetail} onClose={closeSaleDetail} />
 
-      <MobileDetailDrawer
-        title={selectedSalesChannelSummary ? `Detail Channel — ${selectedSalesChannelSummary.channel}` : "Detail Channel"}
-        placement="right"
-        width="min(100vw, 720px)"
-        open={Boolean(selectedSalesChannelSummary)}
+      <SalesChannelDetailDrawer
+        summary={selectedSalesChannelSummary}
         onClose={closeSalesChannelDetail}
-        destroyOnClose
-      >
-        {selectedSalesChannelSummary ? (
-          <>
-            <div className="ims-readonly-stat-grid" style={{ marginBottom: 16 }}>
-              <div className="ims-readonly-stat-field">
-                <div className="ims-readonly-stat-label">Omzet</div>
-                <div className="ims-readonly-stat-value">{formatCurrencyId(selectedSalesChannelSummary.totalAmount)}</div>
-                <div className="ims-cell-meta">Total channel</div>
-              </div>
-              <div className="ims-readonly-stat-field">
-                <div className="ims-readonly-stat-label">Selesai</div>
-                <div className="ims-readonly-stat-value">{formatCurrencyId(selectedSalesChannelSummary.completedAmount)}</div>
-                <div className="ims-cell-meta">Income resmi</div>
-              </div>
-              <div className="ims-readonly-stat-field">
-                <div className="ims-readonly-stat-label">Pending</div>
-                <div className="ims-readonly-stat-value">{formatCurrencyId(selectedSalesChannelSummary.pendingAmount)}</div>
-                <div className="ims-cell-meta">Belum masuk kas</div>
-              </div>
-            </div>
-
-            <Space style={{ marginBottom: 16, width: "100%", justifyContent: "space-between" }} wrap>
-              <Input.Search
-                placeholder="Cari ref / order / pelanggan"
-                allowClear
-                value={channelDetailSearch}
-                onChange={(event) => setChannelDetailSearch(event.target.value)}
-                style={{ width: "min(100%, 280px)" }}
-              />
-              <Select
-                value={channelDetailStatusFilter}
-                onChange={setChannelDetailStatusFilter}
-                style={{ width: "min(100%, 180px)" }}
-              >
-                <Option value="all">Semua Status</Option>
-                {onlineStatuses.map((status) => (
-                  <Option key={status} value={status}>
-                    {status}
-                  </Option>
-                ))}
-              </Select>
-            </Space>
-
-            <DataTableView
-              className="app-data-table"
-              columns={selectedSalesChannelTransactionColumns}
-              dataSource={selectedSalesChannelTransactions}
-              rowKey="id"
-              pagination={{ pageSize: 5 }}
-              size="small"
-              tableLayout="fixed"
-              scroll={{ x: 560 }}
-              showRefreshIndicator={false}
-              mobileCardConfig={selectedSalesChannelTransactionMobileCardConfig}
-              locale={{
-                emptyText: (
-                  <Empty
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description="Tidak ada transaksi yang cocok dengan filter ini."
-                  />
-                ),
-              }}
-            />
-          </>
-        ) : null}
-      </MobileDetailDrawer>
+        searchValue={channelDetailSearch}
+        onSearchChange={setChannelDetailSearch}
+        statusValue={channelDetailStatusFilter}
+        onStatusChange={setChannelDetailStatusFilter}
+        statusOptions={onlineStatuses}
+        columns={selectedSalesChannelTransactionColumns}
+        transactions={selectedSalesChannelTransactions}
+        mobileCardConfig={selectedSalesChannelTransactionMobileCardConfig}
+      />
 
       <Modal
         title="Tambah Penjualan"

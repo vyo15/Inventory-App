@@ -3,7 +3,7 @@ const {
   formatBusinessDateStamp,
   resolveBusinessCode,
 } = require("../../utils/businessCodeCounter");
-const { commitStockMutation, insertEventRecord } = require("../../utils/sqliteStockEngine");
+const { commitStockMutation, insertEventRecord } = require("./engine");
 
 const getStockAdjustmentCounterOptions = (payload = {}) => {
   const dateStamp = formatBusinessDateStamp(

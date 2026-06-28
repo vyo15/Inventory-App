@@ -4,7 +4,6 @@ import {
   Button,
   Card,
   Col,
-  Descriptions,
   Divider,
   Drawer,
   Empty,
@@ -23,17 +22,16 @@ import {
 import { PlusOutlined } from '@ant-design/icons';
 import { formatNumberId, parseIntegerIdInput } from '../../utils/formatters/numberId';
 import { formatCurrencyId } from '../../utils/formatters/currencyId';
-import { formatDateId } from '../../utils/formatters/dateId';
 import FilterBar from '../../components/Layout/Filters/FilterBar';
 import PageHeader from '../../components/Layout/Page/PageHeader';
 import PageSection from '../../components/Layout/Page/PageSection';
 import SummaryStatGrid from '../../components/Layout/Display/SummaryStatGrid';
 import StockDisplayBlock from '../../components/Layout/Table/StockDisplayBlock';
 import DataTableView from '../../components/Layout/Table/DataTableView';
-import MobileDetailDrawer from '../../components/Layout/Mobile/MobileDetailDrawer';
 import InfoPopoverButton from '../../components/Layout/Feedback/InfoPopoverButton';
 import ResponsiveFormSection from '../../components/Layout/Mobile/ResponsiveFormSection';
 import MasterRecordActions from './components/MasterRecordActions';
+import ProductDetailDrawer from './components/ProductDetailDrawer';
 import { buildMasterRecordMobileActions } from './components/masterRecordActionHelpers';
 import { listCategories } from '../../data/repositories/categoriesRepository';
 import { CATEGORY_TYPES } from '../../constants/categoryOptions';
@@ -975,7 +973,7 @@ const Products = () => {
                           disabled={fields.length === 1 || isGuardedVariantStock(field.name)}
                           onClick={() => remove(field.name)}
                         >
-                          Hapus Varian
+                          Arsipkan Varian
                         </Button>
                       </Card>
                     ))}
@@ -1039,135 +1037,14 @@ const Products = () => {
         </Form>
       </Drawer>
 
-      {/* =====================================================
-          SECTION: Product Detail Drawer — AKTIF
-          Fungsi:
-          - Menata ringkasan produk, harga, stok, varian, dan catatan dalam section yang mudah dibaca.
-
-          Dipakai oleh:
-          - Halaman Master Data / Produk Jadi saat user membuka tombol Detail.
-
-          Alasan perubahan:
-          - Drawer lama menampilkan semua data dalam satu blok sehingga harga, stok, dan varian kurang cepat dibaca.
-
-          Catatan cleanup:
-          - Belum ada.
-
-          Risiko:
-          - Jangan ubah mapping stok, varian, pricing, HPP, atau handler detail dari section presentasi ini.
-      ===================================================== */}
-      <MobileDetailDrawer title="Detail Produk" open={detailVisible} onClose={() => setDetailVisible(false)} width={900} destroyOnClose>
-        {selectedProduct ? (() => {
-          const stockSummary = getProductStockSummary(selectedProduct);
-          const statusMeta = getProductStatusMeta(selectedProduct);
-
-          return (
-            <Space direction="vertical" style={{ width: '100%' }} size={16}>
-              <Card size="small">
-                <Space direction="vertical" size={8} style={{ width: '100%' }}>
-                  <Space size={[8, 8]} wrap>
-                    <Text strong style={{ fontSize: 18 }}>{selectedProduct.name || '-'}</Text>
-                    <Tag className="ims-status-tag" color={statusMeta.color}>{statusMeta.label}</Tag>
-                    {selectedProduct.hasVariants ? <Tag color="blue">Pakai Varian</Tag> : <Tag>Tanpa Varian</Tag>}
-                  </Space>
-                  <Text type="secondary">{resolveProductCategoryLabel(selectedProduct)}</Text>
-                  {resolveProductFlowerTypeLabel(selectedProduct) ? (
-                    <Text type="secondary">Jenis bunga: {resolveProductFlowerTypeLabel(selectedProduct)}</Text>
-                  ) : null}
-                </Space>
-              </Card>
-
-              <Row gutter={[12, 12]}>
-                <Col xs={24} md={8}>
-                  <Card size="small"><Statistic title="Harga Jual" value={formatCurrencyId(selectedProduct.price)} formatter={(value) => value} /></Card>
-                </Col>
-                <Col xs={24} md={8}>
-                  <Card size="small"><Statistic title="HPP / Unit" value={formatCurrencyId(selectedProduct.hppPerUnit)} formatter={(value) => value} /></Card>
-                </Col>
-                <Col xs={24} md={8}>
-                  <Card size="small"><Statistic title="Stok Tersedia" value={`${formatNumberId(stockSummary.availableStock)} pcs`} formatter={(value) => value} /></Card>
-                </Col>
-              </Row>
-
-              <Card size="small" title="Ringkasan">
-                <Descriptions bordered column={1} size="small">
-                  <Descriptions.Item label="Bentuk Produk">{resolveProductCategoryLabel(selectedProduct)}</Descriptions.Item>
-                  <Descriptions.Item label="Jenis Bunga">{resolveProductFlowerTypeLabel(selectedProduct) || '-'}</Descriptions.Item>
-                  <Descriptions.Item label="Mode Pricing">{getRuleModeLabel(selectedProduct.pricingMode, selectedProduct.pricingRuleId, pricingRuleMap)}</Descriptions.Item>
-                  <Descriptions.Item label="Pricing Rule">{pricingRuleMap[selectedProduct.pricingRuleId] || '-'}</Descriptions.Item>
-                  <Descriptions.Item label="Minimum Stok">{formatStockWithUnit(selectedProduct.minStockAlert)}</Descriptions.Item>
-                  <Descriptions.Item label="Update Terakhir">{formatDateId(selectedProduct.updatedAt, true)}</Descriptions.Item>
-                </Descriptions>
-              </Card>
-
-              <Card size="small" title={selectedProduct.hasVariants ? 'Varian Produk' : 'Stok Master'}>
-                {selectedProduct.hasVariants ? (
-                  <DataTableView
-                    className="ims-table"
-                    rowKey={(record, index) => `${selectedProduct.id}-${record.variantKey || record.color || index}`}
-                    pagination={false}
-                    size="small"
-                    showRefreshIndicator={false}
-                    dataSource={selectedProduct.variants || []}
-                    mobileCardConfig={{
-                      title: (variant, index) => getVariantDisplayLabel(variant, index),
-                      tags: (variant) => (
-                        <Tag className="ims-status-tag" color={variant.isActive === false ? 'default' : 'green'}>
-                          {variant.isActive === false ? 'Nonaktif' : 'Aktif'}
-                        </Tag>
-                      ),
-                      meta: [
-                        { label: 'Stok', value: (variant) => formatStockWithUnit(variant.currentStock || 0) },
-                        { label: 'Reserved', value: (variant) => formatStockWithUnit(variant.reservedStock || 0) },
-                        {
-                          label: 'Tersedia',
-                          value: (variant) => formatStockWithUnit(
-                            Math.max(Number(variant.currentStock || 0) - Number(variant.reservedStock || 0), 0),
-                          ),
-                        },
-                      ],
-                    }}
-                    columns={[
-                      {
-                        title: selectedProduct.variantLabel || 'Varian',
-                        dataIndex: 'color',
-                        render: (_, variant, index) => getVariantDisplayLabel(variant, index),
-                      },
-                      { title: 'Stok', dataIndex: 'currentStock', render: (value) => formatStockWithUnit(value || 0) },
-                      { title: 'Reserved', dataIndex: 'reservedStock', render: (value) => formatStockWithUnit(value || 0) },
-                      {
-                        title: 'Tersedia',
-                        key: 'availableStock',
-                        render: (_, variant) => formatStockWithUnit(
-                          Math.max(Number(variant.currentStock || 0) - Number(variant.reservedStock || 0), 0),
-                        ),
-                      },
-                      {
-                        title: 'Status',
-                        dataIndex: 'isActive',
-                        render: (value) => <Tag className="ims-status-tag" color={value === false ? 'default' : 'green'}>{value === false ? 'Nonaktif' : 'Aktif'}</Tag>,
-                      },
-                    ]}
-                  />
-                ) : (
-                  <Descriptions bordered column={1} size="small">
-                    <Descriptions.Item label="Stok Total">{formatStockWithUnit(stockSummary.currentStock)}</Descriptions.Item>
-                    <Descriptions.Item label="Reserved Stock">{formatStockWithUnit(stockSummary.reservedStock)}</Descriptions.Item>
-                    <Descriptions.Item label="Stok Tersedia">{formatStockWithUnit(stockSummary.availableStock)}</Descriptions.Item>
-                    <Descriptions.Item label="Minimum Stok">{formatStockWithUnit(selectedProduct.minStockAlert)}</Descriptions.Item>
-                  </Descriptions>
-                )}
-              </Card>
-
-              {selectedProduct.description ? (
-                <Card size="small" title="Catatan">
-                  <Text>{selectedProduct.description}</Text>
-                </Card>
-              ) : null}
-            </Space>
-          );
-        })() : null}
-      </MobileDetailDrawer>
+      <ProductDetailDrawer
+        open={detailVisible}
+        onClose={() => setDetailVisible(false)}
+        product={selectedProduct}
+        pricingRuleMap={pricingRuleMap}
+        resolveCategoryLabel={resolveProductCategoryLabel}
+        resolveFlowerTypeLabel={resolveProductFlowerTypeLabel}
+      />
     </div>
   );
 };

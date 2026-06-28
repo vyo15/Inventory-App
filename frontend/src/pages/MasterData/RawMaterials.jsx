@@ -3,7 +3,6 @@ import {
   Button,
   Card,
   Col,
-  Descriptions,
   Divider,
   Drawer,
   Empty,
@@ -18,11 +17,9 @@ import {
   Typography,
   message,
 } from 'antd';
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { PlusOutlined, StopOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { formatNumberId } from '../../utils/formatters/numberId';
-import { formatCurrencyId } from '../../utils/formatters/currencyId';
-import { formatDateId } from '../../utils/formatters/dateId';
 import FilterBar from '../../components/Layout/Filters/FilterBar';
 import PageHeader from '../../components/Layout/Page/PageHeader';
 import PageSection from '../../components/Layout/Page/PageSection';
@@ -47,9 +44,9 @@ import {
   ensureAtLeastOneRawMaterialVariant,
 } from '../../utils/variants/rawMaterialVariantHelpers';
 import DataTableView from "../../components/Layout/Table/DataTableView";
-import MobileDetailDrawer from '../../components/Layout/Mobile/MobileDetailDrawer';
 import ResponsiveFormSection from '../../components/Layout/Mobile/ResponsiveFormSection';
 import MasterRecordActions from './components/MasterRecordActions';
+import RawMaterialDetailDrawer from './components/RawMaterialDetailDrawer';
 import { buildMasterRecordMobileActions } from './components/masterRecordActionHelpers';
 import { isVariantStockEmpty } from '../../utils/variants/variantArchiveHelpers';
 
@@ -68,7 +65,6 @@ import {
   getPurchaseProductLink,
   getRawMaterialStatusMeta,
   getRawMaterialStockSummary,
-  getRuleModeLabel,
   getActiveSupplierOffersForMaterial,
   getRawMaterialMinimumStockDisplay,
   getSupplierCatalogSummaryForMaterial,
@@ -1012,11 +1008,11 @@ const RawMaterials = () => {
                           <Button
                             danger
                             type="text"
-                            icon={<DeleteOutlined />}
+                            icon={<StopOutlined />}
                             disabled={fields.length === 1 || isGuardedVariantStock(field.name)}
                             onClick={() => remove(field.name)}
                           >
-                            Hapus
+                            Arsipkan Varian
                           </Button>
                         }
                       >
@@ -1155,235 +1151,20 @@ const RawMaterials = () => {
         </Form>
       </Drawer>
 
-      {/* =====================================================
-          SECTION: Raw Material Detail Drawer — AKTIF
-          Fungsi:
-          - Menata ringkasan bahan, stok, harga, supplier, varian, dan link restock dalam section yang mudah dibaca.
-
-          Dipakai oleh:
-          - Halaman Master Data / Bahan Baku saat user membuka tombol Detail.
-
-          Alasan perubahan:
-          - Drawer lama terlalu padat dalam satu Descriptions dan membuat stok, cost, supplier, serta varian kurang cepat dipahami.
-
-          Catatan cleanup:
-          - Belum ada.
-
-          Risiko:
-          - Jangan ubah mapping stok, average cost, supplier snapshot, varian, purchase linkage, atau handler detail dari section presentasi ini.
-      ===================================================== */}
-      <MobileDetailDrawer
-        title="Detail Bahan Baku"
+      <RawMaterialDetailDrawer
         open={detailVisible}
         onClose={() => setDetailVisible(false)}
-        width={900}
-        destroyOnClose
-      >
-        {selectedMaterial ? (() => {
-          const stockSummary = getRawMaterialStockSummary(selectedMaterial);
-          const statusMeta = getRawMaterialStatusMeta(selectedMaterial);
-
-          return (
-            <Space direction="vertical" style={{ width: '100%' }} size={16}>
-              <Card size="small">
-                <Space direction="vertical" size={8} style={{ width: '100%' }}>
-                  <Space size={[8, 8]} wrap>
-                    <Text strong style={{ fontSize: 18 }}>{selectedMaterial.name || '-'}</Text>
-                    <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
-                    <Tag color={selectedMaterial.hasVariants ? 'blue' : 'default'}>
-                      {selectedMaterial.hasVariants ? 'Pakai Varian' : 'Tanpa Varian'}
-                    </Tag>
-                  </Space>
-                  <Text type="secondary">{resolveMaterialCategoryLabel(selectedMaterial)}</Text>
-                  <Text type="secondary">Satuan stok: {selectedMaterial.stockUnit || '-'}</Text>
-                </Space>
-              </Card>
-
-              <Row gutter={[12, 12]}>
-                <Col xs={24} md={8}>
-                  <Card size="small">
-                    <Text type="secondary">Stok Tersedia</Text>
-                    <div style={{ fontWeight: 700, fontSize: 20 }}>{formatStockWithUnit(stockSummary.availableStock, selectedMaterial.stockUnit || 'pcs')}</div>
-                  </Card>
-                </Col>
-                <Col xs={24} md={8}>
-                  <Card size="small">
-                    <Text type="secondary">Modal Aktual Rata-rata</Text>
-                    <div style={{ fontWeight: 700, fontSize: 20 }}>{selectedMaterial.averageActualUnitCost ? formatCurrencyId(selectedMaterial.averageActualUnitCost) : '-'}</div>
-                  </Card>
-                </Col>
-                <Col xs={24} md={8}>
-                  <Card size="small">
-                    <Text type="secondary">Harga Referensi</Text>
-                    <div style={{ fontWeight: 700, fontSize: 20 }}>{formatCurrencyId(selectedMaterial.restockReferencePrice || 0)}</div>
-                  </Card>
-                </Col>
-              </Row>
-
-              <Card size="small" title="Ringkasan">
-                <Descriptions bordered column={1} size="small">
-                  <Descriptions.Item label="Kelompok Bahan">
-                    {resolveMaterialCategoryLabel(selectedMaterial)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={selectedMaterial.hasVariants ? 'Minimum Stok Total Varian' : 'Minimum Stok'}>
-                    {formatStockWithUnit(
-                      getRawMaterialMinimumStockDisplay(selectedMaterial),
-                      selectedMaterial.stockUnit || 'pcs',
-                    )}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Sumber Restock">
-                    <Space size={8} wrap>
-                      <Text strong>{getSupplierCatalogSummaryForMaterial(suppliers, selectedMaterial.id).label}</Text>
-                      <Button
-                        size="small"
-                        onClick={() => navigate(buildSupplierDetailRoute(selectedMaterial.id))}
-                      >
-                        {getSupplierCatalogSummaryForMaterial(suppliers, selectedMaterial.id).offerCount > 0
-                          ? 'Bandingkan Supplier'
-                          : 'Atur Sumber Restock'}
-                      </Button>
-                    </Space>
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Supplier Pembelian Terakhir">
-                    {detailLatestPurchase ? detailRestockSupplier.name : '-'}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Harga Jual">
-                    {`${formatCurrencyId(selectedMaterial.sellingPrice || 0)} / ${selectedMaterial.stockUnit || '-'}`}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Mode Pricing">
-                    {getRuleModeLabel(selectedMaterial.pricingMode, selectedMaterial.pricingRuleId, pricingRuleMap)}
-                  </Descriptions.Item>
-                  {selectedMaterial.specifications ? (
-                    <Descriptions.Item label="Spesifikasi">{selectedMaterial.specifications}</Descriptions.Item>
-                  ) : null}
-                  {selectedMaterial.notes ? (
-                    <Descriptions.Item label="Catatan Internal">{selectedMaterial.notes}</Descriptions.Item>
-                  ) : null}
-                  <Descriptions.Item label="Update Terakhir">
-                    {formatDateId(selectedMaterial.updatedAt, true)}
-                  </Descriptions.Item>
-                </Descriptions>
-              </Card>
-
-              <Card size="small" title="Link Restock Terakhir">
-                <Space direction="vertical" size={6}>
-                  {detailLatestPurchase ? (
-                    <Text type="secondary">
-                      {`Pembelian terakhir: ${formatDateId(detailLatestPurchase.date || detailLatestPurchase.purchaseDate || detailLatestPurchase.createdAt, true)}`}
-                    </Text>
-                  ) : null}
-                  {detailLatestPurchaseLink ? (
-                    <Button
-                      size="small"
-                      type="primary"
-                      href={detailLatestPurchaseLink}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Buka Link Produk
-                    </Button>
-                  ) : (
-                    <Text type="secondary">Belum ada link produk dari pembelian terakhir.</Text>
-                  )}
-                </Space>
-              </Card>
-
-              <Card size="small" title={selectedMaterial.hasVariants ? 'Varian Bahan Baku' : 'Stok Master'}>
-                {selectedMaterial.hasVariants ? (
-                  <DataTableView
-                    rowKey={(variant, index) => `${selectedMaterial.id}-${variant.variantKey || variant.name}-${index}`}
-                    pagination={false}
-                    size="small"
-                    showRefreshIndicator={false}
-                    dataSource={selectedMaterial.variants || []}
-                    mobileCardConfig={{
-                      title: (variant) => variant.name || variant.variantLabel || variant.variantKey || 'Varian',
-                      tags: (variant) => (
-                        <Tag color={variant.isActive === false ? 'default' : 'green'}>
-                          {variant.isActive === false ? 'Nonaktif' : 'Aktif'}
-                        </Tag>
-                      ),
-                      meta: [
-                        { label: 'Stok', value: (variant) => formatStockWithUnit(variant.currentStock || 0, selectedMaterial.stockUnit || 'pcs') },
-                        { label: 'Reserved', value: (variant) => formatStockWithUnit(variant.reservedStock || 0, selectedMaterial.stockUnit || 'pcs') },
-                        { label: 'Minimum', value: (variant) => formatStockWithUnit(getVariantMinimumStock(variant, 0), selectedMaterial.stockUnit || 'pcs') },
-                        {
-                          label: 'Tersedia',
-                          value: (variant) => formatStockWithUnit(
-                            Math.max(Number(variant.currentStock || 0) - Number(variant.reservedStock || 0), 0),
-                            selectedMaterial.stockUnit || 'pcs',
-                          ),
-                        },
-                      ],
-                    }}
-                    columns={[
-                      {
-                        title: selectedMaterial.variantLabel || 'Varian',
-                        dataIndex: 'name',
-                        key: 'name',
-                        render: (value) => value || '-',
-                      },
-                      {
-                        title: 'Stok',
-                        dataIndex: 'currentStock',
-                        key: 'currentStock',
-                        render: (value) => formatStockWithUnit(value || 0, selectedMaterial.stockUnit || 'pcs'),
-                      },
-                      {
-                        title: 'Reserved',
-                        dataIndex: 'reservedStock',
-                        key: 'reservedStock',
-                        render: (value) => formatStockWithUnit(value || 0, selectedMaterial.stockUnit || 'pcs'),
-                      },
-                      {
-                        title: 'Minimum',
-                        key: 'minStockAlert',
-                        render: (_, variant) => formatStockWithUnit(
-                          getVariantMinimumStock(variant, 0),
-                          selectedMaterial.stockUnit || 'pcs',
-                        ),
-                      },
-                      {
-                        title: 'Tersedia',
-                        key: 'availableStock',
-                        render: (_, variant) => formatStockWithUnit(
-                          Math.max(Number(variant.currentStock || 0) - Number(variant.reservedStock || 0), 0),
-                          selectedMaterial.stockUnit || 'pcs',
-                        ),
-                      },
-                      {
-                        title: 'Status',
-                        dataIndex: 'isActive',
-                        key: 'isActive',
-                        render: (value) => (
-                          <Tag color={value === false ? 'default' : 'green'}>
-                            {value === false ? 'Nonaktif' : 'Aktif'}
-                          </Tag>
-                        ),
-                      },
-                    ]}
-                  />
-                ) : (
-                  <Descriptions bordered column={1} size="small">
-                    <Descriptions.Item label="Stok Total">
-                      {formatStockWithUnit(stockSummary.currentStock, selectedMaterial.stockUnit || 'pcs')}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="Reserved Stock">
-                      {formatStockWithUnit(stockSummary.reservedStock, selectedMaterial.stockUnit || 'pcs')}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="Stok Tersedia">
-                      {formatStockWithUnit(stockSummary.availableStock, selectedMaterial.stockUnit || 'pcs')}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="Minimum Stok">
-                      {formatStockWithUnit(getRawMaterialMinimumStockDisplay(selectedMaterial), selectedMaterial.stockUnit || 'pcs')}
-                    </Descriptions.Item>
-                  </Descriptions>
-                )}
-              </Card>
-            </Space>
-          );
-        })() : null}
-      </MobileDetailDrawer>
+        material={selectedMaterial}
+        suppliers={suppliers}
+        latestPurchase={detailLatestPurchase}
+        latestPurchaseLink={detailLatestPurchaseLink}
+        restockSupplier={detailRestockSupplier}
+        pricingRuleMap={pricingRuleMap}
+        resolveCategoryLabel={resolveMaterialCategoryLabel}
+        getSupplierCatalogSummary={getSupplierCatalogSummaryForMaterial}
+        buildSupplierRoute={buildSupplierDetailRoute}
+        navigate={navigate}
+      />
     </div>
   );
 };

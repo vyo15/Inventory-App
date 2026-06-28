@@ -1,7 +1,7 @@
 const {
   createInventoryMasterRouteGuards,
   resolveInventoryVariantCollection,
-} = require("../../utils/sqliteStockEngine");
+} = require("../stock/engine");
 const { safeJsonParse } = require("../../utils/jsonUtils");
 
 const RAW_MATERIAL_VALUATION_FIELDS = ["averageActualUnitCost"];

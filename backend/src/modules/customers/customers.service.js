@@ -1,12 +1,13 @@
 const { getDb, runInTransaction } = require("../../db/connection");
+const businessCodeContract = require("../../../../shared/businessCodeContract.json");
 const { createAuditLog } = require("../../utils/auditLog");
 const {
   getBusinessCodePreview,
   resolveBusinessCode,
 } = require("../../utils/businessCodeCounter");
 
-const CUSTOMER_CODE_PREFIX = "CUS";
-const CUSTOMER_CODE_PATTERN = /^CUS-\d{8}-\d{3,}$/;
+const CUSTOMER_CODE_PREFIX = businessCodeContract.customer.prefix;
+const CUSTOMER_CODE_PATTERN = new RegExp(businessCodeContract.customer.pattern);
 
 const normalizeText = (value) => (value || "").toString().trim();
 const normalizeCode = (value) => normalizeText(value).toUpperCase();

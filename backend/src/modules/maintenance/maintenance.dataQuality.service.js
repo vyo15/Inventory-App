@@ -1,14 +1,18 @@
+const fs = require("fs");
 const {
   getDb,
+  getDatabaseGeneration,
   getDbPath,
   getDbQueueStatus,
   runInTransaction,
   runSerializedDbOperation,
 } = require("../../db/connection");
+const { TABLES } = require("../../db/schema");
 const env = require("../../config/env");
 const { createAuditLog } = require("../../utils/auditLog");
 const { safeJsonParse } = require("../../utils/jsonUtils");
-const { upsertStockReadModel } = require("../../utils/sqliteStockEngine");
+const { upsertStockReadModel } = require("../stock/engine");
+const { getRealtimeRuntimeStatus } = require("../realtime/realtime.service");
 const {
   buildStockReadModelSourceAuditRow,
   getSnapshotIssues,
@@ -18,12 +22,19 @@ const {
   toInventoryMasterPayload,
 } = require("./maintenance.auditHelpers");
 const {
+  BACKUP_LIFECYCLE_INTERVAL_MS,
   RESTORE_CONFIRM_KEYWORD,
   createOfficialSqliteBackup,
   enrichBackupLog,
-} = require("../../utils/sqliteBackup");
+  getBackupLifecycleRuntimeStatus,
+  getTableCounts,
+} = require("./backup");
 
 const STOCK_READ_MODEL_CLEANUP_CONFIRM_KEYWORD = "BERSIHKAN DATA STOK";
+const MAINTENANCE_STATUS_CONTRACT_VERSION = 3;
+const BACKEND_STARTED_AT = new Date(Date.now() - Math.round(process.uptime() * 1000)).toISOString();
+const BACKEND_RUNTIME_INSTANCE_ID = `${process.pid}-${Date.now().toString(36)}`;
+const EXPECTED_SQLITE_TABLES = Object.freeze(Object.values(TABLES));
 
 const STOCK_READ_MODEL_SOURCES = Object.freeze([
   { sourceType: "product", sourceCollection: "products", sourceLabel: "Produk" },
@@ -135,6 +146,72 @@ const buildMasterDataExportPayload = async ({ includeOpeningStock = true } = {})
   };
 };
 
+
+let tableRecordStatusCapabilityCache = null;
+
+const getTableRecordStatusCapabilities = async (db) => {
+  if (tableRecordStatusCapabilityCache) return tableRecordStatusCapabilityCache;
+
+  const capabilities = {};
+  for (const tableName of EXPECTED_SQLITE_TABLES) {
+    const columns = await db.all(`PRAGMA table_info(${tableName})`);
+    const columnNames = new Set(columns.map((column) => column.name));
+    capabilities[tableName] = {
+      hasStatus: columnNames.has("status"),
+      hasIsActive: columnNames.has("is_active"),
+    };
+  }
+  tableRecordStatusCapabilityCache = capabilities;
+  return capabilities;
+};
+
+const getTableRecordStatusCounts = async (db) => {
+  const result = {};
+  const capabilities = await getTableRecordStatusCapabilities(db);
+
+  for (const tableName of EXPECTED_SQLITE_TABLES) {
+    const { hasStatus, hasIsActive } = capabilities[tableName] || {};
+
+    if (!hasStatus && !hasIsActive) {
+      const row = await db.get(`SELECT COUNT(*) AS stored_total FROM ${tableName}`);
+      const storedTotal = Number(row?.stored_total || 0);
+      result[tableName] = {
+        storedTotal,
+        active: storedTotal,
+        inactive: 0,
+        deleted: 0,
+        statusAware: false,
+      };
+      continue;
+    }
+
+    const statusExpression = hasStatus ? "LOWER(COALESCE(status, 'active'))" : "'active'";
+    const activeExpression = hasIsActive
+      ? `${statusExpression} NOT IN ('inactive', 'deleted') AND COALESCE(is_active, 1) <> 0`
+      : `${statusExpression} NOT IN ('inactive', 'deleted')`;
+    const inactiveExpression = hasIsActive
+      ? `(${statusExpression} = 'inactive' OR (${statusExpression} <> 'deleted' AND COALESCE(is_active, 1) = 0))`
+      : `${statusExpression} = 'inactive'`;
+    const row = await db.get(
+      `SELECT
+         COUNT(*) AS stored_total,
+         SUM(CASE WHEN ${activeExpression} THEN 1 ELSE 0 END) AS active_count,
+         SUM(CASE WHEN ${inactiveExpression} THEN 1 ELSE 0 END) AS inactive_count,
+         SUM(CASE WHEN ${statusExpression} = 'deleted' THEN 1 ELSE 0 END) AS deleted_count
+       FROM ${tableName}`
+    );
+
+    result[tableName] = {
+      storedTotal: Number(row?.stored_total || 0),
+      active: Number(row?.active_count || 0),
+      inactive: Number(row?.inactive_count || 0),
+      deleted: Number(row?.deleted_count || 0),
+      statusAware: true,
+    };
+  }
+  return result;
+};
+
 const buildStockReadModelAudit = async (db) => {
   const sourceRows = [];
   const sourceMap = new Map();
@@ -242,6 +319,137 @@ const runDatabaseIntegrityChecks = async (db) => {
   };
 };
 
+const buildFinanceLedgerAudit = async (db) => {
+  const [incomeRows, expenseRows, ledgerRows] = await Promise.all([
+    db.all("SELECT * FROM incomes ORDER BY updated_at DESC"),
+    db.all("SELECT * FROM expenses ORDER BY updated_at DESC"),
+    db.all("SELECT * FROM money_movement_ledger ORDER BY updated_at DESC"),
+  ]);
+  const movements = [
+    ...incomeRows.map((row) => ({ ...row, movementTable: "incomes", expectedDirection: "in" })),
+    ...expenseRows.map((row) => ({ ...row, movementTable: "expenses", expectedDirection: "out" })),
+  ];
+  const movementById = new Map(movements.map((row) => [String(row.id), row]));
+  const issues = [];
+  const normalizeStatus = (value = "") => String(value || "").trim().toLowerCase();
+  const isActive = (row) => normalizeStatus(row.status) !== "deleted";
+  const toAmount = (row) => Number(row.total_amount || 0);
+  const toPayload = (row) => safeJsonParse(row.payload_json, {});
+  const getLedgerMatches = (movement) => ledgerRows.filter((ledger) => (
+    String(ledger.id) === `ledger_${movement.id}`
+      || String(ledger.source_id || "") === String(movement.id)
+  ));
+
+  for (const movement of movements.filter(isActive)) {
+    const matches = getLedgerMatches(movement);
+    const activeMatches = matches.filter(isActive);
+    const deletedMatches = matches.filter((row) => !isActive(row));
+    const reference = movement.code || movement.id;
+
+    if (activeMatches.length === 0) {
+      issues.push({
+        issueType: deletedMatches.length ? "ledger_deleted_for_active_movement" : "missing_ledger",
+        collectionName: movement.movementTable,
+        reference,
+        issue: deletedMatches.length
+          ? "Transaksi kas aktif hanya memiliki pasangan ledger yang sudah deleted."
+          : "Transaksi kas aktif belum memiliki pasangan ledger aktif.",
+      });
+      continue;
+    }
+
+    if (activeMatches.length > 1) {
+      issues.push({
+        issueType: "duplicate_ledger",
+        collectionName: movement.movementTable,
+        reference,
+        issue: `Transaksi kas memiliki ${activeMatches.length} pasangan ledger aktif.`,
+      });
+    }
+
+    for (const ledger of activeMatches) {
+      const ledgerPayload = toPayload(ledger);
+      const direction = String(ledgerPayload.direction || "").toLowerCase();
+      const movementAmount = Math.abs(toAmount(movement));
+      const ledgerAmount = Math.abs(toAmount(ledger));
+      if (movementAmount !== ledgerAmount) {
+        issues.push({
+          issueType: "amount_mismatch",
+          collectionName: movement.movementTable,
+          reference,
+          issue: `Nominal kas ${movementAmount} berbeda dengan ledger ${ledgerAmount}.`,
+        });
+      }
+      if (direction && direction !== movement.expectedDirection) {
+        issues.push({
+          issueType: "direction_mismatch",
+          collectionName: movement.movementTable,
+          reference,
+          issue: `Arah ledger ${direction} tidak sesuai dengan transaksi ${movement.expectedDirection}.`,
+        });
+      }
+      const movementPayload = toPayload(movement);
+      const expectedSourceType = String(movementPayload.sourceModule || "").trim().toLowerCase();
+      const actualSourceType = String(ledger.source_type || "").trim().toLowerCase();
+      if (String(ledger.source_id || "") !== String(movement.id)) {
+        issues.push({
+          issueType: "source_id_mismatch",
+          collectionName: movement.movementTable,
+          reference,
+          issue: `Source ID ledger ${ledger.source_id || "-"} tidak sesuai dengan transaksi ${movement.id}.`,
+        });
+      }
+      if (expectedSourceType && actualSourceType !== expectedSourceType) {
+        issues.push({
+          issueType: "source_type_mismatch",
+          collectionName: movement.movementTable,
+          reference,
+          issue: `Source type ledger ${ledger.source_type || "-"} tidak sesuai dengan ${movementPayload.sourceModule}.`,
+        });
+      }
+      const debit = Number(ledgerPayload.debit || 0);
+      const credit = Number(ledgerPayload.credit || 0);
+      if (
+        (movement.expectedDirection === "in" && (debit !== ledgerAmount || credit !== 0))
+        || (movement.expectedDirection === "out" && (credit !== ledgerAmount || debit !== 0))
+      ) {
+        issues.push({
+          issueType: "debit_credit_mismatch",
+          collectionName: movement.movementTable,
+          reference,
+          issue: "Nilai debit/credit ledger tidak sesuai dengan arah transaksi kas.",
+        });
+      }
+    }
+  }
+
+  for (const ledger of ledgerRows.filter(isActive)) {
+    const sourceLinkedId = String(ledger.source_id || "");
+    const idLinkedId = String(ledger.id || "").replace(/^ledger_/, "");
+    const movement = movementById.get(sourceLinkedId) || movementById.get(idLinkedId);
+    if (!movement) {
+      issues.push({
+        issueType: "orphan_ledger",
+        collectionName: "money_movement_ledger",
+        reference: ledger.code || ledger.id,
+        issue: "Ledger aktif tidak memiliki source transaksi kas.",
+      });
+    } else if (!isActive(movement)) {
+      issues.push({
+        issueType: "active_ledger_for_deleted_movement",
+        collectionName: "money_movement_ledger",
+        reference: ledger.code || ledger.id,
+        issue: "Ledger masih aktif sementara source transaksi kas sudah deleted.",
+      });
+    }
+  }
+
+  return {
+    issues,
+    checkedRecords: movements.length + ledgerRows.length,
+  };
+};
+
 const buildDataQualityAudit = async (db) => {
   const categories = [];
   const { integrityRows, foreignKeyRows, integrityIssues } = await runDatabaseIntegrityChecks(db);
@@ -264,23 +472,29 @@ const buildDataQualityAudit = async (db) => {
 
   const inventoryIssues = [];
   let inventoryChecked = 0;
+  let inventoryIssueCount = 0;
   for (const sourceConfig of STOCK_READ_MODEL_SOURCES) {
-    const totals = await db.get(`SELECT COUNT(*) AS count FROM ${sourceConfig.sourceCollection} WHERE status != 'deleted'`);
+    const issueWhere = `status != 'deleted'
+      AND (
+        current_stock < 0
+        OR reserved_stock < 0
+        OR available_stock < 0
+        OR reserved_stock > current_stock
+        OR available_stock != (current_stock - reserved_stock)
+      )`;
+    const [totals, issueTotals, rows] = await Promise.all([
+      db.get(`SELECT COUNT(*) AS count FROM ${sourceConfig.sourceCollection} WHERE status != 'deleted'`),
+      db.get(`SELECT COUNT(*) AS count FROM ${sourceConfig.sourceCollection} WHERE ${issueWhere}`),
+      db.all(
+        `SELECT id, code, name, current_stock, reserved_stock, available_stock
+         FROM ${sourceConfig.sourceCollection}
+         WHERE ${issueWhere}
+         ORDER BY updated_at DESC
+         LIMIT 50`,
+      ),
+    ]);
     inventoryChecked += Number(totals?.count || 0);
-    const rows = await db.all(
-      `SELECT id, code, name, current_stock, reserved_stock, available_stock
-       FROM ${sourceConfig.sourceCollection}
-       WHERE status != 'deleted'
-         AND (
-           current_stock < 0
-           OR reserved_stock < 0
-           OR available_stock < 0
-           OR reserved_stock > current_stock
-           OR available_stock != (current_stock - reserved_stock)
-         )
-       ORDER BY updated_at DESC
-       LIMIT 50`,
-    );
+    inventoryIssueCount += Number(issueTotals?.count || 0);
     inventoryIssues.push(...rows.map((row) => ({
       collectionName: sourceConfig.sourceLabel,
       reference: row.code || row.id,
@@ -293,8 +507,10 @@ const buildDataQualityAudit = async (db) => {
     key: "inventory_invariants",
     label: "Invariant Stok Master",
     collection: "inventory_master",
-    count: inventoryIssues.length,
+    count: inventoryIssueCount,
     checkedRecords: inventoryChecked,
+    isTruncated: inventoryIssueCount > inventoryIssues.length,
+    sampleCount: inventoryIssues.length,
     samples: inventoryIssues.slice(0, 10),
     recommendation: "Jangan repair stok master otomatis. Review transaksi, inventory log, dan sumber perubahan sebelum koreksi guarded.",
   });
@@ -320,7 +536,7 @@ const buildDataQualityAudit = async (db) => {
   });
 
   const backupRows = await db.all(
-    "SELECT id, filename, path, status FROM backup_logs WHERE status != 'retention_deleted' ORDER BY id DESC LIMIT 500",
+    "SELECT id, filename, path, status FROM backup_logs WHERE status != 'retention_deleted' ORDER BY id DESC",
   );
   const missingBackupFiles = backupRows.filter((row) => !row.path || !fs.existsSync(row.path));
   categories.push({
@@ -329,6 +545,8 @@ const buildDataQualityAudit = async (db) => {
     collection: "backup_logs",
     count: missingBackupFiles.length,
     checkedRecords: backupRows.length,
+    isTruncated: missingBackupFiles.length > 10,
+    sampleCount: Math.min(missingBackupFiles.length, 10),
     samples: missingBackupFiles.slice(0, 10).map((row) => ({
       reference: row.filename || row.id,
       issue: "Log backup menunjuk ke file yang tidak ditemukan.",
@@ -336,46 +554,17 @@ const buildDataQualityAudit = async (db) => {
     recommendation: "Verifikasi media backup eksternal. Jangan menghapus log tanpa memastikan file memang sudah tidak diperlukan.",
   });
 
-  const financeIssues = await db.all(
-    `SELECT movement_table, movement_id, movement_code FROM (
-       SELECT 'incomes' AS movement_table, movement.id AS movement_id, movement.code AS movement_code
-       FROM incomes movement
-       LEFT JOIN money_movement_ledger ledger
-         ON (
-           ledger.id = ('ledger_' || movement.id)
-           OR (ledger.source_id = movement.id AND ledger.source_type = movement.source_type)
-         )
-        AND ledger.status != 'deleted'
-       WHERE movement.status != 'deleted' AND ledger.id IS NULL
-       UNION ALL
-       SELECT 'expenses' AS movement_table, movement.id AS movement_id, movement.code AS movement_code
-       FROM expenses movement
-       LEFT JOIN money_movement_ledger ledger
-         ON (
-           ledger.id = ('ledger_' || movement.id)
-           OR (ledger.source_id = movement.id AND ledger.source_type = movement.source_type)
-         )
-        AND ledger.status != 'deleted'
-       WHERE movement.status != 'deleted' AND ledger.id IS NULL
-     )
-     LIMIT 100`,
-  );
-  const financeCountRows = await Promise.all([
-    db.get("SELECT COUNT(*) AS count FROM incomes WHERE status != 'deleted'"),
-    db.get("SELECT COUNT(*) AS count FROM expenses WHERE status != 'deleted'"),
-  ]);
+  const financeAudit = await buildFinanceLedgerAudit(db);
   categories.push({
     key: "finance_ledger_pairs",
-    label: "Pasangan Kas dan Ledger",
+    label: "Rekonsiliasi Kas dan Ledger",
     collection: "money_movement_ledger",
-    count: financeIssues.length,
-    checkedRecords: financeCountRows.reduce((total, row) => total + Number(row?.count || 0), 0),
-    samples: financeIssues.slice(0, 10).map((row) => ({
-      collectionName: row.movement_table,
-      reference: row.movement_code || row.movement_id,
-      issue: "Transaksi kas aktif belum memiliki pasangan ledger aktif.",
-    })),
-    recommendation: "Review sumber transaksi dan audit log. Finance tidak diperbaiki otomatis oleh tool ini.",
+    count: financeAudit.issues.length,
+    checkedRecords: financeAudit.checkedRecords,
+    isTruncated: financeAudit.issues.length > 10,
+    sampleCount: Math.min(financeAudit.issues.length, 10),
+    samples: financeAudit.issues.slice(0, 10),
+    recommendation: "Review source transaksi, nominal, arah debit/credit, status, dan audit log. Finance tetap manual-review dan tidak diperbaiki otomatis.",
   });
 
   const summary = categories.reduce((result, category) => {
@@ -400,9 +589,28 @@ const buildDataQualityAudit = async (db) => {
   };
 };
 
-const getDataQualityAudit = async () => runSerializedDbOperation(async () => {
+const getDataQualityAudit = async ({ actor = "system" } = {}) => runSerializedDbOperation(async () => {
   const db = await getDb();
-  return buildDataQualityAudit(db);
+  const audit = await buildDataQualityAudit(db);
+  await createAuditLog({
+    module: "maintenance",
+    action: "data_quality_audit",
+    entityType: "database",
+    entityId: "sqlite",
+    actor,
+    description: "Audit kualitas data read-only dijalankan dari Maintenance",
+    metadata: {
+      auditedAt: audit.auditedAt,
+      summary: audit.summary,
+      categories: audit.categories.map((category) => ({
+        key: category.key,
+        count: category.count,
+        checkedRecords: category.checkedRecords,
+        isTruncated: category.isTruncated === true,
+      })),
+    },
+  });
+  return audit;
 }, { label: "maintenance_data_quality_audit" });
 
 const getStockReadModelMaintenanceAudit = async () => runSerializedDbOperation(async () => {
@@ -542,8 +750,11 @@ const deleteOrphanStockReadModels = async ({ confirmKeyword = "", actor = "syste
 
 const getMaintenanceStatus = async () => {
   const db = await getDb();
+  const backupLifecycle = getBackupLifecycleRuntimeStatus();
   const [
     schemaVersion,
+    tableCounts,
+    tableRecordStatusCounts,
     userCount,
     activeAdminCount,
     customerCount,
@@ -558,6 +769,8 @@ const getMaintenanceStatus = async () => {
     recentLegacyBearerMigrationCount,
   ] = await Promise.all([
     db.get("SELECT value FROM schema_meta WHERE key = 'schema_version'"),
+    getTableCounts(db),
+    getTableRecordStatusCounts(db),
     db.get("SELECT COUNT(*) AS count FROM users"),
     db.get("SELECT COUNT(*) AS count FROM users WHERE role = 'administrator' AND status = 'active'"),
     db.get("SELECT COUNT(*) AS count FROM customers WHERE status != 'deleted'"),
@@ -582,10 +795,56 @@ const getMaintenanceStatus = async () => {
     ),
   ]);
 
+  const missingTables = EXPECTED_SQLITE_TABLES.filter((tableName) => (
+    !Object.prototype.hasOwnProperty.call(tableCounts, tableName)
+  ));
+  const invalidCountTables = Object.entries(tableCounts)
+    .filter(([, value]) => !Number.isFinite(Number(value)) || Number(value) < 0)
+    .map(([tableName]) => tableName);
+  const unexpectedTables = Object.keys(tableCounts)
+    .filter((tableName) => !EXPECTED_SQLITE_TABLES.includes(tableName));
+  const summaryWithinStoredTotals = [
+    ["categories", Number(categoryCount?.count || 0)],
+    ["customers", Number(customerCount?.count || 0)],
+    ["suppliers", Number(supplierCount?.count || 0)],
+    ["audit_logs", Number(auditCount?.count || 0)],
+  ].every(([tableName, filteredCount]) => (
+    filteredCount <= Number(tableCounts?.[tableName] || 0)
+  ));
+  const databaseConsistency = {
+    healthy: missingTables.length === 0
+      && invalidCountTables.length === 0
+      && summaryWithinStoredTotals,
+    expectedTableCount: EXPECTED_SQLITE_TABLES.length,
+    discoveredTableCount: Object.keys(tableCounts).length,
+    missingTables,
+    invalidCountTables,
+    unexpectedTables,
+    summaryWithinStoredTotals,
+  };
+  const statusGeneratedAt = new Date().toISOString();
+
   return {
+    maintenanceStatusContractVersion: MAINTENANCE_STATUS_CONTRACT_VERSION,
+    capabilities: {
+      sqliteOnlyRuntime: true,
+      tableCounts: true,
+      tableRecordStatusCounts: true,
+      liveStatusRefresh: true,
+      realtimeEvents: true,
+      databaseConsistency: true,
+    },
+    statusGeneratedAt,
+    backendStartedAt: BACKEND_STARTED_AT,
+    backendRuntimeInstanceId: BACKEND_RUNTIME_INSTANCE_ID,
+    databaseGeneration: getDatabaseGeneration(),
+    databaseConsistency,
     dbPath: getDbPath(),
     backupDir: env.backupDir,
     schemaVersion: schemaVersion?.value || "unknown",
+    tableCounts,
+    tableRecordStatusCounts,
+    realtime: getRealtimeRuntimeStatus(),
     userCount: userCount?.count || 0,
     activeAdministratorCount: activeAdminCount?.count || 0,
     customerCount: customerCount?.count || 0,
@@ -598,12 +857,15 @@ const getMaintenanceStatus = async () => {
     migrationStatusCount: moduleRuntimeStatusCount?.count || 0,
     latestBackup: enrichBackupLog(latestBackup),
     backupFormat: "imsbackup_single_file_manifest_checksum",
+    backupLifecycle,
     backupPolicy: {
       folders: ["daily", "monthly", "manual"],
       manual: true,
-      autoDaily: true,
+      autoDaily: backupLifecycle.schedulerActive === true,
       dailyRetentionDays: 60,
-      autoMonthlyPromotion: true,
+      autoMonthlyPromotion: backupLifecycle.schedulerActive === true,
+      autoRetention: backupLifecycle.schedulerActive === true,
+      lifecycleIntervalMs: backupLifecycle.intervalMs || BACKUP_LIFECYCLE_INTERVAL_MS,
       monthlyRetentionCount: 12,
       manualAutoDelete: false,
       preRestoreStoredAsManual: true,
@@ -611,6 +873,8 @@ const getMaintenanceStatus = async () => {
       singleFilePackage: true,
       verifyChecksum: true,
       verifyIntegrityCheck: true,
+      zip64Supported: false,
+      diskSpacePreflight: true,
       externalCopyReminderDays: 7,
     },
     restoreMode: "guarded_confirm_keyword",
@@ -644,6 +908,7 @@ module.exports = {
   deleteOrphanStockReadModels,
   getDataQualityAudit,
   getMaintenanceStatus,
+  getTableRecordStatusCounts,
   getStockReadModelMaintenanceAudit,
   rebuildStockReadModels,
   runDatabaseIntegrityChecks,

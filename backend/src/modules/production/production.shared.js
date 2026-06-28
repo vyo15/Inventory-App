@@ -4,7 +4,7 @@ const { resolveBusinessCode } = require("../../utils/businessCodeCounter");
 const {
   matchesVariantReference,
   resolveInventoryVariantCollection,
-} = require("../../utils/sqliteStockEngine");
+} = require("../stock/engine");
 const {
   normalizeSourceType,
   toPositiveNumber,

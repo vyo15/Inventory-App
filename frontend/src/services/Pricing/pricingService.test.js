@@ -56,6 +56,8 @@ describe('applyPricingRuleToItems SQLite atomic', () => {
       items,
       rule,
       targetType: 'products',
+      changeSource: 'pricing_rule_apply',
+      notes: 'Apply rule: Markup 100%',
     });
 
     expect(mocks.applyPricingRuleBatch).toHaveBeenCalledTimes(1);
@@ -66,6 +68,8 @@ describe('applyPricingRuleToItems SQLite atomic', () => {
         expectedVersion: 'version-1',
         newPrice: 2000,
       }],
+      changeSource: 'pricing_rule_apply',
+      notes: 'Apply rule: Markup 100%',
     });
     expect(result.summary.updatedCount).toBe(1);
     expect(result.summary.skippedManualCount).toBe(1);

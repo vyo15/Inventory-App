@@ -1,5 +1,5 @@
 const { runInTransaction } = require("../../db/connection");
-const { createFinanceMovement, markFinanceMovementDeleted } = require("../../utils/sqliteFinanceEngine");
+const { createFinanceMovement, markFinanceMovementDeleted } = require("./finance.engine");
 
 const runFinanceTransaction = (callback) => runInTransaction(callback);
 

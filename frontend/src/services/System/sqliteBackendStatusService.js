@@ -1,5 +1,17 @@
 const DEFAULT_SQLITE_BACKEND_PORT = "3001";
 const LEGACY_AUTH_TOKEN_KEY = "ims.sqlite.authToken";
+export const MAINTENANCE_STATUS_CONTRACT_VERSION = 3;
+const LEGACY_SQLITE_CLIENT_ID_KEY = "ims.sqlite.clientId";
+const SQLITE_BROWSER_ID_KEY = "ims.sqlite.browserId";
+let sqlitePageInstanceId = "";
+
+const REQUIRED_MAINTENANCE_COUNT_TABLES = Object.freeze([
+  "categories",
+  "customers",
+  "suppliers",
+  "users",
+  "audit_logs",
+]);
 
 const normalizeBaseUrl = (value) => String(value || "").replace(/\/$/, "");
 
@@ -16,6 +28,44 @@ const getRuntimeHostBaseUrl = () => {
 export const getSqliteBackendBaseUrl = () => normalizeBaseUrl(
   import.meta.env.VITE_SQLITE_API_BASE_URL || getRuntimeHostBaseUrl(),
 );
+
+const createRuntimeIdentifier = (prefix) => {
+  const randomPart = typeof window.crypto?.randomUUID === "function"
+    ? window.crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `${prefix}-${randomPart}`;
+};
+
+const getSqliteBrowserId = () => {
+  try {
+    const existing = window.localStorage.getItem(SQLITE_BROWSER_ID_KEY);
+    if (existing) return existing;
+    const generated = createRuntimeIdentifier("browser");
+    window.localStorage.setItem(SQLITE_BROWSER_ID_KEY, generated);
+    return generated;
+  } catch {
+    return createRuntimeIdentifier("browser-volatile");
+  }
+};
+
+const getSqlitePageInstanceId = () => {
+  if (!sqlitePageInstanceId) sqlitePageInstanceId = createRuntimeIdentifier("page");
+  return sqlitePageInstanceId;
+};
+
+export const getSqliteClientId = () => {
+  if (typeof window === "undefined") return "server-render";
+  try {
+    window.sessionStorage.removeItem(LEGACY_SQLITE_CLIENT_ID_KEY);
+  } catch {
+    // Legacy sessionStorage boleh tidak tersedia; ID halaman tetap dibuat di memory.
+  }
+  return `${getSqliteBrowserId()}:${getSqlitePageInstanceId()}`.slice(0, 128);
+};
+
+export const getSqliteClientHeaders = () => ({
+  "X-IMS-Client-ID": getSqliteClientId(),
+});
 
 export const getStoredSqliteAuthToken = () => {
   if (typeof window === "undefined") return "";
@@ -43,6 +93,7 @@ export const fetchSqliteJson = async (path, options = {}) => {
       ...options,
       headers: {
         "Content-Type": "application/json",
+        ...getSqliteClientHeaders(),
         ...(options.headers || {}),
       },
     });
@@ -72,9 +123,44 @@ export const fetchSqliteJson = async (path, options = {}) => {
 
 export const getSqliteBackendHealth = async () => fetchSqliteJson("/health");
 
-export const getSqliteBackendStatus = async () => fetchSqliteJson("/api/maintenance/status", {
-  headers: getStoredSqliteAuthHeaders(),
-});
+export const validateSqliteMaintenanceStatusResponse = (response) => {
+  const data = response?.data;
+  const contractVersion = Number(data?.maintenanceStatusContractVersion || 0);
+  const tableCounts = data?.tableCounts;
+  const missingRequiredTables = REQUIRED_MAINTENANCE_COUNT_TABLES.filter((tableName) => (
+    !Object.prototype.hasOwnProperty.call(tableCounts || {}, tableName)
+  ));
+  const contractReady = contractVersion >= MAINTENANCE_STATUS_CONTRACT_VERSION
+    && data?.capabilities?.sqliteOnlyRuntime === true
+    && data?.capabilities?.tableCounts === true
+    && data?.capabilities?.tableRecordStatusCounts === true
+    && data?.capabilities?.realtimeEvents === true
+    && tableCounts
+    && typeof tableCounts === "object"
+    && !Array.isArray(tableCounts)
+    && missingRequiredTables.length === 0;
+
+  if (!contractReady) {
+    const error = new Error(
+      "Frontend dan backend IMS belum menggunakan versi yang sama. Hentikan layanan lalu jalankan kembali npm run dev dari folder project."
+    );
+    error.code = "SQLITE_STATUS_CONTRACT_MISMATCH";
+    error.errorCode = "SQLITE_STATUS_CONTRACT_MISMATCH";
+    error.expectedContractVersion = MAINTENANCE_STATUS_CONTRACT_VERSION;
+    error.receivedContractVersion = contractVersion || null;
+    error.missingRequiredTables = missingRequiredTables;
+    error.payload = response;
+    throw error;
+  }
+
+  return response;
+};
+
+export const getSqliteBackendStatus = async () => validateSqliteMaintenanceStatusResponse(
+  await fetchSqliteJson("/api/maintenance/status", {
+    headers: getStoredSqliteAuthHeaders(),
+  })
+);
 
 export const getSqliteInitialSetupReadiness = async () => fetchSqliteJson(
   "/api/maintenance/initial-setup-readiness",
@@ -100,7 +186,7 @@ export const downloadSqliteBackendBackup = async (filename) => {
   const baseUrl = getSqliteBackendBaseUrl();
   const response = await fetch(`${baseUrl}/api/maintenance/backups/${encodeURIComponent(filename)}/download`, {
     credentials: "include",
-    headers: getStoredSqliteAuthHeaders(),
+    headers: { ...getSqliteClientHeaders(), ...getStoredSqliteAuthHeaders() },
   });
 
   if (!response.ok) {
@@ -120,6 +206,7 @@ export const importSqliteBackendBackup = async (file) => {
     method: "POST",
     credentials: "include",
     headers: {
+      ...getSqliteClientHeaders(),
       ...getStoredSqliteAuthHeaders(),
       "Content-Type": "application/octet-stream",
       "X-IMS-Backup-Filename": encodeURIComponent(file?.name || "backup.imsbackup"),
@@ -165,3 +252,22 @@ export const executeSqliteRestore = async (values = {}, token = "") => fetchSqli
   headers: token ? { Authorization: `Bearer ${token}` } : getStoredSqliteAuthHeaders(),
   body: JSON.stringify(values),
 });
+
+export const getSqliteInactiveData = async ({ entityType = "" } = {}) => {
+  const query = new URLSearchParams();
+  if (entityType) query.set("entityType", entityType);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return fetchSqliteJson(`/api/maintenance/inactive-data${suffix}`, {
+    headers: getStoredSqliteAuthHeaders(),
+  });
+};
+
+export const purgeSqliteInactiveData = async (values = {}) => fetchSqliteJson(
+  "/api/maintenance/inactive-data/purge",
+  {
+    method: "POST",
+    headers: getStoredSqliteAuthHeaders(),
+    body: JSON.stringify(values),
+  },
+);
+

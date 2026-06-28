@@ -1,7 +1,9 @@
 import * as sqliteSuppliersAdapter from "../../data/adapters/sqlite/sqliteSuppliersAdapter";
+import { calculateSupplierCatalogMetrics } from "../../../../shared/supplierCatalogPricing.js";
+import businessCodeContract from "../../../../shared/businessCodeContract.json";
 
 const safeTrim = (value = "") => String(value || "").trim();
-const SUPPLIER_CODE_PATTERN = /^SUP-[0-9]{8}-[0-9]{3,}$/;
+const SUPPLIER_CODE_PATTERN = new RegExp(businessCodeContract.supplier.pattern);
 
 export const normalizeSupplierCode = (value = "") => safeTrim(value).toUpperCase();
 export const isValidSupplierCodeFormat = (code = "") => SUPPLIER_CODE_PATTERN.test(
@@ -64,43 +66,9 @@ export const normalizeSupplierCatalogItemType = (value = "") => {
   return normalized;
 };
 
-export const calculateSupplierMaterialRestockMetrics = (detail = {}) => {
-  const purchaseType = detail.purchaseType === "offline" ? "offline" : "online";
-  const purchaseQty = Math.max(1, Math.round(Number(detail.purchaseQty || 1)));
-  const conversionValue = Math.max(1, Math.round(Number(detail.conversionValue || 1)));
-  const supplierItemPrice = Math.max(0, Math.round(Number(detail.supplierItemPrice || 0)));
-  const estimatedShippingCost = purchaseType === "offline"
-    ? 0
-    : Math.max(0, Math.round(Number(detail.estimatedShippingCost || 0)));
-  const serviceFee = purchaseType === "offline"
-    ? 0
-    : Math.max(0, Math.round(Number(detail.serviceFee || 0)));
-  const discount = purchaseType === "offline"
-    ? 0
-    : Math.max(0, Math.round(Number(detail.discount || 0)));
-  const totalStockQty = purchaseQty * conversionValue;
-  const totalEstimatedSupplier = Math.max(
-    0,
-    (purchaseQty * supplierItemPrice) + estimatedShippingCost + serviceFee - discount,
-  );
-  const estimatedUnitPrice = totalStockQty > 0
-    ? Math.round(totalEstimatedSupplier / totalStockQty)
-    : 0;
-
-  return {
-    purchaseType,
-    purchaseQty,
-    conversionValue,
-    supplierItemPrice,
-    estimatedShippingCost,
-    serviceFee,
-    discount,
-    totalStockQty,
-    totalEstimatedSupplier,
-    estimatedUnitPrice,
-    referencePrice: estimatedUnitPrice,
-  };
-};
+export const calculateSupplierMaterialRestockMetrics = (detail = {}) => (
+  calculateSupplierCatalogMetrics(detail)
+);
 
 export const getSupplierCatalogOffers = (
   supplier = {},

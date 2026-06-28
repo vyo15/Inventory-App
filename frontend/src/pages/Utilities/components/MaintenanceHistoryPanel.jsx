@@ -6,7 +6,9 @@ import {
   Col,
   Descriptions,
   Empty,
+  Pagination,
   Row,
+  Select,
   Space,
   Tag,
   Timeline,
@@ -94,8 +96,35 @@ const getAuditActionLabel = (action = "") => {
     stock_read_model_rebuild: "Rebuild data turunan stok",
     pre_stock_read_model_cleanup_backup: "Backup sebelum cleanup stok",
     stock_read_model_orphan_cleanup: "Cleanup orphan stok",
+    pre_inactive_record_purge_backup: "Backup sebelum purge data nonaktif",
+    inactive_record_purge: "Hapus permanen data nonaktif",
   };
   return labels[action] || action || "Maintenance";
+};
+
+const getAuditCategory = (action = "") => {
+  const normalized = String(action || "");
+  if (normalized.includes("backup")) return "backup";
+  if (normalized.includes("restore")) return "restore";
+  if (normalized.includes("purge")) return "purge";
+  if (normalized.includes("repair") || normalized.includes("rebuild") || normalized.includes("cleanup")) return "repair";
+  return "other";
+};
+
+const isWithinPeriod = (value, period) => {
+  if (period === "all") return true;
+  const date = parseDate(value);
+  if (!date) return false;
+  const ageMs = Date.now() - date.getTime();
+  if (period === "today") {
+    const now = new Date();
+    return date.getFullYear() === now.getFullYear()
+      && date.getMonth() === now.getMonth()
+      && date.getDate() === now.getDate();
+  }
+  if (period === "7d") return ageMs <= 7 * 24 * 60 * 60 * 1000;
+  if (period === "30d") return ageMs <= 30 * 24 * 60 * 60 * 1000;
+  return true;
 };
 
 const MaintenanceHistoryPanel = () => {
@@ -104,6 +133,9 @@ const MaintenanceHistoryPanel = () => {
   const [backups, setBackups] = useState([]);
   const [restoreLogs, setRestoreLogs] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [activityFilter, setActivityFilter] = useState("all");
+  const [activityPeriod, setActivityPeriod] = useState("all");
+  const [restorePage, setRestorePage] = useState(1);
 
   const loadHistory = useCallback(async ({ showSuccess = false } = {}) => {
     setLoading(true);
@@ -140,31 +172,50 @@ const MaintenanceHistoryPanel = () => {
     [backups],
   );
   const repairAuditCount = useMemo(
-    () => auditLogs.filter((log) => ["stock_read_model_rebuild", "stock_read_model_orphan_cleanup"].includes(log.action)).length,
+    () => auditLogs.filter((log) => [
+      "stock_read_model_rebuild",
+      "stock_read_model_orphan_cleanup",
+      "inactive_record_purge",
+    ].includes(log.action)).length,
     [auditLogs],
   );
 
   const historySummaryItems = [
     { key: "backup", label: "Backup", value: backups.length, note: "Total backup resmi", icon: <DatabaseOutlined />, color: "green" },
-    { key: "verified", label: "Verified", value: successfulBackups, note: "Backup terverifikasi", icon: <SafetyOutlined />, color: "blue" },
-    { key: "restore", label: "Restore", value: restoreLogs.length, note: "Preview/restore tercatat", icon: <SwapOutlined />, color: "purple" },
-    { key: "repair", label: "Repair", value: repairAuditCount, note: "Aksi repair resmi", icon: <HistoryOutlined />, color: "orange" },
+    { key: "verified", label: "Terverifikasi", value: successfulBackups, note: "Backup terverifikasi", icon: <SafetyOutlined />, color: "blue" },
+    { key: "restore", label: "Restore", value: restoreLogs.length, note: "Preview/restore tercatat", icon: <SwapOutlined />, color: "blue" },
+    { key: "repair", label: "Perbaikan", value: repairAuditCount, note: "Aksi repair resmi", icon: <HistoryOutlined />, color: "orange" },
   ];
 
-  const restoreTimelineItems = useMemo(() => restoreLogs.slice(0, 8).map((log) => ({
+  const filteredAuditLogs = useMemo(() => auditLogs.filter((log) => {
+    const matchesType = activityFilter === "all" || getAuditCategory(log.action) === activityFilter;
+    return matchesType && isWithinPeriod(log.created_at, activityPeriod);
+  }), [activityFilter, activityPeriod, auditLogs]);
+
+  const restorePageSize = 6;
+  const restorePageCount = Math.max(1, Math.ceil(restoreLogs.length / restorePageSize));
+  const visibleRestoreLogs = restoreLogs.slice(
+    (restorePage - 1) * restorePageSize,
+    restorePage * restorePageSize,
+  );
+  const restoreTimelineItems = useMemo(() => visibleRestoreLogs.map((log) => ({
     color: getStatusColor(log.plan_status),
     children: (
       <Space direction="vertical" size={2}>
         <Text strong>{formatDateTime(log.created_at)}</Text>
-        <Text type="secondary">{log.filename || "Restore preview"}</Text>
+        <Text type="secondary" ellipsis={{ tooltip: log.filename }}>{log.filename || "Restore preview"}</Text>
         <Space size={6} wrap>
           <Tag color={getStatusColor(log.plan_status)}>{log.plan_status || "planned"}</Tag>
-          <Tag color={log.destructive_allowed ? "red" : "blue"}>{log.destructive_allowed ? "execute" : "preview"}</Tag>
+          <Tag color={log.destructive_allowed ? "red" : "blue"}>{log.destructive_allowed ? "Eksekusi" : "Preview"}</Tag>
           {log.actor ? <Tag>{log.actor}</Tag> : null}
         </Space>
       </Space>
     ),
-  })), [restoreLogs]);
+  })), [visibleRestoreLogs]);
+
+  useEffect(() => {
+    if (restorePage > restorePageCount) setRestorePage(restorePageCount);
+  }, [restorePage, restorePageCount]);
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
@@ -172,7 +223,7 @@ const MaintenanceHistoryPanel = () => {
         variant="guidance"
         compact
         title="Riwayat resmi dari database"
-        description="Backup, restore, import, repair data turunan, cleanup orphan, dan lifecycle backup ditampilkan dari log layanan lokal. Session browser bukan sumber audit."
+        description="Backup, restore, import, repair data turunan, cleanup orphan, purge data nonaktif, dan lifecycle backup ditampilkan dari log layanan lokal. Snapshot purge disimpan pada audit log; session browser bukan sumber audit."
       />
 
       <div className="maintenance-history-summary-grid">
@@ -191,23 +242,56 @@ const MaintenanceHistoryPanel = () => {
         extra={<Button icon={<ReloadOutlined />} loading={loading} onClick={() => loadHistory({ showSuccess: true })}>Refresh</Button>}
       >
         <Descriptions size="small" bordered column={{ xs: 1, md: 2 }}>
-          <Descriptions.Item label="Backup terakhir">{latestBackup?.filename || "-"}</Descriptions.Item>
+          <Descriptions.Item label="Backup terakhir"><Text ellipsis={{ tooltip: latestBackup?.filename }}>{latestBackup ? getBackupTypeLabel(latestBackup.backupType) : "-"}</Text></Descriptions.Item>
           <Descriptions.Item label="Tanggal backup">{formatDateTime(latestBackup?.created_at)}</Descriptions.Item>
-          <Descriptions.Item label="Restore terakhir">{latestRestore?.filename || "-"}</Descriptions.Item>
+          <Descriptions.Item label="Restore terakhir"><Text ellipsis={{ tooltip: latestRestore?.filename }}>{latestRestore ? "Aktivitas restore tercatat" : "-"}</Text></Descriptions.Item>
           <Descriptions.Item label="Tanggal restore">{formatDateTime(latestRestore?.created_at)}</Descriptions.Item>
           <Descriptions.Item label="Aktivitas terakhir">{getAuditActionLabel(latestAudit?.action)}</Descriptions.Item>
           <Descriptions.Item label="Actor terakhir">{latestAudit?.actor || "-"}</Descriptions.Item>
         </Descriptions>
       </Card>
 
-      <Card title="Aktivitas Maintenance" size="small">
+      <Card
+        title="Aktivitas Maintenance"
+        size="small"
+        extra={(
+          <Space wrap size={8}>
+            <Tag>{filteredAuditLogs.length} dari {auditLogs.length} aktivitas</Tag>
+            <Select
+              size="small"
+              value={activityFilter}
+              onChange={setActivityFilter}
+              style={{ minWidth: 145 }}
+              options={[
+                { value: "all", label: "Semua aktivitas" },
+                { value: "backup", label: "Backup" },
+                { value: "restore", label: "Restore" },
+                { value: "repair", label: "Perbaikan" },
+                { value: "purge", label: "Hapus permanen" },
+              ]}
+            />
+            <Select
+              size="small"
+              value={activityPeriod}
+              onChange={setActivityPeriod}
+              style={{ minWidth: 125 }}
+              options={[
+                { value: "all", label: "Semua waktu" },
+                { value: "today", label: "Hari ini" },
+                { value: "7d", label: "7 hari" },
+                { value: "30d", label: "30 hari" },
+              ]}
+            />
+          </Space>
+        )}
+      >
         <DataTableView
           className="app-data-table"
           size="small"
           loading={loading}
-          dataSource={auditLogs.slice(0, 50).map((log) => ({ ...log, key: log.id }))}
-          pagination={false}
-          locale={{ emptyText: <Empty description="Belum ada audit log maintenance" /> }}
+          dataSource={filteredAuditLogs.map((log) => ({ ...log, key: log.id }))}
+          pagination={{ pageSize: 15, showSizeChanger: true, hideOnSinglePage: true }}
+          locale={{ emptyText: <Empty description="Tidak ada aktivitas sesuai filter" /> }}
           columns={[
             {
               title: "Waktu",
@@ -253,8 +337,8 @@ const MaintenanceHistoryPanel = () => {
               className="app-data-table"
               size="small"
               loading={loading}
-              dataSource={backups.slice(0, 20).map((backup) => ({ ...backup, key: backup.id || backup.filename }))}
-              pagination={false}
+              dataSource={backups.map((backup) => ({ ...backup, key: backup.id || backup.filename }))}
+              pagination={{ pageSize: 10, showSizeChanger: true, hideOnSinglePage: true }}
               locale={{ emptyText: <Empty description="Belum ada riwayat backup" /> }}
               columns={[
                 { title: "Tanggal", dataIndex: "created_at", key: "created_at", width: 150, render: formatDateTime },
@@ -278,7 +362,20 @@ const MaintenanceHistoryPanel = () => {
         </Col>
         <Col xs={24} xl={9}>
           <Card title="Riwayat Restore" size="small">
-            {restoreTimelineItems.length ? <Timeline items={restoreTimelineItems} /> : <Empty description="Belum ada riwayat restore" />}
+            {restoreTimelineItems.length ? (
+              <Space direction="vertical" size={10} style={{ width: "100%" }}>
+                <Timeline items={restoreTimelineItems} />
+                <Pagination
+                  current={restorePage}
+                  pageSize={restorePageSize}
+                  total={restoreLogs.length}
+                  showSizeChanger={false}
+                  hideOnSinglePage
+                  size="small"
+                  onChange={setRestorePage}
+                />
+              </Space>
+            ) : <Empty description="Belum ada riwayat restore" />}
           </Card>
         </Col>
       </Row>

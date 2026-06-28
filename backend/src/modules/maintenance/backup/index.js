@@ -1,0 +1,39 @@
+const constants = require("./backupConstants");
+const pathApi = require("./backupPath");
+const validation = require("./backupValidation");
+const creation = require("./backupCreate");
+const lifecycle = require("./backupLifecycle");
+
+module.exports = {
+  BACKUP_FILE_SUFFIX: constants.BACKUP_FILE_SUFFIX,
+  BACKUP_LIFECYCLE_INTERVAL_MS: constants.BACKUP_LIFECYCLE_INTERVAL_MS,
+  DAILY_RETENTION_DAYS: constants.DAILY_RETENTION_DAYS,
+  LEGACY_BACKUP_FILE_SUFFIX: constants.LEGACY_BACKUP_FILE_SUFFIX,
+  MONTHLY_RETENTION_COUNT: constants.MONTHLY_RETENTION_COUNT,
+  RESTORE_CONFIRM_KEYWORD: constants.RESTORE_CONFIRM_KEYWORD,
+  SUPPORTED_BACKUP_FILE_SUFFIXES: constants.SUPPORTED_BACKUP_FILE_SUFFIXES,
+  ZIP32_MAX_ENTRY_BYTES: constants.ZIP32_MAX_ENTRY_BYTES,
+  applyBackupRetention: lifecycle.applyBackupRetention,
+  assertSufficientDiskSpace: pathApi.assertSufficientDiskSpace,
+  calculateRequiredDiskBytes: pathApi.calculateRequiredDiskBytes,
+  createMonthlyBackupFromDaily: lifecycle.createMonthlyBackupFromDaily,
+  createOfficialSqliteBackup: creation.createOfficialSqliteBackup,
+  ensureDailyBackupForToday: lifecycle.ensureDailyBackupForToday,
+  ensureMonthlyBackups: lifecycle.ensureMonthlyBackups,
+  enrichBackupLog: validation.enrichBackupLog,
+  enrichBackupLogs: validation.enrichBackupLogs,
+  extractBackupDatabaseToTemp: validation.extractBackupDatabaseToTemp,
+  getBackupPreview: validation.getBackupPreview,
+  getTableCounts: validation.getTableCounts,
+  getBackupStorageClass: pathApi.getBackupStorageClass,
+  getUniquePackagePath: pathApi.getUniquePackagePath,
+  isSupportedBackupPackageName: pathApi.isSupportedBackupPackageName,
+  normalizeBackupFilename: pathApi.normalizeBackupFilename,
+  getBackupLifecycleRuntimeStatus: lifecycle.getBackupLifecycleRuntimeStatus,
+  readBackupManifest: validation.readBackupManifest,
+  runBackupLifecycleMaintenance: lifecycle.runBackupLifecycleMaintenance,
+  startBackupLifecycleScheduler: lifecycle.startBackupLifecycleScheduler,
+  stopBackupLifecycleScheduler: lifecycle.stopBackupLifecycleScheduler,
+  sanitizeImportedBackupFilename: pathApi.sanitizeImportedBackupFilename,
+  validateSqliteFile: validation.validateSqliteFile,
+};

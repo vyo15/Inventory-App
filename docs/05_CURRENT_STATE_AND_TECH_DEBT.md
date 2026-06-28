@@ -1,10 +1,10 @@
 # CURRENT STATE & TECH DEBT — IMS Bunga Flanel
 
-## Status source aktual — 2026-06-21
+## Status source aktual — 2026-06-28
 
 Status: **AKTIF / SOURCE-VERIFIED / SQLITE-FIRST**.
 
-Source aktual ZIP `Inventory-App-20260622-202512318-main-a99017ed-dirty.zip` menunjukkan IMS berjalan dengan arsitektur:
+Source aktual ZIP `Inventory-App-20260628-002207845-main-06635c58-dirty.zip` menunjukkan IMS berjalan dengan arsitektur:
 
 - Frontend React/Vite.
 - Backend Node.js Express sebagai satu-satunya akses database.
@@ -85,7 +85,7 @@ Konsekuensi:
 - Runner command Windows menjalankan `npm.cmd`/`npx.cmd` melalui `cmd.exe`, sehingga shortcut quality gate tidak gagal dengan `spawnSync ... EINVAL` pada Node.js Windows.
 - Production P4 memusatkan create PO dari Planning, Start Production, Complete Work Log, auto payroll, Payroll Paid, finance posting, dan HPP reconcile pada transaction backend SQLite.
 - Generic production CRUD tidak lagi dapat dipakai untuk melewati lifecycle sensitif Planning, Production Order, Work Log, atau Payroll.
-- Test discovery source saat ini mencakup 140 deklarasi test backend pada 33 file, 115 test frontend pada 33 file, dan 11 test tooling. Coverage baru melindungi facade/split arsitektur Production dan Maintenance, kalkulasi produksi, snapshot audit, User Management guard, BOM, Work Log, Cash In/Out, shared input Rupiah, filter Produksi, aksi Master Data, serta kontrak Maintenance Center dan audit log resmi. Test backend yang memakai SQLite native tetap wajib dijalankan pada runtime lokal dengan binding `sqlite3` aktif.
+- Test discovery source saat ini mencakup 172 test backend pada 37 file, 151 test frontend pada 40 file, dan 11 test tooling. Coverage baru melindungi facade/split arsitektur Production dan Maintenance, kalkulasi produksi, snapshot audit, User Management guard, BOM, Work Log, Cash In/Out, shared input Rupiah, filter Produksi, aksi Master Data, serta kontrak Maintenance Center dan audit log resmi. Test backend yang memakai SQLite native tetap wajib dijalankan pada runtime lokal dengan binding `sqlite3` aktif.
 
 ## Tech debt aktif yang masih perlu dijaga
 
@@ -119,7 +119,8 @@ Jangan membuat perhitungan stok baru di UI.
 
 - Sales tidak boleh punya cancel/delete user-facing.
 - Return adalah jalur resmi barang kembali.
-- Purchase/Sales/Return wajib menjaga audit log dan finance side effect sesuai aturan backend.
+- Purchase/Sales/Return wajib menjaga audit log dan finance side effect sesuai aturan backend. Purchase commit dan Return commit sekarang menormalisasi status di backend; Return bersifat stock-only dan menolak refund payload/finance side effect.
+- UI Sales dan Returns memakai kontrak service canonical; Return wajib memilih Sales dan item dengan sisa qty yang masih dapat diretur.
 - Jangan membuat direct write generic ke transaksi.
 
 ### 5. Finance ledger
@@ -180,6 +181,7 @@ Jangan membuat perhitungan stok baru di UI.
 - **Masih residual:** chunk terbesar setelah vendor split stabil sekitar 706.6 KiB dari budget 1074.2 KiB. React/React Router dan Day.js dipisahkan tanpa circular chunk; business/page modules tetap mengikuti route lazy.
 - **Masih residual dependency:** `xlsx@0.18.5` dan `esbuild@0.27.7` tetap terdokumentasi; tidak ada force upgrade/override major.
 - **Arsitektur service setelah cleanup:** public facade Produksi tetap di `production.service.js`; lifecycle Planning/Order dipisah ke `production.order.service.js`, guard/router ke `production.guards.js`, primitive bersama ke `production.shared.js`, dan kalkulasi murni ke `production.calculations.js`. Maintenance memisahkan audit/repair data quality ke `maintenance.dataQuality.service.js` tanpa memindahkan backup/restore/rollback dari facade. Pemisahan transaction domain yang lebih jauh tetap ditunda sampai full SQLite regression lokal lulus. Repository-mode compatibility masih memiliki importer aktif dan belum dihapus.
+- **Maintenance hardening:** preview purge memakai indeks referensi JSON satu kali per audit run, memblokir mapping legacy, dan tidak mengizinkan hard purge User agar identitas audit tetap utuh. Data-quality audit menghitung total penuh, menyimpan sample terbatas, memperluas finance reconciliation, dan mencatat audit run. Audit tetap on-demand; scheduler otomatis dan auto-repair finance belum tersedia karena perlu review performa/operasional terpisah.
 - **Quality evidence aktif:** frontend critical-flow coverage memakai provider V8 dengan threshold baseline dan CI mengunggah `coverage-summary.json` bersama CycloneDX SBOM backend/frontend.
 - **Masih hardening non-blocker:** TypeScript source dan breached-password screening online belum ditambahkan. OpenAPI administrator-only, security headers tanpa dependency, structured JSON logger/rotation, password umum lokal, Node runtime pinning, dan queue telemetry sudah aktif.
 
@@ -267,3 +269,19 @@ Test discovery otomatis menemukan bahwa empat file regression Production P4 suda
 - Legacy Bearer sekarang opt-in dan default nonaktif; flag hanya dipakai sementara untuk migrasi perangkat lama.
 - Refactor domain Produksi sudah memisahkan Planning/Order, guard/router, primitive bersama, dan kalkulasi murni sambil menjaga public facade identik. Complete Work Log, stock mutation, payroll, HPP, finance, dan audit tetap berada pada boundary backend resmi. Maintenance memisahkan data-quality audit/repair dari backup/restore facade. Pemisahan lebih jauh dan penghapusan repository-mode compatibility tetap pekerjaan terpisah setelah full SQLite regression lokal.
 - Placeholder frontend `businessCodeGenerator.js` dan `businessCodeCounterService.js` tetap dihapus karena tidak mempunyai importer. Tabel existing `business_code_counters` sekarang dipakai runtime melalui helper backend bersama; concurrency code allocation dilindungi transaction dan regression test.
+
+## Update cleanup architecture C0–C16 — 2026-06-28
+
+Source terbaru telah menjalani cleanup behavior-preserving:
+
+- Stock, Finance, Backup, dan generic SQLite router dipindahkan ke domain/infrastructure yang tepat.
+- Path engine lama tetap compatibility facade tipis; internal backend memakai canonical path.
+- Password policy dan kalkulasi katalog Supplier memakai canonical shared core.
+- Role, category, serta pola kode Customer/Supplier memakai shared contract tanpa mengubah access matrix.
+- Supplier, Transactions, Production, dan Maintenance service dipecah internal sambil mempertahankan public facade.
+- Frontend HPP reconcile legacy dihapus; backend Production tetap authority.
+- Primitive `CompactCell`, filter periode Finance, Purchase defaults/quantity, payroll tally, dan state mutation helper mengurangi duplikasi UI.
+- Detail drawer utama dipisahkan dari page orchestration tanpa memindahkan business mutation ke presentational component.
+- Architecture/source-hygiene test mencegah business engine kembali ke `utils`, formula canonical kembali disalin, atau facade kembali membesar.
+
+Peta struktur dan guard final tersedia di `docs/22_CLEANUP_ARCHITECTURE.md`.

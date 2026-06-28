@@ -99,14 +99,20 @@ const originalLoad = Module._load;
 Module._load = function patchedLoad(request, parent, isMain) {
   if (request === "sqlite3") return { Database: function Database() {}, OPEN_READONLY: 1 };
   if (request === "sqlite") return { open: async () => fakeReadonlyDb };
-  if (request === "../db/connection" && parent?.filename?.endsWith("sqliteBackup.js")) {
+  const parentFilename = parent?.filename || "";
+  const isLegacyBackupFacade = parentFilename.endsWith("sqliteBackup.js");
+  const isModularBackupImplementation = parentFilename.includes(`${path.sep}modules${path.sep}maintenance${path.sep}backup${path.sep}`);
+  if ((request === "../db/connection" && isLegacyBackupFacade)
+    || (request === "../../../db/connection" && isModularBackupImplementation)) {
     return {
       getDb: async () => fakeDb,
       getDbPath: () => dbPath,
+      runInTransaction: async (callback) => callback(fakeDb),
       runSerializedDbOperation: async (callback) => callback(fakeDb),
     };
   }
-  if (request === "./auditLog" && parent?.filename?.endsWith("sqliteBackup.js")) {
+  if ((request === "./auditLog" && isLegacyBackupFacade)
+    || (request === "../../../utils/auditLog" && isModularBackupImplementation)) {
     return { createAuditLog: async () => ({}) };
   }
   return originalLoad.call(this, request, parent, isMain);
@@ -114,9 +120,11 @@ Module._load = function patchedLoad(request, parent, isMain) {
 
 const backupModule = require("../src/utils/sqliteBackup");
 Module._load = originalLoad;
+const { assertZip32EntrySize, buildReadme } = require("../src/modules/maintenance/backup/backupPackage");
 
 before(() => {
   fs.mkdirSync(backupDir, { recursive: true });
+  fs.writeFileSync(dbPath, "fake-active-sqlite");
 });
 
 after(() => {
@@ -130,6 +138,38 @@ test("storage class hanya daily, monthly, dan manual", () => {
   assert.equal(backupModule.getBackupStorageClass("pre-restore"), "manual");
   assert.equal(backupModule.getBackupStorageClass("pre-repair"), "manual");
   assert.equal(backupModule.getBackupStorageClass("manual-import"), "manual");
+});
+
+test("preflight disk dan batas ZIP klasik mempunyai guard eksplisit", () => {
+  const required = backupModule.calculateRequiredDiskBytes({
+    expectedWriteBytes: 10 * 1024 * 1024,
+    copyCount: 2,
+  });
+  assert.equal(typeof required, "bigint");
+  assert.ok(required > BigInt(20 * 1024 * 1024));
+  assert.throws(
+    () => assertZip32EntrySize(0x100000000, "database.sqlite"),
+    /ZIP64 belum didukung/,
+  );
+  assert.match(buildReadme({
+    createdAt: new Date().toISOString(),
+    backupType: "manual",
+    schemaVersion: "9",
+    backupFormat: "imsbackup",
+    backupFormatVersion: 2,
+    compression: "deflate",
+  }), /tanpa ZIP64/);
+});
+
+test("scheduler lifecycle dapat diaktifkan dan dihentikan secara idempotent", () => {
+  const started = backupModule.startBackupLifecycleScheduler({ intervalMs: 60_000 });
+  assert.equal(started.schedulerActive, true);
+  assert.equal(started.intervalMs, 60_000);
+  assert.ok(started.nextRunAt);
+
+  const stopped = backupModule.stopBackupLifecycleScheduler();
+  assert.equal(stopped.schedulerActive, false);
+  assert.equal(stopped.nextRunAt, null);
 });
 
 test("backup baru hanya satu package tanpa sidecar manifest", async () => {

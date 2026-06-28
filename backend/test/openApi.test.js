@@ -14,5 +14,9 @@ test("OpenAPI contract mendokumentasikan endpoint commit guarded dan cookie sess
   assert.ok(document.paths["/api/maintenance/data-audit"]);
   assert.ok(document.paths["/api/maintenance/initial-setup-readiness"]);
   assert.ok(document.paths["/api/maintenance/stock-read-model-rebuild"]);
+  assert.ok(document.paths["/api/realtime/events"]);
+  assert.ok(document.paths["/api/realtime/status"]);
+  assert.ok(document.paths["/api/maintenance/inactive-data"]);
+  assert.ok(document.paths["/api/maintenance/inactive-data/purge"]);
   assert.equal(document.paths["/api/finance/cash-in/commit"].post.responses[409].description, "Referensi manual duplikat");
 });

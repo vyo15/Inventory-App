@@ -13,10 +13,13 @@ const {
   rebuildStockReadModels,
   deleteOrphanStockReadModels,
   listBackups,
+  listInactivePurgeCandidates,
   listRestoreLogs,
+  purgeInactiveRecord,
 } = require("./maintenance.service");
 
 const getActor = (req) => req.localAuth?.user?.username || "system";
+const getActorUser = (req) => req.localAuth?.user || {};
 
 const getMaintenanceStatusController = async (_req, res, next) => {
   try {
@@ -36,9 +39,9 @@ const getInitialSetupReadinessController = async (_req, res, next) => {
   }
 };
 
-const getDataQualityAuditController = async (_req, res, next) => {
+const getDataQualityAuditController = async (req, res, next) => {
   try {
-    const result = await getDataQualityAudit();
+    const result = await getDataQualityAudit({ actor: getActor(req) });
     return success(res, "Audit kualitas data selesai. Tidak ada data yang diubah.", result);
   } catch (error) {
     return next(error);
@@ -175,6 +178,34 @@ const listRestoreLogsController = async (_req, res, next) => {
   }
 };
 
+
+const listInactivePurgeCandidatesController = async (req, res, next) => {
+  try {
+    const result = await listInactivePurgeCandidates({
+      entityType: req.query?.entityType || "",
+      actorUser: getActorUser(req),
+    });
+    return success(res, "Preview data nonaktif berhasil dimuat. Tidak ada data yang diubah.", result);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const purgeInactiveRecordController = async (req, res, next) => {
+  try {
+    const result = await purgeInactiveRecord({
+      entityType: req.body?.entityType,
+      id: req.body?.id,
+      confirmKeyword: req.body?.confirmKeyword,
+      confirmTarget: req.body?.confirmTarget,
+      actorUser: getActorUser(req),
+    });
+    return success(res, "Data nonaktif berhasil dihapus permanen dan snapshot audit dipertahankan.", result);
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const listBackupsController = async (_req, res, next) => {
   try {
     const rows = await listBackups();
@@ -198,5 +229,7 @@ module.exports = {
   importBackupController,
   rebuildStockReadModelsController,
   listBackupsController,
+  listInactivePurgeCandidatesController,
   listRestoreLogsController,
+  purgeInactiveRecordController,
 };

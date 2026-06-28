@@ -1,48 +1,65 @@
-import { Card, Col, Row, Tag } from "antd";
+import { Tag, Typography } from "antd";
+
+const { Text } = Typography;
 
 const guideItems = [
   {
-    title: "1. Backup",
-    steps: [
-      "Pastikan backup verified terbaru tersedia.",
-      "Buat backup manual sebelum update atau repair.",
-      "Copy backup terbaru ke media eksternal secara berkala.",
-    ],
+    key: "backup",
+    step: "01",
+    title: "Backup",
+    tone: "green",
+    description: "Pastikan backup terverifikasi tersedia sebelum update, restore, repair, atau purge.",
+    note: "Simpan salinan eksternal secara berkala.",
   },
   {
-    title: "2. Audit",
-    steps: [
-      "Jalankan Audit & Health untuk pemeriksaan read-only.",
-      "Review issue integritas, stok, backup, dan finance.",
-      "Jangan memperbaiki stok master atau ledger langsung dari UI.",
-    ],
+    key: "audit",
+    step: "02",
+    title: "Audit",
+    tone: "blue",
+    description: "Jalankan pemeriksaan read-only untuk melihat issue integritas dan data turunan.",
+    note: "Audit tidak mengubah database.",
   },
   {
-    title: "3. Repair & Verifikasi",
-    steps: [
-      "Repair hanya untuk data turunan stok missing/stale.",
-      "Cleanup orphan wajib memakai keyword dan backup otomatis.",
-      "Jalankan audit ulang lalu cek Riwayat Maintenance.",
-    ],
+    key: "repair",
+    step: "03",
+    title: "Perbaikan",
+    tone: "orange",
+    description: "Perbaikan hanya untuk projection stok missing/stale dan tetap memakai backup otomatis.",
+    note: "Jangan mengubah stok master atau ledger langsung.",
+  },
+  {
+    key: "verify",
+    step: "04",
+    title: "Verifikasi",
+    tone: "green",
+    description: "Jalankan audit ulang, periksa hasil, lalu pastikan aktivitas tercatat pada Riwayat.",
+    note: "Testing transaksi tetap dilakukan di sandbox.",
   },
 ];
 
 const ResetUsageGuidePanel = () => (
-  <Card title="Alur Maintenance Aman" size="small" extra={<Tag color="blue">Backup → Audit → Repair</Tag>}>
-    <Row gutter={[12, 12]}>
+  <section className="reset-maintenance-guide-panel" aria-label="Panduan maintenance aman">
+    <div className="reset-maintenance-guide-heading">
+      <div>
+        <Text strong>Panduan Maintenance Aman</Text>
+        <Text type="secondary">Ikuti urutan ini agar perubahan tetap terkontrol dan dapat diaudit.</Text>
+      </div>
+      <Tag color="blue">Backup → Audit → Perbaikan → Verifikasi</Tag>
+    </div>
+
+    <div className="reset-maintenance-guide-grid">
       {guideItems.map((item) => (
-        <Col key={item.title} xs={24} md={8}>
-          <Card size="small" title={item.title}>
-            <ol style={{ paddingLeft: 18, marginBottom: 0 }}>
-              {item.steps.map((step) => (
-                <li key={step}>{step}</li>
-              ))}
-            </ol>
-          </Card>
-        </Col>
+        <article key={item.key} className="reset-maintenance-guide-step">
+          <div className="reset-maintenance-guide-step-header">
+            <span>{item.step}</span>
+            <Tag color={item.tone}>{item.title}</Tag>
+          </div>
+          <Text>{item.description}</Text>
+          <Text type="secondary">{item.note}</Text>
+        </article>
       ))}
-    </Row>
-  </Card>
+    </div>
+  </section>
 );
 
 export default ResetUsageGuidePanel;

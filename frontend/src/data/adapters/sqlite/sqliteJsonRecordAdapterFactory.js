@@ -2,6 +2,29 @@ import { requestSqliteApi } from "./sqliteApiClient";
 
 const toArray = (result) => (Array.isArray(result?.data) ? result.data : []);
 
+export const createSqliteInitialLoadSubscription = ({ loadRecords, callback, onError }) => {
+  let disposed = false;
+  let requestInFlight = false;
+
+  const load = async () => {
+    if (disposed || requestInFlight) return;
+    requestInFlight = true;
+    try {
+      const rows = await loadRecords();
+      if (!disposed) callback(rows);
+    } catch (error) {
+      if (!disposed && typeof onError === "function") onError(error);
+    } finally {
+      requestInFlight = false;
+    }
+  };
+
+  void load();
+  return () => {
+    disposed = true;
+  };
+};
+
 export const createSqliteJsonRecordAdapter = ({ endpoint, normalizeRecord = (record) => record } = {}) => {
   if (!endpoint) {
     throw new Error("Endpoint adapter database lokal wajib tersedia.");
@@ -54,26 +77,13 @@ export const createSqliteJsonRecordAdapter = ({ endpoint, normalizeRecord = (rec
   };
 
   const subscribe = (callback, onError, options = {}) => {
-    let disposed = false;
-    let timer = null;
-    const intervalMs = Math.max(Number(options.intervalMs || 15000), 5000);
-
-    const load = async () => {
-      try {
-        const rows = await list(options);
-        if (!disposed) callback(rows);
-      } catch (error) {
-        if (!disposed && typeof onError === "function") onError(error);
-      }
-    };
-
-    load();
-    timer = window.setInterval(load, intervalMs);
-
-    return () => {
-      disposed = true;
-      if (timer) window.clearInterval(timer);
-    };
+    // Compatibility API tetap dipertahankan, tetapi refresh berkala sekarang
+    // dipusatkan pada SSE + fallback revision global agar tidak ada polling per-adapter.
+    return createSqliteInitialLoadSubscription({
+      loadRecords: () => list(options),
+      callback,
+      onError,
+    });
   };
 
   return { list, getById, generateCode, create, update, remove, subscribe };

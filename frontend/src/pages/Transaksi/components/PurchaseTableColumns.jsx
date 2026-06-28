@@ -4,6 +4,7 @@ import { formatNumberId } from "../../../utils/formatters/numberId";
 import { formatCurrencyId as formatCurrencyIdr } from "../../../utils/formatters/currencyId";
 import { getPurchaseSavingMeta } from "../../../services/Transaksi/purchasesService";
 import { buildPurchaseNoteTableMeta } from "../../../utils/purchases/purchaseNoteDisplay";
+import CompactCell, { CompactCellText } from "../../../components/Layout/Table/CompactCell";
 
 /* =====================================================
    SECTION: Compact Purchases Table Columns — AKTIF/GUARDED
@@ -23,22 +24,14 @@ export const createPurchaseTableColumns = ({ onOpenShopeeOcrDetail }) => [
       const dateText = record.date?.toDate ? dayjs(record.date.toDate()).format("DD-MM-YYYY") : "-";
       const supplierName = record.supplierName || "Supplier tidak tercatat";
       return (
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 600 }}>{dateText}</div>
-          <Tooltip title={record.purchaseNumber || record.code || record.referenceNumber || supplierName}>
-            <div style={{ color: "var(--ims-text-secondary)", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {record.purchaseNumber || record.code || record.referenceNumber || "Kode otomatis"}
-            </div>
-          </Tooltip>
-          <Tooltip title={supplierName}>
-            <div style={{ color: "var(--ims-text-secondary)", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {supplierName}
-            </div>
-          </Tooltip>
+        <CompactCell>
+          <CompactCellText value={dateText} strong tooltip={false} />
+          <CompactCellText value={record.purchaseNumber || record.code || record.referenceNumber || "Kode otomatis"} secondary />
+          <CompactCellText value={supplierName} secondary />
           <Tag color={record.purchaseType === "offline" ? "default" : "blue"} style={{ marginTop: 4 }}>
             {record.purchaseType === "offline" ? "Offline" : "Online"}
           </Tag>
-        </div>
+        </CompactCell>
       );
     },
   },
@@ -56,17 +49,13 @@ export const createPurchaseTableColumns = ({ onOpenShopeeOcrDetail }) => [
       );
 
       return (
-        <div style={{ minWidth: 0 }}>
-          <Tooltip title={itemName}>
-            <div style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {itemName}
-            </div>
-          </Tooltip>
+        <CompactCell>
+          <CompactCellText value={itemName} strong />
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
             {typeTag}
             {variantTag}
           </div>
-        </div>
+        </CompactCell>
       );
     },
   },

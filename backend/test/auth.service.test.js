@@ -78,3 +78,27 @@ test("administrator aktif terakhir tidak dapat diturunkan role-nya", async () =>
   const storedUser = await db.get("SELECT role, status FROM users WHERE id = ?", [administrator.id]);
   assert.deepEqual(storedUser, { role: "administrator", status: "active" });
 });
+
+test("delete user compatibility hanya menonaktifkan akun dan mempertahankan histori", async () => {
+  const administrator = await bootstrapAdministrator();
+  const user = await authService.createUser({
+    username: "operator-soft-delete",
+    displayName: "Operator Soft Delete",
+    password: "Operator123",
+    role: "user",
+    status: "active",
+  }, administrator);
+
+  const result = await authService.deleteUser(user.id, administrator);
+  assert.equal(result.softDeleted, true);
+  assert.equal(result.deleted, false);
+
+  const db = await testDatabase.getDb();
+  const storedUser = await db.get("SELECT username, status FROM users WHERE id = ?", [user.id]);
+  const audit = await db.get(
+    "SELECT action FROM audit_logs WHERE module = 'auth' AND entity_id = ? ORDER BY id DESC LIMIT 1",
+    [String(user.id)],
+  );
+  assert.deepEqual(storedUser, { username: "operator-soft-delete", status: "inactive" });
+  assert.equal(audit.action, "user_deactivate");
+});

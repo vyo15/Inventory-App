@@ -1,4 +1,4 @@
-const { createInventoryMasterRouteGuards } = require("../../utils/sqliteStockEngine");
+const { createInventoryMasterRouteGuards } = require("../stock/engine");
 
 const PRODUCT_VALUATION_FIELDS = ["hppPerUnit", "averageCostPerUnit", "costPerUnit"];
 

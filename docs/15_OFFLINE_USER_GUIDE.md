@@ -114,22 +114,62 @@ README_RESTORE.txt
 Backup lama `.imsbak.zip` tetap didukung sebagai legacy restore agar backup yang sudah pernah dibuat tetap bisa dipakai.
 
 
+## SOP Return dari Sales
+
+1. Buka menu `Return`, lalu pilih `Tambah Retur`.
+2. Pilih transaksi Sales terkait. Item tidak dipilih dari master bebas; IMS hanya menampilkan item yang benar-benar ada pada Sales tersebut.
+3. Pilih item/varian dengan sisa qty retur yang masih tersedia.
+4. Isi qty maksimal sesuai sisa yang ditampilkan dan isi alasan/catatan.
+5. Simpan. Backend memvalidasi ulang relasi Sales, item, qty kumulatif, dan stok sebelum commit.
+6. Return selalu berstatus final `Selesai`, menambah stok melalui `return_in`, dan tidak membuat refund, expense, atau ledger otomatis. Koreksi kas harus melalui proses finance terpisah yang disetujui.
+
 ## Maintenance Center
 
 Menu `Maintenance Center` adalah pusat perawatan data lokal. Urutan pakainya:
 
-1. Buka `Ringkasan` untuk melihat database, schema, backup verified, issue audit, dan aktivitas terakhir.
-2. Gunakan `Backup & Restore` untuk backup resmi dan restore guarded.
-3. Tab `Audit & Health` menyediakan audit read-only untuk integrity database, foreign key, invariant stok, data turunan stok, registry backup, dan pasangan kas-ledger.
-4. Tab `Repair Data Turunan` hanya mengaktifkan rebuild missing/stale `stock_read_models` dan cleanup orphan. Sistem membuat backup `pre-repair`; cleanup membutuhkan keyword `BERSIHKAN DATA STOK`.
-5. Repair stok utama, transaksi, finance, production, payroll, HPP, dan reset data tidak tersedia dari menu ini.
-6. Gunakan `Export Data Master` untuk arsip/review JSON; file tersebut bukan paket restore.
-7. Gunakan `Checklist` sebelum update, restore, atau maintenance besar.
-8. Buka `Riwayat` untuk melihat backup, restore, import, repair, cleanup, dan lifecycle backup resmi.
+1. Buka `Ringkasan` untuk melihat status layanan, backup terverifikasi terakhir, status audit, dan tindakan yang perlu diperiksa.
+2. Nilai `Belum diperiksa` berarti audit belum dijalankan. Nilai tersebut tidak disamarkan menjadi `0`.
+3. Gunakan `Backup & Restore` untuk membuat backup, preview restore, melihat seluruh cakupan data, dan membuka detail teknis bila diperlukan.
+4. Di dalam `Backup & Restore`, gunakan selector compact `Backup`, `Restore`, `Cakupan Data`, dan `Detail Teknis`. Status, kebijakan retensi, serta nama file lengkap tersedia melalui tombol `Informasi`, `Kebijakan`, atau `Detail` agar tidak memenuhi tampilan utama.
+5. Buka `Kesehatan Data`, lalu pilih `Audit — Hanya baca` untuk pemeriksaan integrity database, foreign key, invariant stok, data turunan stok, registry backup, dan rekonsiliasi kas-ledger. Angka issue adalah total penuh; kolom contoh dapat menampilkan sebagian dan memberi penanda jumlah contoh. Audit tidak mengubah data bisnis, tetapi ringkasannya dicatat pada audit log.
+6. Pada area yang sama, pilih `Perbaikan — Dengan pengaman` untuk rebuild missing/stale `stock_read_models` atau cleanup orphan. Sistem membuat backup `pre-repair`; cleanup membutuhkan keyword `BERSIHKAN DATA STOK`.
+7. Repair stok utama, transaksi, finance, production, payroll, HPP, dan reset data tidak tersedia dari menu ini. Temuan finance harus direview manual; tidak ada Repair Side-Effect Transaksi otomatis.
+8. Buka `Alat Admin` untuk `Export Data Master` atau `Checklist`. File export JSON bukan paket restore.
+9. Gunakan `Data Nonaktif` untuk melihat data yang aman dihapus dan data yang masih dilindungi histori.
+10. Buka `Riwayat` untuk melihat backup, restore, import, repair, cleanup, purge, dan lifecycle backup resmi dengan filter serta pagination.
+
+Tombol `Panduan & Status` pada header membuka informasi urutan aman dan status pemeriksaan. Informasi tersebut tidak ditampilkan sebagai banner permanen supaya workspace tetap ringkas.
+
+## Cakupan data backup
+
+Tab `Cakupan Data` menampilkan seluruh kelompok data yang berada di database aktif:
+
+- Master Data: produk, bahan baku, produk setengah jadi, kategori, supplier, customer, dan aturan harga.
+- Katalog Supplier: penawaran restock dan histori katalog/harga per supplier.
+- Stok: posisi stok, penyesuaian stok, dan histori mutasi persediaan.
+- Transaksi: pembelian, penjualan, dan retur.
+- Produksi: tahap, pekerja, template, BOM, planning, order, work log, dan payroll produksi.
+- Keuangan: pemasukan, pengeluaran, dan ledger.
+- Sistem & Histori: user, audit log, riwayat backup/restore, dan snapshot laporan.
+- Data Teknis: metadata schema, pengaturan aplikasi, status modul, counter kode, role, sesi login, dan peta migrasi.
+
+Jumlah yang tampil adalah jumlah record fisik yang masih tersimpan, sehingga dapat mencakup histori atau record lama. Semua tabel tersebut ikut dalam backup resmi karena backup mengambil database SQLite secara utuh.
+
+Ringkasan membaca `/api/maintenance/status` secara otomatis setiap 15 detik saat halaman terlihat dan juga ketika tab/browser kembali aktif. Frontend hanya menerima angka jika backend mengirim kontrak status SQLite yang sesuai. Jika frontend sudah diperbarui tetapi backend masih proses lama, UI menampilkan `Frontend dan backend belum satu versi` dan tidak mengubah data yang belum tersedia menjadi angka `0`. Hentikan aplikasi dengan `Ctrl+C`, tunggu shutdown selesai, lalu jalankan kembali `npm run dev` dari folder project.
+
+Runtime final hanya memakai SQLite lokal. Variabel lama seperti `VITE_*_REPOSITORY_MODE` tidak lagi memilih sumber data dan tidak boleh dipakai untuk mengaktifkan Firebase/Firestore atau database browser. Data historis dari sistem lama hanya boleh dipindahkan melalui migrasi satu kali yang diaudit, bukan sinkronisasi dua arah.
 
 ## Backup otomatis dan retensi
 
 Backend menjalankan siklus backup saat start dan memeriksa ulang secara berkala selama layanan hidup. Karena itu daily berikutnya tetap dapat dibuat ketika aplikasi melewati pergantian hari tanpa restart.
+
+Scheduler lifecycle dijalankan setiap 1 jam setelah backend siap. Status aktual dapat dilihat pada:
+
+```text
+Utilities -> Maintenance Center -> Backup & Restore -> Status & Detail Teknis
+```
+
+Pastikan `Lifecycle Otomatis` berstatus `Aktif`, waktu `Lifecycle Terakhir` terisi, dan `Pemeriksaan Berikutnya` memiliki jadwal. Jika scheduler tidak aktif, UI menandai auto monthly dan retensi sebagai belum berjalan; status tersebut tidak lagi hanya berdasarkan konfigurasi statis.
 
 Aturan:
 
@@ -143,6 +183,8 @@ Aturan:
 8. Setelah restore selesai, backup `pre-restore` otomatis didaftarkan ulang agar tetap muncul di daftar backup untuk rollback jika restore ternyata salah. Backup sumber restore juga dipastikan tetap tercatat agar riwayat restore mudah dilacak.
 9. Backup harus berstatus `verified` sebelum dianggap aman.
 10. Setiap promosi monthly dan cleanup retention dicatat pada audit log maintenance.
+11. Kegagalan salah satu fase monthly, retention, atau daily tidak menghentikan fase lain. Error terakhir ditampilkan di detail teknis dan dicoba lagi pada interval berikutnya.
+12. Sebelum membuat atau mengekstrak backup, sistem memeriksa ruang kosong agar proses tidak berhenti di tengah karena disk penuh.
 
 ## Backup manual dari UI
 
@@ -167,6 +209,14 @@ Setelah berhasil, cek:
 - integrity check: `ok`
 - tombol `Download` bisa menyimpan file backup ke folder pilihan user
 
+## Batas format backup
+
+- File `.imsbackup` memakai ZIP klasik tanpa ZIP64.
+- Satu entry `database.sqlite` harus berukuran di bawah 4 GB.
+- Sistem menolak ukuran yang membutuhkan ZIP64 dengan pesan eksplisit; paket tidak dibuat setengah jadi.
+- Pembuatan backup, promosi monthly, import, dan ekstraksi preview/restore memakai preflight ruang disk dengan cadangan minimum agar file lama tidak dirusak saat kapasitas tidak cukup.
+- Implementasi saat ini memproses paket di memory dan import UI dibatasi 200 MB. Untuk database yang mendekati batas tersebut, lakukan evaluasi arsitektur streaming sebelum menaikkan batas import; jangan hanya menaikkan limit HTTP.
+
 
 ## Filter dan download backup
 
@@ -189,7 +239,7 @@ Rekomendasi operasional:
 - Sebelum update aplikasi: buat backup manual lalu copy ke media eksternal.
 - Setelah banyak transaksi penting: buat backup manual tambahan.
 
-Di tab Backup atau Checklist, klik:
+Di tab Backup atau `Alat Admin → Checklist`, klik:
 
 ```text
 Saya sudah copy ke flashdisk
@@ -209,16 +259,17 @@ Alur restore:
 
 1. Pilih backup resmi dari daftar.
 2. Klik `Preview Restore`.
-3. Pastikan backup valid, checksum cocok, integrity check `ok`, dan ringkasan data sesuai.
-4. Ketik keyword:
+3. Pastikan backup valid, checksum cocok, integrity check `ok`, dan guard akun menyatakan aman.
+4. Periksa perbandingan `Database Saat Ini` dan `Isi Backup`. Nilai negatif berarti jumlah record akan berkurang setelah full restore; detail seluruh tabel dapat dibuka per kelompok data.
+5. Ketik keyword:
 
 ```text
 RESTORE DATABASE
 ```
 
-5. Klik `Restore Database`.
-6. Sistem otomatis membuat backup `pre-restore` lalu mengganti database melalui file candidate/swap.
-7. Jika migrasi, validasi, atau audit restore gagal, database sebelum restore dikembalikan otomatis. Setelah restore berhasil, refresh aplikasi dan login ulang bila perlu.
+6. Klik `Restore Database`.
+7. Sistem otomatis membuat backup `pre-restore` lalu mengganti database melalui file candidate/swap.
+8. Jika migrasi, validasi, atau audit restore gagal, database sebelum restore dikembalikan otomatis. Setelah restore berhasil, refresh aplikasi dan login ulang bila perlu.
 
 Jangan restore dengan cara copy manual `database.sqlite` ke folder `data/` saat backend aktif.
 
@@ -239,7 +290,7 @@ Import backup belum mengubah data. Data baru berubah setelah `Restore Database` 
 
 ## Checklist auto/manual Maintenance Center
 
-Maintenance Center memiliki tab `Checklist` untuk membantu user melihat kesiapan backup dan restore tanpa membaca folder manual.
+Checklist tersedia di `Maintenance Center → Alat Admin → Checklist` untuk membantu user melihat kesiapan backup dan restore tanpa membaca folder manual.
 
 Checklist otomatis terisi jika sistem bisa membuktikan kondisinya, misalnya:
 
@@ -303,7 +354,12 @@ Cek:
 - login sebagai administrator lokal;
 - folder `backups/sqlite/` bisa ditulis;
 - disk laptop tidak penuh;
+- pesan `ruang penyimpanan tidak cukup` tidak muncul; jika muncul, kosongkan disk tanpa menghapus backup verified secara sembarang;
 - database tidak sedang dikunci proses lain.
+
+### Lifecycle otomatis tidak aktif
+
+Periksa tab `Status & Detail Teknis`. Jika `Lifecycle Otomatis` berstatus `Tidak aktif`, restart backend melalui root runner dan tunggu sampai log `backup_lifecycle_scheduler_started` muncul. Jangan menganggap monthly dan retensi sudah berjalan sebelum status scheduler aktif dan waktu pemeriksaan berikutnya terlihat.
 
 ### Restore preview tidak valid
 
@@ -455,3 +511,53 @@ Status Maintenance menampilkan antrean database aktif, jumlah request menunggu, 
 3. Log dirotasi berdasarkan ukuran dan dibersihkan sesuai retention; log tidak menyimpan body request atau password.
    Folder `logs/` adalah runtime-only dan tidak ikut clean source ZIP/Git archive.
 4. Jika queue tidak bergerak, hentikan transaksi baru, buat salinan backup terbaru bila memungkinkan, lalu restart backend secara terkontrol.
+
+## Sinkronisasi realtime antar laptop dan HP
+
+IMS sekarang memakai SSE agar perubahan dari perangkat lain terlihat tanpa menekan Muat Ulang pada setiap halaman.
+
+1. Pastikan laptop backend dan perangkat lain berada di jaringan yang sama serta user sudah login.
+2. Saat perangkat lain menambah/mengubah/menonaktifkan data, halaman yang relevan akan memuat ulang otomatis.
+3. Jika Anda sedang mengetik atau membuka modal/drawer, IMS tidak langsung mengganti halaman. Pesan `Data baru tersedia` akan muncul; simpan/batalkan form lalu tekan `Muat Ulang Data`.
+4. Setiap tab browser memiliki koneksi sendiri. Tab hasil duplicate tetap menerima perubahan karena IMS membuat identitas halaman baru pada setiap page load.
+5. Jika koneksi realtime terputus, IMS mencoba menyambung ulang dan memakai satu refresh fallback saat tab terlihat. Halaman tidak lagi menjalankan polling 15 detik masing-masing.
+6. Jika administrator mengubah role atau menonaktifkan akun yang sedang dipakai, tab user akan reload dan memvalidasi session kembali. Login/logout user lain tidak memaksa semua perangkat reload.
+7. Jika masa session habis, koneksi realtime ditutup otomatis dan halaman reload ke pemeriksaan login.
+8. Setelah restore database, semua perangkat akan reload agar tidak menampilkan state database lama.
+
+Untuk mencegah terlalu banyak koneksi, tutup tab IMS yang tidak digunakan. Jika batas koneksi tercapai, sistem meminta user menutup tab lama lalu EventSource akan mencoba tersambung kembali.
+
+Status koneksi SSE, jumlah client, revision, dan event terakhir dapat dilihat di:
+
+```text
+Utilities → Maintenance Center → Backup & Restore → Status & Detail Teknis
+```
+
+## Memahami aktif, nonaktif, dan total tersimpan
+
+Halaman operasional hanya menampilkan record aktif. Cakupan Data Maintenance tetap menghitung histori yang dipertahankan. Contoh setelah dua Customer dinonaktifkan:
+
+- Aktif: `0`
+- Nonaktif/deleted logis: `2`
+- Total tersimpan: `2`
+
+Ini bukan database tidak sinkron. Record dipertahankan agar transaksi dan audit lama tetap aman.
+
+## Menghapus permanen data nonaktif
+
+Menu operasional hanya menyediakan `Nonaktifkan` atau `Arsipkan`. Hapus permanen tersedia khusus administrator pada:
+
+```text
+Utilities → Maintenance Center → Data Nonaktif
+```
+
+Flow aman:
+1. Refresh preview kandidat.
+2. Gunakan filter `Aman dihapus` atau `Dilindungi histori` bila daftar banyak.
+3. Pilih record berstatus `Aman dihapus permanen`. Record dengan dependency/histori protected akan diblokir. User tidak dapat dipurge permanen walaupun nonaktif karena identitasnya dipertahankan untuk histori audit.
+4. Baca blocker dan target dengan teliti.
+5. Ketik `HAPUS PERMANEN`.
+6. Ketik ulang kode/nama/id target.
+7. Jalankan purge.
+
+Sebelum menghapus, IMS membuat backup otomatis. Record dihapus dalam transaction dan snapshot tersanitasi tetap disimpan pada Riwayat/Audit Maintenance. Pemeriksaan dependency mencakup kolom langsung, nested payload yang dikenal, hierarchy/katalog/history, dan mapping legacy. Data User, stok, transaksi, keuangan, produksi, payroll, backup, restore, dan audit tidak dapat dihapus dari tab ini.

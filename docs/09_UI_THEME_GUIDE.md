@@ -339,19 +339,22 @@ Alert tidak boleh membuat aksi berisiko terdengar aman tanpa konsekuensi. Khusus
 - Copy tidak boleh mendorong user membuat data manual ganda untuk sumber otomatis.
 
 ### Maintenance Center
-- Gunakan workspace berbasis tab: Ringkasan, Backup & Restore, Audit & Health, Repair Data Turunan, Export Data Master, Checklist, dan Riwayat.
+- Gunakan enam area utama: `Ringkasan`, `Backup & Restore`, `Kesehatan Data`, `Data Nonaktif`, `Alat Admin`, dan `Riwayat`.
+- `Kesehatan Data` mengelompokkan Audit read-only dan Repair data turunan guarded memakai selector compact; keduanya tidak boleh tampak sebagai satu jenis aksi.
+- `Alat Admin` mengelompokkan Export Data Master dan Checklist. Export tidak boleh disebut paket restore.
+- Status yang belum pernah diperiksa wajib ditampilkan sebagai `Belum diperiksa`, bukan angka `0`.
 - Backup & Restore harus tampil sebagai area utama pada mode database lokal, bukan tersembunyi di tab teknis.
-- Export Data Master tidak boleh bercampur dengan area repair/restore dan tidak boleh disebut paket restore.
-- Checklist memakai status auto/manual: auto untuk kondisi yang bisa dibuktikan sistem, manual untuk konfirmasi user seperti copy backup eksternal dan user lain berhenti input.
-- Riwayat menampilkan backup, restore, import, repair, cleanup, retention, dan promosi monthly dari audit log layanan lokal.
+- Ringkasan utama hanya menampilkan status layanan, backup terakhir, audit, dan tindakan. Schema, queue, logging, runtime ID, dan path file dipindahkan ke detail teknis.
+- Panduan, kebijakan retensi, status sekunder, nama file penuh, schema, dan integrity detail memakai `InfoPopoverButton` existing agar hanya muncul saat user menekan tombol info.
+- Jangan menumpuk dua baris tab bergaris. Navigasi utama memakai tab workspace, sedangkan mode di dalam Backup & Restore memakai selector segmented compact.
+- Checklist memakai status otomatis/manual: otomatis untuk kondisi yang bisa dibuktikan sistem, manual untuk konfirmasi user seperti copy backup eksternal dan user lain berhenti input.
+- Riwayat memakai filter dan pagination; jangan memotong data diam-diam dengan `slice()` tanpa penjelasan.
+- Nama file backup panjang tidak boleh mendominasi ringkasan. Tampilkan jenis, waktu, status, lalu sediakan tooltip/copy untuk nama lengkap.
+- Navigasi workspace Maintenance tidak dibuat sticky bila halaman memiliki selector internal karena dapat menumpuk atau menutup kontrol di dalam panel.
 - Jangan menampilkan tab reset nonaktif, baseline HPP palsu, tombol service stub, atau catatan session browser seolah-olah audit resmi.
 - Jangan menampilkan semua panel maintenance panjang sekaligus jika bisa dipisah per area.
-- Tab boleh membuat tampilan lebih ringkas, tetapi warning aksi berisiko wajib tegas.
-- Preview wajib untuk restore/repair berisiko sesuai konteks.
-- Confirmation keyword tidak boleh disamarkan.
-- Jangan membuat reset terdengar aman tanpa risiko.
-- Scope reset, protected data, jumlah dokumen terdampak, status proses, dan hasil/audit harus tetap jelas.
-- Mobile/tablet harus menjaga tab dapat digeser dan hero tidak overflow.
+- Warning aksi berisiko, preview, keyword konfirmasi, protected data, dan hasil audit wajib tetap jelas.
+- Mobile/tablet harus menjaga tab dapat digeser tanpa membuat body horizontal overflow.
 - Dark mode harus tetap aman; hindari background hardcoded yang terlalu putih/terang.
 
 ### User Management

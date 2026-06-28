@@ -1,6 +1,6 @@
 const { success } = require("../../utils/response");
 const { requireLocalAdministrator } = require("../../middlewares/localAuth");
-const { createSqliteJsonRecordRouter } = require("../../shared/sqliteJsonRecordRoutes");
+const { createSqliteJsonRecordRouter } = require("../../infrastructure/http/sqliteJsonRecordRouter");
 const {
   commitCashIn,
   commitCashOut,
@@ -50,7 +50,7 @@ const deleteCashOutController = async (req, res, next) => {
       id: req.params.id,
       actor: getActor(req),
     });
-    return success(res, "Kas keluar database lokal berhasil dihapus", result);
+    return success(res, "Kas keluar database lokal berhasil dinonaktifkan", result);
   } catch (error) {
     return next(error);
   }

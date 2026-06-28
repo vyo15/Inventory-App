@@ -1,15 +1,11 @@
-import { Suspense, lazy, useMemo } from "react";
-import { Card, Space, Tabs, Tag, Typography } from "antd";
+import { Suspense, lazy, useState } from "react";
+import { Card, Segmented, Tabs, Typography } from "antd";
 import PageHeader from "../../components/Layout/Page/PageHeader";
-import ImsNotice from "../../components/Layout/Feedback/ImsNotice";
-import useAuth from "../../hooks/useAuth";
+import InfoPopoverButton from "../../components/Layout/Feedback/InfoPopoverButton";
 import useResetMaintenanceAudits from "./hooks/useResetMaintenanceAudits";
 import useResetMaintenanceRepairs from "./hooks/useResetMaintenanceRepairs";
 import useMasterDataExport from "./hooks/useMasterDataExport";
-import {
-  buildActorLabel,
-  renderCompactText,
-} from "./utils/resetMaintenanceUiHelpers";
+import { renderCompactText } from "./utils/resetMaintenanceUiHelpers";
 import OfflineDevPanelErrorBoundary from "./components/OfflineDevPanelErrorBoundary";
 import ResetStatusSummaryCard from "./components/ResetStatusSummaryCard";
 import "./ResetMaintenanceData.css";
@@ -19,10 +15,10 @@ const { Text } = Typography;
 const ResetAutoDetectPanel = lazy(() => import("./components/ResetAutoDetectPanel"));
 const ResetExportPanel = lazy(() => import("./components/ResetExportPanel"));
 const ResetSafeRepairPanel = lazy(() => import("./components/ResetSafeRepairPanel"));
-const ResetUsageGuidePanel = lazy(() => import("./components/ResetUsageGuidePanel"));
 const OfflineDatabaseCenter = lazy(() => import("./components/OfflineDatabaseCenter"));
 const MaintenanceChecklistPanel = lazy(() => import("./components/MaintenanceChecklistPanel"));
 const MaintenanceHistoryPanel = lazy(() => import("./components/MaintenanceHistoryPanel"));
+const MaintenanceInactiveDataPanel = lazy(() => import("./components/MaintenanceInactiveDataPanel"));
 
 const ResetPanelRuntime = (
   <Card size="small" loading className="reset-maintenance-lazy-panel" />
@@ -33,11 +29,9 @@ const renderLazyResetPanel = (children) => (
 );
 
 const ResetMaintenanceData = () => {
-  const { authUser, profile } = useAuth();
-  const maintenanceActor = useMemo(
-    () => buildActorLabel({ profile, authUser }),
-    [authUser, profile],
-  );
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState("overview");
+  const [healthView, setHealthView] = useState("audit");
+  const [adminToolView, setAdminToolView] = useState("export");
 
   const {
     loadingMasterExportPreview,
@@ -57,6 +51,7 @@ const ResetMaintenanceData = () => {
 
   const {
     stockReadModelAudit,
+    hasStockReadModelAudit,
     loadingStockReadModelAudit,
     loadingStockReadModelRepair,
     loadingStockReadModelCleanup,
@@ -69,36 +64,52 @@ const ResetMaintenanceData = () => {
   const repairCandidateCount = Number(stockReadModelSummary.executablePlanCount || 0);
   const orphanCount = Number(stockReadModelSummary.orphanCount || 0);
 
-  const workspaceTabs = [
-    {
-      key: "overview",
-      label: "Ringkasan",
-      children: (
-        <Space direction="vertical" size={16} style={{ width: "100%" }}>
-          <ResetStatusSummaryCard
-            autoBugSummary={{
-              ...autoBugSummary,
-              safeRepairCount: repairCandidateCount || autoBugSummary.safeRepairCount,
-            }}
-            maintenanceActor={maintenanceActor}
-          />
-          {renderLazyResetPanel(<ResetUsageGuidePanel />)}
-        </Space>
-      ),
-    },
-    {
-      key: "backup-restore",
-      label: "Backup & Restore",
-      children: (
-        <OfflineDevPanelErrorBoundary>
-          {renderLazyResetPanel(<OfflineDatabaseCenter />)}
-        </OfflineDevPanelErrorBoundary>
-      ),
-    },
-    {
-      key: "audit-health",
-      label: `Audit & Health${autoBugSummary.issueCount ? ` (${autoBugSummary.issueCount})` : ""}`,
-      children: renderLazyResetPanel(
+  const handleNavigate = (tabKey, viewKey) => {
+    if (tabKey === "health-data" && viewKey) setHealthView(viewKey);
+    if (tabKey === "admin-tools" && viewKey) setAdminToolView(viewKey);
+    setActiveWorkspaceTab(tabKey);
+  };
+
+  const auditStatusLabel = autoBugSummary.hasAuditResult
+    ? (autoBugSummary.issueCount ? `${autoBugSummary.issueCount} masalah` : "Sehat")
+    : "Belum diperiksa";
+  const repairStatusLabel = hasStockReadModelAudit
+    ? (repairCandidateCount ? `${repairCandidateCount} kandidat` : "Tidak ada kandidat")
+    : "Belum diperiksa";
+  const orphanStatusLabel = hasStockReadModelAudit
+    ? (orphanCount ? `${orphanCount} data turunan` : "Tidak ada")
+    : "Belum diperiksa";
+
+  const maintenanceInfoItems = [
+    { label: "Urutan aman", value: "Backup → Audit → Perbaikan → Verifikasi" },
+    { label: "Data operasional", value: "Dinonaktifkan agar histori tetap tersimpan." },
+    { label: "Hapus permanen", value: "Hanya dari Data Nonaktif setelah backup dan pemeriksaan referensi." },
+    { label: "Status audit", value: auditStatusLabel },
+    { label: "Status perbaikan", value: repairStatusLabel },
+    { label: "Data tanpa master", value: orphanStatusLabel },
+  ];
+
+  const healthPanel = (
+    <div className="reset-maintenance-group-panel">
+      <div className="reset-maintenance-group-heading">
+        <div>
+          <Text strong>Kesehatan Data</Text>
+          <Text type="secondary">
+            Audit hanya membaca data. Perbaikan dibatasi pada data turunan stok dan tetap memakai pengaman.
+          </Text>
+        </div>
+        <Segmented
+          block
+          value={healthView}
+          onChange={setHealthView}
+          options={[
+            { label: "Audit — Hanya baca", value: "audit" },
+            { label: "Perbaikan — Dengan pengaman", value: "repair" },
+          ]}
+        />
+      </div>
+
+      {healthView === "audit" ? renderLazyResetPanel(
         <ResetAutoDetectPanel
           autoBugSummary={autoBugSummary}
           loadingDataQualityAudit={loadingDataQualityAudit}
@@ -106,12 +117,7 @@ const ResetMaintenanceData = () => {
           dataQualityCategoryRows={dataQualityCategoryRows}
           renderCompactText={renderCompactText}
         />,
-      ),
-    },
-    {
-      key: "derived-data-repair",
-      label: `Repair Data Turunan${repairCandidateCount + orphanCount ? ` (${repairCandidateCount + orphanCount})` : ""}`,
-      children: renderLazyResetPanel(
+      ) : renderLazyResetPanel(
         <ResetSafeRepairPanel
           loadingStockReadModelAudit={loadingStockReadModelAudit}
           onLoadStockReadModelAudit={handleLoadStockReadModelAudit}
@@ -124,12 +130,31 @@ const ResetMaintenanceData = () => {
           stockReadModelRows={stockReadModelAudit?.rows || []}
           renderCompactText={renderCompactText}
         />,
-      ),
-    },
-    {
-      key: "master-export",
-      label: "Export Data Master",
-      children: renderLazyResetPanel(
+      )}
+    </div>
+  );
+
+  const adminToolsPanel = (
+    <div className="reset-maintenance-group-panel">
+      <div className="reset-maintenance-group-heading">
+        <div>
+          <Text strong>Alat Admin</Text>
+          <Text type="secondary">
+            Export dan checklist mendukung verifikasi operasional tanpa mengubah business flow.
+          </Text>
+        </div>
+        <Segmented
+          block
+          value={adminToolView}
+          onChange={setAdminToolView}
+          options={[
+            { label: "Export Data Master", value: "export" },
+            { label: "Checklist", value: "checklist" },
+          ]}
+        />
+      </div>
+
+      {adminToolView === "export" ? renderLazyResetPanel(
         <ResetExportPanel
           loadingMasterExportPreview={loadingMasterExportPreview}
           onLoadMasterExportPreview={handleLoadMasterExportPreview}
@@ -138,12 +163,52 @@ const ResetMaintenanceData = () => {
           masterExportPreview={masterExportPreview}
           lastMasterExport={lastMasterExport}
         />,
+      ) : renderLazyResetPanel(<MaintenanceChecklistPanel />)}
+    </div>
+  );
+
+  const workspaceTabs = [
+    {
+      key: "overview",
+      label: "Ringkasan",
+      children: (
+        <ResetStatusSummaryCard
+          autoBugSummary={{
+            ...autoBugSummary,
+            safeRepairCount: repairCandidateCount || autoBugSummary.safeRepairCount,
+          }}
+          hasRepairAudit={hasStockReadModelAudit}
+          onNavigate={handleNavigate}
+        />
       ),
     },
     {
-      key: "checklist",
-      label: "Checklist",
-      children: renderLazyResetPanel(<MaintenanceChecklistPanel />),
+      key: "backup-restore",
+      label: "Backup & Restore",
+      children: (
+        <OfflineDevPanelErrorBoundary>
+          {renderLazyResetPanel(<OfflineDatabaseCenter />)}
+        </OfflineDevPanelErrorBoundary>
+      ),
+    },
+    {
+      key: "health-data",
+      label: "Kesehatan Data",
+      children: healthPanel,
+    },
+    {
+      key: "inactive-data",
+      label: "Data Nonaktif",
+      children: (
+        <OfflineDevPanelErrorBoundary>
+          {renderLazyResetPanel(<MaintenanceInactiveDataPanel />)}
+        </OfflineDevPanelErrorBoundary>
+      ),
+    },
+    {
+      key: "admin-tools",
+      label: "Alat Admin",
+      children: adminToolsPanel,
     },
     {
       key: "history",
@@ -153,53 +218,35 @@ const ResetMaintenanceData = () => {
   ];
 
   return (
-    <div className="page-container">
-      <Card className="content-card">
-        <Space direction="vertical" size={20} style={{ width: "100%" }}>
-          <PageHeader
-            title="Maintenance Center"
-            subtitle="Backup, restore, pemeriksaan kesehatan data, repair projection stok, export master, checklist, dan riwayat resmi."
-          />
+    <div className="page-container reset-maintenance-page">
+      <div className="reset-maintenance-page-surface">
+        <PageHeader
+          className="reset-maintenance-page-header"
+          title="Maintenance Center"
+          subtitle="Pusat backup, audit, perbaikan data turunan, pengelolaan data nonaktif, dan riwayat sistem."
+          extra={(
+            <InfoPopoverButton
+              label="Panduan & Status"
+              title="Panduan Maintenance"
+              description="Informasi ditampilkan saat dibutuhkan agar workspace tetap ringkas. Audit hanya membaca data; repair dan hapus permanen tetap memakai pengaman."
+              items={maintenanceInfoItems}
+            />
+          )}
+        />
 
-          <ImsNotice
-            variant="guidance"
-            kicker="Operational guidance"
-            title="Gunakan urutan Backup → Audit → Repair → Verifikasi"
-            description="Menu ini tidak menyediakan reset data operasional atau generator dummy. Testing transaksi harus dilakukan pada database sandbox terpisah, bukan database aktif."
-            sideLayout="inline"
-            sideItems={[
-              { label: "Backup", value: "Guarded", tone: "success" },
-              { label: "Audit", value: "Read-only", tone: "success" },
-              { label: "Repair", value: "Projection stok", tone: "warning" },
-            ]}
-          />
-
-          <div className="reset-maintenance-workspace reset-maintenance-workspace-flat">
-            <div className="reset-maintenance-toolbar">
-              <div className="reset-maintenance-toolbar-main">
-                <Space size={8} wrap>
-                  <Text strong>Maintenance Workspace</Text>
-                  <Tag color="blue">Administrator</Tag>
-                </Space>
-                <Text type="secondary">
-                  Aksi write dibatasi ke backup/restore guarded dan repair data turunan stok dengan backup otomatis.
-                </Text>
-              </div>
-              <Space size={8} wrap className="reset-maintenance-toolbar-status">
-                <Tag color={autoBugSummary.issueCount ? "orange" : "green"}>Issue: {autoBugSummary.issueCount || 0}</Tag>
-                <Tag color={repairCandidateCount ? "blue" : "default"}>Rebuild: {repairCandidateCount}</Tag>
-                <Tag color={orphanCount ? "red" : "default"}>Orphan: {orphanCount}</Tag>
-              </Space>
-            </div>
-
+        <div className="reset-maintenance-page-body">
+          <div className="reset-maintenance-workspace">
             <Tabs
               className="reset-maintenance-tabs"
-              defaultActiveKey="overview"
+              size="small"
+              animated={false}
+              activeKey={activeWorkspaceTab}
+              onChange={setActiveWorkspaceTab}
               items={workspaceTabs}
             />
           </div>
-        </Space>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 };

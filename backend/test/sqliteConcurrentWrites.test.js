@@ -1,5 +1,9 @@
 const assert = require("node:assert/strict");
 const { after, before, beforeEach, test } = require("node:test");
+const { configureTestDatabase } = require("./helpers/testDatabase");
+
+const testDatabase = configureTestDatabase("concurrent-writes");
+
 const { runInTransaction } = require("../src/db/connection");
 const { formatBusinessDateStamp } = require("../src/utils/businessCodeCounter");
 const { createCustomer, generateCustomerCode } = require("../src/modules/customers/customers.service");
@@ -12,10 +16,6 @@ const {
   createPricingRule,
   generatePricingRuleCode,
 } = require("../src/modules/pricingRules/pricingRules.service");
-const { configureTestDatabase } = require("./helpers/testDatabase");
-
-const testDatabase = configureTestDatabase("concurrent-writes");
-
 before(testDatabase.initialize);
 beforeEach(testDatabase.reset);
 after(testDatabase.cleanup);

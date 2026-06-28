@@ -1,16 +1,35 @@
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const { AsyncLocalStorage } = require("node:async_hooks");
 const sqlite3 = require("sqlite3");
 const { open } = require("sqlite");
 const env = require("../config/env");
 const logger = require("../utils/logger");
+const { getRequestContext } = require("../middlewares/requestContext");
+const { queueDatabaseMutation } = require("../modules/realtime/realtime.service");
 
 let rawDbPromise = null;
 let databaseGeneration = 0;
 let dbQueueTail = Promise.resolve();
 let operationSequence = 0;
 const dbAccessContext = new AsyncLocalStorage();
+
+const MUTATION_TABLE_PATTERN = /\b(?:INSERT(?:\s+OR\s+\w+)?\s+INTO|REPLACE\s+INTO|UPDATE(?:\s+OR\s+\w+)?|DELETE\s+FROM)\s+[`"\[]?([a-zA-Z_][a-zA-Z0-9_]*)/gi;
+
+const extractMutationTables = (sql = "") => {
+  const tables = new Set();
+  const source = String(sql || "");
+  let match = MUTATION_TABLE_PATTERN.exec(source);
+  while (match) {
+    const tableName = String(match[1] || "").trim().toLowerCase();
+    if (tableName && !tableName.startsWith("sqlite_")) tables.add(tableName);
+    match = MUTATION_TABLE_PATTERN.exec(source);
+  }
+  MUTATION_TABLE_PATTERN.lastIndex = 0;
+  return [...tables];
+};
+
 const queueMetrics = {
   queued: 0,
   active: null,
@@ -22,6 +41,48 @@ const queueMetrics = {
   lastSlowWait: null,
   lastSlowOperation: null,
   lastError: null,
+};
+
+const isPathAtOrInside = (candidatePath, parentPath) => {
+  const candidate = path.resolve(candidatePath);
+  const parent = path.resolve(parentPath);
+  const relative = path.relative(parent, candidate);
+  return relative === "" || (!relative.startsWith(`..${path.sep}`)
+    && relative !== ".."
+    && !path.isAbsolute(relative));
+};
+
+const resolveThroughExistingAncestor = (candidatePath) => {
+  const resolvedCandidate = path.resolve(candidatePath);
+  let existingAncestor = resolvedCandidate;
+  while (!fs.existsSync(existingAncestor)) {
+    const parent = path.dirname(existingAncestor);
+    if (parent === existingAncestor) break;
+    existingAncestor = parent;
+  }
+
+  const realAncestor = fs.realpathSync(existingAncestor);
+  return path.resolve(realAncestor, path.relative(existingAncestor, resolvedCandidate));
+};
+
+const assertSafeTestDatabaseRuntime = () => {
+  const isTestRuntime = process.env.NODE_ENV === "test" || Boolean(process.env.NODE_TEST_CONTEXT);
+  if (!isTestRuntime) return;
+
+  const resolvedDbPath = resolveThroughExistingAncestor(env.dbPath);
+  const resolvedTempRoot = resolveThroughExistingAncestor(os.tmpdir());
+  const resolvedRepositoryRoot = resolveThroughExistingAncestor(path.resolve(__dirname, "../../.."));
+  if (isPathAtOrInside(resolvedDbPath, resolvedTempRoot)
+    && !isPathAtOrInside(resolvedDbPath, resolvedRepositoryRoot)) return;
+
+  const error = new Error(
+    "Mode test menolak membuka database di luar folder temporary sistem atau di dalam source project. Database runtime tidak disentuh.",
+  );
+  error.code = "TEST_DATABASE_RUNTIME_PATH_UNSAFE";
+  error.dbPath = resolvedDbPath;
+  error.repositoryRoot = resolvedRepositoryRoot;
+  error.tempRoot = resolvedTempRoot;
+  throw error;
 };
 
 const ensureDirectory = (filePath) => {
@@ -50,6 +111,7 @@ const getDbQueueStatus = () => ({
 });
 
 const openRawDb = async () => {
+  assertSafeTestDatabaseRuntime();
   ensureDirectory(env.dbPath);
   const db = await open({
     filename: env.dbPath,
@@ -78,6 +140,7 @@ const enqueueDbAccess = (callback, { label = "database_operation" } = {}) => {
     return callback(activeContext);
   }
 
+  const requestContext = getRequestContext();
   operationSequence += 1;
   const operationId = operationSequence;
   const queuedAt = Date.now();
@@ -110,12 +173,20 @@ const enqueueDbAccess = (callback, { label = "database_operation" } = {}) => {
       rawDb: null,
       operationId,
       operationLabel: label,
+      originClientId: requestContext.clientId || "",
+      pendingMutationTables: new Set(),
     };
 
     return dbAccessContext.run(context, async () => {
       try {
         const result = await callback(context);
         queueMetrics.totalCompleted += 1;
+        if (context.pendingMutationTables.size > 0) {
+          queueDatabaseMutation({
+            tables: [...context.pendingMutationTables],
+            originClientId: context.originClientId,
+          });
+        }
         return result;
       } catch (error) {
         queueMetrics.totalFailed += 1;
@@ -148,7 +219,13 @@ const enqueueDbAccess = (callback, { label = "database_operation" } = {}) => {
 const callSerializedDbMethod = (methodName, args) => enqueueDbAccess(async (context) => {
   const rawDb = context.rawDb || await getRawDb();
   context.rawDb = rawDb;
-  return rawDb[methodName](...args);
+  const result = await rawDb[methodName](...args);
+  if (["run", "exec"].includes(methodName)) {
+    for (const tableName of extractMutationTables(args[0])) {
+      context.pendingMutationTables.add(tableName);
+    }
+  }
+  return result;
 }, { label: `db.${methodName}` });
 
 const dbFacade = new Proxy({}, {
@@ -250,6 +327,7 @@ async function closeDb() {
 
 module.exports = {
   closeDb,
+  extractMutationTables,
   getDb,
   getDatabaseGeneration,
   getDbPath,

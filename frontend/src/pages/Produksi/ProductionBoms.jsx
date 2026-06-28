@@ -1250,7 +1250,7 @@ const ProductionBoms = () => {
                 },
                 // Nested/subtable editor sengaja tetap non-sticky karena tidak punya masalah horizontal scroll nyata.
                 buildBomLineActionColumn({
-                  deleteTitle: "Hapus material line ini?",
+                  deleteTitle: "Keluarkan material dari BOM ini?",
                   onDelete: handleRemoveMaterialLine,
                   onEdit: openMaterialModal,
                 }),
@@ -1286,7 +1286,7 @@ const ProductionBoms = () => {
                 },
                 // Nested/subtable editor sengaja tetap non-sticky karena aksi masih langsung terlihat di dalam modal BOM.
                 buildBomLineActionColumn({
-                  deleteTitle: "Hapus step line ini?",
+                  deleteTitle: "Keluarkan tahap dari BOM ini?",
                   onDelete: handleRemoveStepLine,
                   onEdit: openStepModal,
                 }),

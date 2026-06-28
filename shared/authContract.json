@@ -1,0 +1,6 @@
+{
+  "roles": ["administrator", "user"],
+  "userStatuses": ["active", "inactive"],
+  "usernamePattern": "^[a-z0-9._-]+$",
+  "sessionDurationHours": 12
+}

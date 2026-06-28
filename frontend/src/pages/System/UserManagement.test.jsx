@@ -22,7 +22,6 @@ vi.mock("../../services/System/userService", () => ({
   DELETE_PROFILE_NOT_FOUND_ERROR_CODE: "DELETE_PROFILE_NOT_FOUND",
   DELETE_PROFILE_PERMISSION_ERROR_CODE: "DELETE_PROFILE_PERMISSION_DENIED",
   createManualUserProfile: vi.fn(),
-  deleteSystemUserProfile: vi.fn(),
   isUsernameAlreadyUsedError: vi.fn(() => false),
   listSystemUsers: mockListSystemUsers,
   updateSystemUserProfile: vi.fn(),
@@ -65,9 +64,9 @@ describe("UserManagement", () => {
     render(<UserManagement />);
 
     expect((await screen.findAllByText("Administrator Utama")).length).toBeGreaterThan(0);
-    const deleteButtons = screen.getAllByRole("button", { name: /hapus akun/i });
-    expect(deleteButtons.some((button) => button.disabled)).toBe(true);
-
+    expect(screen.queryByRole("button", { name: /hapus akun/i })).toBeNull();
+    const deactivateButtons = screen.getAllByRole("button", { name: /nonaktifkan/i });
+    expect(deactivateButtons.some((button) => button.disabled)).toBe(true);
     expect(screen.getByRole("button", { name: /tambah akun/i }).disabled).toBe(false);
   });
 

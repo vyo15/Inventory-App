@@ -1,9 +1,6 @@
-export const CATEGORY_TYPES = Object.freeze({
-  PRODUCT_FORM: 'product_form',
-  FLOWER_TYPE: 'flower_type',
-  RAW_MATERIAL_GROUP: 'raw_material_group',
-  SEMI_FINISHED_GROUP: 'semi_finished_group',
-});
+import categoryContract from "../../../shared/categoryContract.json";
+
+export const CATEGORY_TYPES = Object.freeze({ ...categoryContract.types });
 
 export const CATEGORY_TYPE_OPTIONS = [
   {

@@ -1,7 +1,9 @@
-const ROLES = ["administrator", "user"];
-const USER_STATUSES = ["active", "inactive"];
-const USERNAME_PATTERN = /^[a-z0-9._-]+$/;
-const SESSION_DURATION_HOURS = 12;
+const authContract = require("../../../../shared/authContract.json");
+
+const ROLES = Object.freeze([...authContract.roles]);
+const USER_STATUSES = Object.freeze([...authContract.userStatuses]);
+const USERNAME_PATTERN = new RegExp(authContract.usernamePattern);
+const SESSION_DURATION_HOURS = authContract.sessionDurationHours;
 
 module.exports = {
   ROLES,

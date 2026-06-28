@@ -96,6 +96,8 @@ npm run check
 
 Runner test menemukan seluruh file `backend/test/**/*.test.js`. Root check menjalankan test, syntax check backend, dan production build frontend. `git check`/pre-push juga menjalankan automated test.
 
+`npm test` wajib mengisolasi database, backup, dan log ke folder temporary sistem. Runner menimpa `IMS_SQLITE_DB_PATH`, `IMS_SQLITE_BACKUP_DIR`, dan `IMS_LOG_DIR`; helper integration test menolak reset bila path aktif berbeda dari database temporary milik test. Mode `NODE_ENV=test` juga menolak membuka database di luar folder temporary. Jika guard `TEST_DATABASE_*` gagal, hentikan test dan jangan mengubah path agar menunjuk ke `data/`.
+
 ## Runtime data
 
 ```txt

@@ -339,3 +339,43 @@ test("purchase Bahan Baku yang gagal verifikasi tidak mengubah stok atau modal",
     audit_count: 1,
   });
 });
+
+test("purchase menolak status deleted sebelum stock-in dan finance", async () => {
+  await seedProduct();
+  const { supplier, offer } = await seedPurchaseSupplier();
+
+  await assert.rejects(
+    commitPurchase({
+      actor: "tester",
+      payload: {
+        referenceNumber: "PUR-DELETED-001",
+        status: "deleted",
+        supplierId: supplier.id,
+        supplierName: supplier.name,
+        catalogOfferId: offer.id,
+        sourceType: "product",
+        sourceId: "product-1",
+        itemId: "product-1",
+        quantity: 1,
+        qty: 1,
+        subtotalItems: 5000,
+        verifiedCatalogPrice: 5000,
+        priceVerified: true,
+        priceVerifiedAt: "2026-06-28T00:00:00.000Z",
+        totalAmount: 5000,
+        items: [{ sourceType: "product", sourceId: "product-1", quantity: 1 }],
+      },
+    }),
+    (error) => error.code === "INVALID_PURCHASE_STATUS",
+  );
+
+  const db = await testDatabase.getDb();
+  const state = await db.get(`
+    SELECT
+      (SELECT current_stock FROM products WHERE id = 'product-1') AS stock,
+      (SELECT COUNT(*) FROM purchases) AS purchase_count,
+      (SELECT COUNT(*) FROM expenses) AS expense_count,
+      (SELECT COUNT(*) FROM money_movement_ledger) AS ledger_count
+  `);
+  assert.deepEqual(state, { stock: 10, purchase_count: 0, expense_count: 0, ledger_count: 0 });
+});

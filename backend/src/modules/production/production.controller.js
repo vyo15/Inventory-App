@@ -4,7 +4,7 @@ const {
   requireLocalAdministrator,
   requireLocalOperationalUser,
 } = require("../../middlewares/localAuth");
-const { createSqliteJsonRecordRouter } = require("../../shared/sqliteJsonRecordRoutes");
+const { createSqliteJsonRecordRouter } = require("../../infrastructure/http/sqliteJsonRecordRouter");
 const { success } = require("../../utils/response");
 const {
   cancelProductionPlan,

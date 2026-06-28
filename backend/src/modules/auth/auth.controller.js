@@ -106,7 +106,7 @@ const updateUser = async (req, res, next) => {
 const deleteUser = async (req, res, next) => {
   try {
     const result = await authService.deleteUser(req.params.id, req.localAuth.user);
-    return success(res, "User lokal berhasil dihapus", result);
+    return success(res, "User lokal berhasil dinonaktifkan", result);
   } catch (error) {
     return handleAuthError(res, next, error);
   }

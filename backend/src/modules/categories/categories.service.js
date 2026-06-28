@@ -1,33 +1,19 @@
 const { getDb, runInTransaction } = require("../../db/connection");
 const { createAuditLog } = require("../../utils/auditLog");
 const { safeJsonParse } = require("../../utils/jsonUtils");
+const categoryContract = require("../../../../shared/categoryContract.json");
 
-const CATEGORY_TYPES = new Set([
-  "product_form",
-  "flower_type",
-  "raw_material_group",
-  "semi_finished_group",
-]);
+const CATEGORY_TYPES = new Set(Object.values(categoryContract.types));
 
-const CATEGORY_TYPE_ALIASES = {
-  general: "product_form",
-  product: "product_form",
-  raw_material: "raw_material_group",
-  semi_finished: "semi_finished_group",
-};
+const CATEGORY_TYPE_ALIASES = Object.freeze({ ...categoryContract.aliases });
 
-const CATEGORY_CODE_PREFIX = {
-  product_form: "BENTUK",
-  flower_type: "BUNGA",
-  raw_material_group: "BAHAN",
-  semi_finished_group: "KOMPONEN",
-};
+const CATEGORY_CODE_PREFIX = Object.freeze({ ...categoryContract.codePrefixes });
 
 const normalizeText = (value) => (value || "").toString().trim();
 const normalizeCode = (value) => normalizeText(value).toUpperCase();
 const normalizeCategoryType = (value) => {
   const normalized = normalizeText(value).toLowerCase();
-  return CATEGORY_TYPE_ALIASES[normalized] || normalized || "product_form";
+  return CATEGORY_TYPE_ALIASES[normalized] || normalized || categoryContract.defaultType;
 };
 const normalizeParentId = (value) => {
   if (value === null || value === undefined || value === "") return null;

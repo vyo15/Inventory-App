@@ -3,12 +3,10 @@ import {
   REPOSITORY_MODES,
 } from "./repositoryMode";
 
-const SQLITE_MODULE_MODES = new Set(["sqlite", "sqlite_sidecar", "local_sqlite"]);
-
-export const isSqliteRepositoryModuleEnabled = (envKey, fallbackMode = "sqlite") => {
-  const value = String(import.meta.env?.[envKey] || fallbackMode || "").trim().toLowerCase();
-  return SQLITE_MODULE_MODES.has(value);
-};
+// Runtime final IMS hanya memakai SQLite lokal. Parameter dipertahankan untuk
+// kompatibilitas pemanggil lama, tetapi environment lama tidak boleh lagi
+// menonaktifkan modul atau membuat sumber data ganda.
+export const isSqliteRepositoryModuleEnabled = () => true;
 
 export const getRepositoryModeStatus = async () => ({
   mode: DEFAULT_REPOSITORY_MODE,

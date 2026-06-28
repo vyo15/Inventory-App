@@ -84,6 +84,7 @@ const useResetMaintenanceRepairs = () => {
 
   return {
     stockReadModelAudit,
+    hasStockReadModelAudit: Boolean(stockReadModelAudit),
     loadingStockReadModelAudit,
     loadingStockReadModelRepair,
     loadingStockReadModelCleanup,

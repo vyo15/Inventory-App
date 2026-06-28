@@ -90,7 +90,7 @@ const ChecklistItemCard = ({ item }) => (
         <Tag icon={getStatusIcon(item.status)} color={getStatusColor(item.status)}>
           {item.statusLabel}
         </Tag>
-        <Tag color={item.kind === "auto" ? "blue" : "purple"}>{item.kind === "auto" ? "Auto" : "Manual"}</Tag>
+        <Tag color={item.kind === "auto" ? "blue" : "default"}>{item.kind === "auto" ? "Otomatis" : "Manual"}</Tag>
       </Space>
       <Text strong>{item.title}</Text>
       <Text type="secondary">{item.description}</Text>
@@ -155,6 +155,7 @@ const MaintenanceChecklistPanel = () => {
 
   const statusData = useMemo(() => status?.data || {}, [status]);
   const backupPolicy = useMemo(() => statusData.backupPolicy || {}, [statusData.backupPolicy]);
+  const backupLifecycle = useMemo(() => statusData.backupLifecycle || {}, [statusData.backupLifecycle]);
   const latestBackup = backups[0] || statusData.latestBackup || null;
   const latestVerifiedBackup = backups.find(isVerifiedBackup) || (isVerifiedBackup(latestBackup) ? latestBackup : null);
   const verifiedBackupToday = backups.find((backup) => isToday(backup.created_at) && isVerifiedBackup(backup));
@@ -210,6 +211,7 @@ const MaintenanceChecklistPanel = () => {
       kind: "auto",
       status: backupPolicy.autoDaily
         && backupPolicy.autoMonthlyPromotion
+        && backupPolicy.autoRetention
         && Number(backupPolicy.dailyRetentionDays) === 60
         && Number(backupPolicy.monthlyRetentionCount) === 12
         && backupPolicy.manualAutoDelete === false
@@ -217,6 +219,7 @@ const MaintenanceChecklistPanel = () => {
         : "pending",
       statusLabel: backupPolicy.autoDaily
         && backupPolicy.autoMonthlyPromotion
+        && backupPolicy.autoRetention
         && Number(backupPolicy.dailyRetentionDays) === 60
         && Number(backupPolicy.monthlyRetentionCount) === 12
         && backupPolicy.manualAutoDelete === false
@@ -224,9 +227,9 @@ const MaintenanceChecklistPanel = () => {
         : "Perlu cek",
       title: "Retensi daily, monthly, dan manual aktif",
       description: "Daily disimpan 60 hari, monthly maksimal 12 bulan, dan manual tidak dihapus otomatis.",
-      extra: Array.isArray(backupPolicy.folders)
-        ? `Folder aktif: ${backupPolicy.folders.join(", ")}`
-        : "Kebijakan folder backup belum terbaca.",
+      extra: backupLifecycle.schedulerActive
+        ? `Scheduler aktif. Pemeriksaan berikutnya: ${formatDateTime(backupLifecycle.nextRunAt)}.`
+        : "Scheduler lifecycle tidak aktif; auto monthly dan retensi belum berjalan.",
     },
     {
       key: "latest-backup-verified",
@@ -292,7 +295,7 @@ const MaintenanceChecklistPanel = () => {
       description: "Checklist otomatis dari status modul aplikasi yang dinormalisasi layanan lokal.",
       extra: moduleRuntimeKnown ? `${moduleRuntimeReady}/${moduleRuntimeTotal} modul siap` : "Status modul aplikasi belum terbaca.",
     },
-  ], [backupPolicy, dailyBackupToday, latestVerifiedBackup, moduleRuntimeKnown, moduleRuntimeTotal, moduleRuntimeNotReady, moduleRuntimeReady, statusData, verifiedBackupToday]);
+  ], [backupLifecycle, backupPolicy, dailyBackupToday, latestVerifiedBackup, moduleRuntimeKnown, moduleRuntimeTotal, moduleRuntimeNotReady, moduleRuntimeReady, statusData, verifiedBackupToday]);
 
   const manualItems = useMemo(() => [
     {
@@ -337,7 +340,7 @@ const MaintenanceChecklistPanel = () => {
   const manualDoneCount = manualItems.filter((item) => item.status === "done").length;
   const criticalIssues = autoItems.filter((item) => item.status === "failed").length;
   const summaryItems = [
-    { key: "auto", label: "Auto Sesuai", value: `${autoDoneCount} / ${autoItems.length}`, icon: <SafetyOutlined /> },
+    { key: "auto", label: "Otomatis Sesuai", value: `${autoDoneCount} / ${autoItems.length}`, icon: <SafetyOutlined /> },
     { key: "manual", label: "Manual Selesai", value: `${manualDoneCount} / ${manualItems.length}`, icon: <CheckCircleOutlined /> },
     { key: "backup", label: "Backup Verified", value: backups.filter(isVerifiedBackup).length, icon: <HddOutlined /> },
     { key: "critical", label: "Issue Kritis", value: criticalIssues, icon: <CloseCircleOutlined /> },

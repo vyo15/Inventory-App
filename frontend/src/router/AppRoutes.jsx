@@ -7,6 +7,8 @@ import {
   LEGACY_ROUTE_REDIRECTS,
 } from "../config/appRoutes";
 import { ROUTE_ACCESS_KEYS } from "../utils/auth/roleAccess";
+import LiveRouteRefresh from "../components/System/LiveRouteRefresh";
+import { REALTIME_ROUTE_SCOPES } from "../config/realtimeRouteScopes";
 
 // =========================
 // SECTION: Lazy Loaded Pages — AKTIF
@@ -131,7 +133,11 @@ const RouteFallback = (
 // =========================
 const AppRoutes = ({ darkTheme }) => {
   const guardRoute = (routeKey, element) => (
-    <ProtectedRoute routeKey={routeKey}>{element}</ProtectedRoute>
+    <ProtectedRoute routeKey={routeKey}>
+      <LiveRouteRefresh scopes={REALTIME_ROUTE_SCOPES[routeKey] || []}>
+        {element}
+      </LiveRouteRefresh>
+    </ProtectedRoute>
   );
 
   return (

@@ -23,8 +23,8 @@ import { createCashInTransaction, listenCashInRecords } from "../../services/Fin
 import { compareRecordsByDateDesc, upsertRecordById } from "../../utils/state/recordCollectionState";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import CashTransactionFormFields from "./components/CashTransactionFormFields";
+import FinancePeriodYearMonthFilter from "./components/FinancePeriodYearMonthFilter";
 import {
-  buildFinanceMonthOptions,
   buildFinanceRecordYearOptions,
   filterFinanceRecordsByPeriod,
   getCurrentFinanceYear,
@@ -40,7 +40,6 @@ import {
 const { Option } = Select;
 const { Text } = Typography;
 
-const MONTH_OPTIONS = buildFinanceMonthOptions();
 
 const CashIn = () => {
   // =========================
@@ -336,38 +335,13 @@ const CashIn = () => {
         title="Filter Pemasukan"
         subtitle="Filter periode."
       >
-        <FilterBar>
-          <Col xs={24} md={6}>
-            <Select
-              value={selectedYear}
-              onChange={setSelectedYear}
-              className="ims-filter-control"
-              placeholder="Pilih tahun"
-            >
-              {yearOptions.map((year) => (
-                <Option key={year} value={year}>
-                  {year}
-                </Option>
-              ))}
-            </Select>
-          </Col>
-
-          <Col xs={24} md={6}>
-            <Select
-              value={selectedMonth}
-              onChange={setSelectedMonth}
-              className="ims-filter-control"
-              placeholder="Pilih bulan"
-            >
-              <Option value="all">Semua Bulan</Option>
-              {MONTH_OPTIONS.map((monthOption) => (
-                <Option key={monthOption.value} value={monthOption.value}>
-                  {monthOption.label}
-                </Option>
-              ))}
-            </Select>
-          </Col>
-        </FilterBar>
+        <FinancePeriodYearMonthFilter
+          selectedYear={selectedYear}
+          selectedMonth={selectedMonth}
+          yearOptions={yearOptions}
+          onYearChange={setSelectedYear}
+          onMonthChange={setSelectedMonth}
+        />
       </PageSection>
 
       <PageSection

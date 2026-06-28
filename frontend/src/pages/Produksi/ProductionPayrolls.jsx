@@ -31,6 +31,7 @@ import ProductionFilterCard from "../../components/Produksi/shared/ProductionFil
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
+import { CompactCellText } from "../../components/Layout/Table/CompactCell";
 import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
 import ImsNotice from "../../components/Layout/Feedback/ImsNotice";
 import InfoPopoverButton from "../../components/Layout/Feedback/InfoPopoverButton";
@@ -141,26 +142,14 @@ Risiko:
 - Jika helper ini diubah sembarangan, identitas payroll, karyawan, work log, atau step bisa sulit diaudit dari tabel utama.
 =====================================================
 */
-const renderCompactText = (value, options = {}) => {
-  const text = value === undefined || value === null || value === ""
-    ? "-"
-    : String(value);
-
-  return (
-    <Typography.Text
-      strong={options.strong}
-      type={options.type}
-      className={options.type === "secondary" ? "ims-cell-meta" : undefined}
-      style={{
-        display: "block",
-        maxWidth: "100%",
-      }}
-      ellipsis={{ tooltip: text }}
-    >
-      {text}
-    </Typography.Text>
-  );
-};
+const renderCompactText = (value, options = {}) => (
+  <CompactCellText
+    value={value}
+    strong={options.strong}
+    secondary={options.type === "secondary"}
+    tooltip={options.tooltip !== false}
+  />
+);
 
 const ProductionPayrolls = () => {
   const [loading, setLoading] = useState(false);

@@ -29,7 +29,7 @@ vi.mock("../../data/adapters/sqlite/sqliteProductsAdapter", () => ({ listProduct
 vi.mock("../../data/adapters/sqlite/sqliteRawMaterialsAdapter", () => ({ listRawMaterials: vi.fn() }));
 
 import { createPurchaseTransaction } from "./purchasesService";
-import { createReturnTransaction } from "./returnsService";
+import { buildReturnableItemsForSale, createReturnTransaction } from "./returnsService";
 import { createSaleTransaction, updateSaleStatusTransaction } from "./salesService";
 
 beforeEach(() => vi.clearAllMocks());
@@ -174,4 +174,28 @@ describe("transaction commit services", () => {
     expect(mocks.commitReturn).toHaveBeenCalledTimes(1);
     expect(mocks.commitReturn).toHaveBeenCalledWith(expect.objectContaining({ relatedSaleId: "sale-1", quantity: 1 }));
   });
+  it("return menghitung sisa qty per item dan varian dari Sales serta Return sebelumnya", () => {
+    const sale = {
+      id: "SALE-001",
+      status: "Selesai",
+      items: [
+        { sourceType: "product", sourceId: "product-1", itemName: "Mawar", variantKey: "red", quantity: 5 },
+        { sourceType: "product", sourceId: "product-1", itemName: "Mawar", variantKey: "blue", quantity: 2 },
+      ],
+    };
+    const items = buildReturnableItemsForSale({
+      sale,
+      returnRecords: [{
+        relatedSaleId: "SALE-001",
+        status: "Selesai",
+        items: [{ sourceType: "product", sourceId: "product-1", variantKey: "red", quantity: 3 }],
+      }],
+    });
+
+    expect(items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ variantKey: "red", soldQuantity: 5, returnedQuantity: 3, remainingQuantity: 2 }),
+      expect.objectContaining({ variantKey: "blue", soldQuantity: 2, returnedQuantity: 0, remainingQuantity: 2 }),
+    ]));
+  });
+
 });

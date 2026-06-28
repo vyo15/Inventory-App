@@ -95,7 +95,7 @@ const applyPricingRuleBatchController = async (req, res, next) => {
 const deletePricingRuleController = async (req, res, next) => {
   try {
     const result = await softDeletePricingRule(req.params.id, getActor(req));
-    return success(res, "Pricing rule database lokal berhasil dihapus", result);
+    return success(res, "Pricing rule database lokal berhasil dinonaktifkan", result);
   } catch (error) {
     const handled = handlePricingRuleError(res, error);
     if (handled) return handled;

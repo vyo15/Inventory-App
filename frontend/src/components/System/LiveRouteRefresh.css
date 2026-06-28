@@ -1,0 +1,17 @@
+.ims-live-route-refresh {
+  width: 100%;
+}
+
+.ims-live-route-refresh__notice {
+  margin: 0 0 12px;
+}
+
+.ims-live-route-refresh__status {
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--ims-border-color, #d8e3ef);
+  border-radius: 10px;
+  color: var(--ims-text-secondary, #53657a);
+  background: var(--ims-surface-muted, rgba(255, 255, 255, 0.68));
+  font-size: 12px;
+}

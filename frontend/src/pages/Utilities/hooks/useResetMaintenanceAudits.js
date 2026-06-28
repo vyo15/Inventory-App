@@ -9,6 +9,9 @@ const buildCategoryRows = (audit) => (audit?.categories || []).map((item) => {
     return `${collectionLabel} • ${referenceLabel}: ${sample.issue || item.label}`;
   }).join(" | ");
 
+  const sampleCount = Number(item.sampleCount ?? item.samples?.length ?? 0);
+  const isTruncated = item.isTruncated === true;
+
   return {
     key: item.key,
     categoryLabel: item.label,
@@ -16,7 +19,11 @@ const buildCategoryRows = (audit) => (audit?.categories || []).map((item) => {
     checkedRecords: Number(item.checkedRecords || 0),
     count: Number(item.count || 0),
     safeRepairCount: Number(item.safeRepairCount || 0),
-    samplePreview: samplePreview || "Tidak ada temuan.",
+    sampleCount,
+    isTruncated,
+    samplePreview: isTruncated
+      ? `${samplePreview || "Tidak ada contoh."} | Menampilkan ${sampleCount} contoh dari ${Number(item.count || 0)} issue.`
+      : samplePreview || "Tidak ada temuan.",
     recommendation: item.recommendation || "Tidak ada tindakan lanjutan.",
   };
 });
@@ -31,7 +38,7 @@ const useResetMaintenanceAudits = () => {
       const result = await getDataQualityAudit();
       setDataQualityAudit(result);
       if (showSuccessMessage) {
-        showActionSuccess("Audit kualitas data selesai. Tidak ada data yang diubah.");
+        showActionSuccess("Audit kualitas data selesai. Tidak ada data bisnis yang diubah; ringkasan audit dicatat.");
       }
       return result;
     } catch (error) {
@@ -62,6 +69,7 @@ const useResetMaintenanceAudits = () => {
       status: !dataQualityAudit ? "Belum dicek" : issueCount ? "Ada temuan" : "Sehat",
       color: !dataQualityAudit ? "default" : issueCount ? "orange" : "green",
       auditedAt: dataQualityAudit?.auditedAt || null,
+      hasAuditResult: Boolean(dataQualityAudit),
     };
   }, [dataQualityAudit]);
 

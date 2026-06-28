@@ -107,14 +107,14 @@ const Customers = () => {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDeactivate = async (id) => {
     try {
       await deleteCustomer(id, getModeOptions());
       message.success("Customer berhasil dinonaktifkan.");
       fetchCustomers();
     } catch (error) {
-      console.error("Gagal hapus customer:", error);
-      message.error(error?.message || "Gagal menghapus customer");
+      console.error("Gagal menonaktifkan customer:", error);
+      message.error(error?.message || "Gagal menonaktifkan customer");
     }
   };
 
@@ -155,12 +155,12 @@ const Customers = () => {
           </Button>
           <Popconfirm
             title="Nonaktifkan customer ini?"
-            onConfirm={() => handleDelete(record.id)}
+            onConfirm={() => handleDeactivate(record.id)}
             okText="Ya"
             cancelText="Batal"
           >
             <Button className="ims-action-button" danger size="small">
-              Hapus
+              Nonaktifkan
             </Button>
           </Popconfirm>
         </Space>
@@ -191,12 +191,12 @@ const Customers = () => {
         </Button>
         <Popconfirm
           title="Nonaktifkan customer ini?"
-          onConfirm={() => handleDelete(record.id)}
+          onConfirm={() => handleDeactivate(record.id)}
           okText="Ya"
           cancelText="Batal"
         >
           <Button className="ims-action-button" danger size="small">
-            Hapus
+            Nonaktifkan
           </Button>
         </Popconfirm>
       </Space>
@@ -235,7 +235,7 @@ const Customers = () => {
           locale={{
             emptyText: getDataTableEmptyText(
               loading,
-              "Belum ada customer. Tambahkan customer pertama dari halaman ini.",
+              "Belum ada customer aktif. Tambahkan customer pertama dari halaman ini.",
             ),
           }}
           mobileCardConfig={customerMobileCardConfig}
