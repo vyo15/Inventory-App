@@ -1,3 +1,4 @@
+const { createServiceError } = require("../../utils/httpError");
 const crypto = require("crypto");
 const { getDb, runInTransaction } = require("../../db/connection");
 const { hashSessionToken } = require("../../middlewares/localAuth");
@@ -11,12 +12,7 @@ const {
   USER_STATUSES,
 } = require("./auth.constants");
 
-const createAuthError = (message, code = "ERROR", statusCode = 400) => {
-  const error = new Error(message);
-  error.code = code;
-  error.statusCode = statusCode;
-  return error;
-};
+const createAuthError = createServiceError;
 
 const normalizeText = (value = "") => String(value || "").trim();
 const normalizeUsername = (value = "") => normalizeText(value).toLowerCase();

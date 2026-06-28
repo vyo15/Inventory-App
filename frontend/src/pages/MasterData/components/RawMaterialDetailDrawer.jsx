@@ -1,5 +1,6 @@
 import { Button, Card, Col, Descriptions, Row, Space, Tag, Typography } from 'antd';
 import DataTableView from '../../../components/Layout/Table/DataTableView';
+import StatusTag from "../../../components/Layout/Feedback/StatusTag";
 import MobileDetailDrawer from '../../../components/Layout/Mobile/MobileDetailDrawer';
 import { formatCurrencyId } from '../../../utils/formatters/currencyId';
 import { formatDateId } from '../../../utils/formatters/dateId';
@@ -41,7 +42,7 @@ const RawMaterialDetailDrawer = ({
             <Space direction="vertical" size={8} style={{ width: '100%' }}>
               <Space size={[8, 8]} wrap>
                 <Text strong style={{ fontSize: 18 }}>{material.name || '-'}</Text>
-                <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
+                <StatusTag color={statusMeta.color}>{statusMeta.label}</StatusTag>
                 <Tag color={material.hasVariants ? 'blue' : 'default'}>{material.hasVariants ? 'Pakai Varian' : 'Tanpa Varian'}</Tag>
               </Space>
               <Text type="secondary">{categoryLabel}</Text>
@@ -93,7 +94,7 @@ const RawMaterialDetailDrawer = ({
                 dataSource={material.variants || []}
                 mobileCardConfig={{
                   title: (variant) => variant.name || variant.variantLabel || variant.variantKey || 'Varian',
-                  tags: (variant) => <Tag color={variant.isActive === false ? 'default' : 'green'}>{variant.isActive === false ? 'Nonaktif' : 'Aktif'}</Tag>,
+                  tags: (variant) => <StatusTag tone={variant.isActive === false ? 'neutral' : 'success'}>{variant.isActive === false ? 'Nonaktif' : 'Aktif'}</StatusTag>,
                   meta: [
                     { label: 'Stok', value: (variant) => formatStockWithUnit(variant.currentStock || 0, material.stockUnit || 'pcs') },
                     { label: 'Reserved', value: (variant) => formatStockWithUnit(variant.reservedStock || 0, material.stockUnit || 'pcs') },
@@ -107,7 +108,7 @@ const RawMaterialDetailDrawer = ({
                   { title: 'Reserved', dataIndex: 'reservedStock', key: 'reservedStock', render: (value) => formatStockWithUnit(value || 0, material.stockUnit || 'pcs') },
                   { title: 'Minimum', key: 'minStockAlert', render: (_, variant) => formatStockWithUnit(getVariantMinimumStock(variant, 0), material.stockUnit || 'pcs') },
                   { title: 'Tersedia', key: 'availableStock', render: (_, variant) => formatStockWithUnit(Math.max(Number(variant.currentStock || 0) - Number(variant.reservedStock || 0), 0), material.stockUnit || 'pcs') },
-                  { title: 'Status', dataIndex: 'isActive', key: 'isActive', render: (value) => <Tag color={value === false ? 'default' : 'green'}>{value === false ? 'Nonaktif' : 'Aktif'}</Tag> },
+                  { title: 'Status', dataIndex: 'isActive', key: 'isActive', render: (value) => <StatusTag tone={value === false ? 'neutral' : 'success'}>{value === false ? 'Nonaktif' : 'Aktif'}</StatusTag> },
                 ]}
               />
             ) : (

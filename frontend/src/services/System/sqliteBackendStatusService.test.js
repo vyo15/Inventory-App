@@ -106,3 +106,40 @@ describe("sqliteBackendStatusService client identity", () => {
     expect(options.headers["X-IMS-Backup-Filename"]).toBe(encodeURIComponent(file.name));
   });
 });
+
+it("download backup mempertahankan status, errorCode, details, dan payload", async () => {
+  vi.spyOn(window, "fetch").mockResolvedValue(
+    new Response(JSON.stringify({
+      ok: false,
+      message: "Backup tidak ditemukan",
+      errorCode: "BACKUP_NOT_FOUND",
+      details: { filename: "missing.imsbackup" },
+    }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    }),
+  );
+  const service = await import("./sqliteBackendStatusService.js");
+
+  await expect(service.downloadSqliteBackendBackup("missing.imsbackup")).rejects.toMatchObject({
+    message: "Backup tidak ditemukan",
+    status: 404,
+    code: "BACKUP_NOT_FOUND",
+    errorCode: "BACKUP_NOT_FOUND",
+    details: { filename: "missing.imsbackup" },
+  });
+});
+
+it("import backup raw request memakai error unavailable yang sama dengan request JSON", async () => {
+  vi.spyOn(window, "fetch").mockRejectedValue(new TypeError("network down"));
+  const service = await import("./sqliteBackendStatusService.js");
+  const file = new File(["backup"], "manual.imsbackup", {
+    type: "application/octet-stream",
+  });
+
+  await expect(service.importSqliteBackendBackup(file)).rejects.toMatchObject({
+    status: 0,
+    code: "SQLITE_BACKEND_UNAVAILABLE",
+    errorCode: "SQLITE_BACKEND_UNAVAILABLE",
+  });
+});

@@ -1,3 +1,4 @@
+const { createHttpError } = require("../../utils/httpError");
 const crypto = require("crypto");
 const { createAuditLog } = require("../../utils/auditLog");
 const { safeJsonParse } = require("../../utils/jsonUtils");
@@ -15,13 +16,8 @@ const normalizeText = (value = "") => String(value ?? "").trim();
 const nowIso = () => new Date().toISOString();
 const MANUAL_FINANCE_SOURCE_MODULES = new Set(["cash_in_manual", "cash_out_manual"]);
 
-const createFinanceConflictError = (message) => {
-  const error = new Error(message);
-  error.publicMessage = message;
-  error.statusCode = 409;
-  error.errorCode = "FINANCE_DUPLICATE_MANUAL_REFERENCE";
-  return error;
-};
+const createFinanceConflictError = (message) =>
+  createHttpError(message, "FINANCE_DUPLICATE_MANUAL_REFERENCE", 409);
 
 
 const normalizeDate = (value) => {
@@ -130,7 +126,7 @@ const createFinanceMovement = async (db, {
   const amount = Math.abs(toInteger(payload.amount ?? payload.totalAmount ?? payload.total ?? 0));
 
   if (amount <= 0) {
-    throw new Error("Nominal kas wajib lebih dari 0.");
+    throw createHttpError("Nominal kas wajib lebih dari 0.", "FINANCE_AMOUNT_INVALID", 400);
   }
 
   if (MANUAL_FINANCE_SOURCE_MODULES.has(effectiveSourceModule)) {
@@ -195,9 +191,9 @@ const createFinanceMovement = async (db, {
 };
 
 const markFinanceMovementDeleted = async (db, { tableName, id, actor = "system" } = {}) => {
-  if (!id) throw new Error("ID kas yang akan dihapus tidak valid.");
+  if (!id) throw createHttpError("ID kas yang akan dihapus tidak valid.", "FINANCE_ID_REQUIRED", 400);
   const row = await db.get(`SELECT * FROM ${tableName} WHERE id = ? AND status != 'deleted'`, [id]);
-  if (!row) throw new Error("Data kas database lokal tidak ditemukan.");
+  if (!row) throw createHttpError("Data kas database lokal tidak ditemukan.", "FINANCE_RECORD_NOT_FOUND", 404);
   const payload = { ...safeJsonParse(row.payload_json, {}), status: "deleted", isActive: false, deletedAt: nowIso(), updatedAt: nowIso() };
 
   await db.run(

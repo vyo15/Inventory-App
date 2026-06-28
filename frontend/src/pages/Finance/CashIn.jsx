@@ -1,19 +1,25 @@
-import { useEffect, useMemo, useState } from "react";
 import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  App as AntdApp,
   Col,
   Form,
   Select,
   Tag,
   Typography,
-  message,
 } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
+import StatusTag from "../../components/Layout/Feedback/StatusTag";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageFormModal from "../../components/Layout/Forms/PageFormModal";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
@@ -42,6 +48,7 @@ const { Text } = Typography;
 
 
 const CashIn = () => {
+  const { message } = AntdApp.useApp();
   // =========================
   // SECTION: State utama halaman
   // =========================
@@ -219,7 +226,7 @@ const CashIn = () => {
         width: 220,
         render: (_, record) => {
           const sourceTag = record.sourceCollection === "incomes"
-            ? <Tag color="green">Penjualan Selesai</Tag>
+            ? <StatusTag tone="success">Penjualan Selesai</StatusTag>
             : record.sourceCollection === "revenues"
               ? <Tag color="blue">Manual / Arsip</Tag>
               : <Tag>-</Tag>;
@@ -272,7 +279,7 @@ const CashIn = () => {
     ].filter(Boolean),
     tags: (record) => [
       record.sourceCollection === 'incomes' ? (
-        <Tag key="source" color="green">Penjualan Selesai</Tag>
+        <StatusTag key="source" tone="success">Penjualan Selesai</StatusTag>
       ) : record.sourceCollection === 'revenues' ? (
         <Tag key="source" color="blue">Manual / Arsip</Tag>
       ) : (
@@ -318,6 +325,8 @@ const CashIn = () => {
         ]}
       />
 
+      <PageContentCanvas>
+
       <PageSection
         title="Ringkasan Periode"
         subtitle="KPI periode aktif."
@@ -359,11 +368,13 @@ const CashIn = () => {
           // IMS NOTE [AKTIF] - table fixed tanpa scroll horizontal; ledger tetap tanpa kolom aksi destructive.
           tableLayout="fixed"
           locale={{
-            emptyText: getDataTableEmptyText(loading, <EmptyStateBlock description="Belum ada pemasukan pada periode ini." />),
+            emptyText: getDataTableEmptyText(loading, "Belum ada pemasukan pada periode ini."),
           }}
           mobileCardConfig={cashInMobileCardConfig}
         />
       </PageSection>
+
+      </PageContentCanvas>
 
       <PageFormModal
         title="Tambah Pemasukan"

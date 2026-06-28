@@ -1,3 +1,4 @@
+const { createServiceError } = require("../../utils/httpError");
 const { toInteger } = require("../stock/engine");
 const { formatBusinessDateStamp, resolveBusinessCode } = require("../../utils/businessCodeCounter");
 
@@ -83,12 +84,7 @@ const resolveTransactionReference = async (db, {
   return code;
 };
 
-const createRequestError = (message, code = "VALIDATION_ERROR", statusCode = 400) => {
-  const error = new Error(message);
-  error.code = code;
-  error.statusCode = statusCode;
-  return error;
-};
+const createRequestError = createServiceError;
 
 
 module.exports = {

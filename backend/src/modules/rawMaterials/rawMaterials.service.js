@@ -1,3 +1,4 @@
+const { createServiceError } = require("../../utils/httpError");
 const {
   createInventoryMasterRouteGuards,
   resolveInventoryVariantCollection,
@@ -43,15 +44,7 @@ const toNonNegativeInteger = (value, label) => {
   return numeric;
 };
 
-const createRawMaterialError = (message, code = "RAW_MATERIAL_VALIDATION_ERROR", statusCode = 400) => {
-  const error = new Error(message);
-  error.code = code;
-  error.errorCode = code;
-  error.publicMessage = message;
-  error.statusCode = statusCode;
-  error.isServiceError = true;
-  return error;
-};
+const createRawMaterialError = createServiceError;
 
 const hasStockSnapshot = (record = {}) => (
   Number(record.currentStock ?? record.stock ?? 0) > 0

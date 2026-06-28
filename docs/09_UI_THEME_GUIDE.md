@@ -652,3 +652,40 @@ Contoh yang tepat:
   ]}
 />
 ```
+
+## Shared status dan state contract — 2026-06-29
+
+### StatusTag
+
+- Gunakan `components/Layout/Feedback/StatusTag.jsx` untuk status semantic.
+- Tone canonical: `success`, `info`, `warning`, `danger`, `neutral`, `brand`, dan `accent`.
+- Mapping business tetap berada di helper domain, misalnya Sales, Work Log, Backup, atau Payroll. Jangan membuat resolver universal berdasarkan string status saja.
+- `StatusTag` selalu memasang class `.ims-status-tag` agar padding, margin, dan typography konsisten.
+- Semantic success/error pada `antdTheme.js` wajib sinkron dengan CSS variable light/dark di `index.css`.
+
+### Empty/loading/error
+
+- Primary empty state memakai `EmptyStateBlock`.
+- `DataTableView` membedakan `loading`, `error`, `empty`, dan `data`.
+- Error load wajib menyediakan pesan yang berbeda dari data kosong dan, bila aman, action `Coba lagi`.
+- Page tidak boleh meneruskan component `<Empty>` sebagai description mobile.
+- Placeholder navigasi/drawer tetap boleh compact, tetapi memakai shared wrapper agar spacing dan light/dark konsisten.
+
+### Feedback action
+
+- Component React memakai `App.useApp()` untuk `message` dan `modal` agar mengikuti ConfigProvider/theme/context.
+- `ActionResultModalHost` dipakai untuk result proses besar/destructive; hasil sebelum host mount diantrikan dan tidak memakai static Modal fallback.
+- Toast untuk feedback singkat, modal result untuk proses penting, dan inline state untuk gagal load.
+
+### Component contrast token
+
+Navigation, Login, dan Dashboard memakai component semantic token seperti:
+
+- `--ims-nav-rail-text`
+- `--ims-nav-active-contrast-text`
+- `--ims-nav-active-contrast-bg`
+- `--ims-nav-active-marker`
+- `--ims-dashboard-hero-text`
+- `--ims-login-submit-text`
+
+Jangan menyalin literal `#173F6B`, `#EAF2FB`, `#F1C75B`, atau putih ke component CSS yang sudah dilindungi source hygiene test.

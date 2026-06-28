@@ -23,45 +23,25 @@ import {
   getSqliteModuleRuntimeStatus,
 } from "../../../services/System/sqliteBackendStatusService";
 import ImsNotice from "../../../components/Layout/Feedback/ImsNotice";
+import StatusTag from "../../../components/Layout/Feedback/StatusTag";
+import {
+  formatDateTimeId,
+  getDateAgeDays,
+  isDateToday,
+} from "../../../utils/formatters/dateId";
+import {
+  EXTERNAL_COPY_STORAGE_KEY,
+  OTHER_USERS_PAUSED_STORAGE_KEY,
+  RESTORE_UNDERSTOOD_STORAGE_KEY,
+} from "../utils/maintenanceUiConstants";
+
 
 const { Text } = Typography;
 
-const EXTERNAL_COPY_STORAGE_KEY = "ims.sqlite.externalBackupCopyConfirmedAt";
-const OTHER_USERS_PAUSED_STORAGE_KEY = "ims.maintenance.otherUsersPausedConfirmedAt";
-const RESTORE_UNDERSTOOD_STORAGE_KEY = "ims.maintenance.restoreImpactUnderstoodAt";
 
-const formatDateTime = (value) => {
-  if (!value) return "-";
-  const normalized = String(value).includes("T") ? String(value) : `${String(value).replace(" ", "T")}Z`;
-  const date = new Date(normalized);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("id-ID", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
-};
-
-const parseDate = (value) => {
-  if (!value) return null;
-  const normalized = String(value).includes("T") ? String(value) : `${String(value).replace(" ", "T")}Z`;
-  const date = new Date(normalized);
-  return Number.isNaN(date.getTime()) ? null : date;
-};
-
-const getAgeDays = (value) => {
-  const date = parseDate(value);
-  if (!date) return null;
-  return Math.floor((Date.now() - date.getTime()) / (24 * 60 * 60 * 1000));
-};
-
-const isToday = (value) => {
-  const date = parseDate(value);
-  if (!date) return false;
-  const now = new Date();
-  return date.getFullYear() === now.getFullYear()
-    && date.getMonth() === now.getMonth()
-    && date.getDate() === now.getDate();
-};
+const formatDateTime = (value) => formatDateTimeId(value, { fallback: value || "-" });
+const getAgeDays = getDateAgeDays;
+const isToday = isDateToday;
 
 const isVerifiedBackup = (backup) => {
   if (!backup || backup.fileExists === false) return false;
@@ -87,9 +67,9 @@ const ChecklistItemCard = ({ item }) => (
   <div className="maintenance-checklist-item">
     <Space direction="vertical" size={6} style={{ width: "100%" }}>
       <Space size={8} wrap>
-        <Tag icon={getStatusIcon(item.status)} color={getStatusColor(item.status)}>
+        <StatusTag icon={getStatusIcon(item.status)} color={getStatusColor(item.status)}>
           {item.statusLabel}
-        </Tag>
+        </StatusTag>
         <Tag color={item.kind === "auto" ? "blue" : "default"}>{item.kind === "auto" ? "Otomatis" : "Manual"}</Tag>
       </Space>
       <Text strong>{item.title}</Text>

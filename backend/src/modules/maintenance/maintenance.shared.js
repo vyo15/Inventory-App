@@ -1,10 +1,6 @@
-const createHttpError = (message, statusCode = 400, errorCode = "MAINTENANCE_ERROR") => {
-  const error = new Error(message);
-  error.publicMessage = message;
-  error.statusCode = statusCode;
-  error.errorCode = errorCode;
-  return error;
-};
+const { createHttpError: createCanonicalHttpError } = require("../../utils/httpError");
+const createHttpError = (message, statusCode = 400, errorCode = "MAINTENANCE_ERROR", options = {}) =>
+  createCanonicalHttpError(message, errorCode, statusCode, options);
 
 
 

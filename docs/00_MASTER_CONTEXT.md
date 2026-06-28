@@ -434,3 +434,12 @@ Status: **AKTIF / SOURCE-ALIGNED / GUARDED**.
 - Rule payroll dibekukan saat Start Production dan snapshot Work Log menjadi source untuk Complete/HPP.
 - Satu Work Log hanya satu operator; pembagian pekerjaan memakai PO/Work Log terpisah.
 - Semi Finished boleh `Umum / Reusable`; Production Profile memakai monitoring metric eksplisit, bukan nama step.
+
+## Consistency hardening — 2026-06-29
+
+- Backend memakai canonical error contract dengan compatibility untuk helper legacy. Stock/Finance validation normal wajib 4xx, bukan generic 500.
+- Shared UI memakai `StatusTag`, `EmptyStateBlock`, dan `DataTableView` state contract; direct Ant Design Empty/static feedback tidak menjadi pola baru.
+- Browser feedback memakai Ant Design `App.useApp()`; action result sebelum host mount diantrikan.
+- CSS dan JavaScript dikunci LF; brand component memakai semantic token.
+- Folder teknis baru memakai English. Folder Indonesia existing tetap compatibility dan tidak di-rename tanpa cleanup khusus.
+- Detail lengkap error backend: `docs/23_BACKEND_ERROR_CONTRACT.md`; test naming/coverage map: `backend/test/README.md`.

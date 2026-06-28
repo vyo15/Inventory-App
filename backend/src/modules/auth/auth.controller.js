@@ -1,13 +1,10 @@
-const { failure, success } = require("../../utils/response");
+const { respondIfServiceError } = require("../../utils/httpError");
+const { success } = require("../../utils/response");
 const { clearSessionCookie, setSessionCookie } = require("../../utils/authSessionCookie");
 const authService = require("./auth.service");
 
-const handleAuthError = (res, next, error) => {
-  if (error?.code && error?.statusCode) {
-    return failure(res, error.message, error.code, error.statusCode);
-  }
-  return next(error);
-};
+const handleAuthError = (res, next, error) =>
+  respondIfServiceError(res, error) || next(error);
 
 const getStatus = async (req, res, next) => {
   try {

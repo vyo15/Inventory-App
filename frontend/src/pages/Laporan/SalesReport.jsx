@@ -1,9 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
-import { Button, Col, DatePicker, Tag, message } from "antd";
+import {
+  useEffect,
+  useMemo,
+  useState } from "react";
+import { App,
+  Button,
+  Col,
+  DatePicker,
+} from "antd";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import { exportJsonToExcel } from "../../utils/export/exportExcel";
@@ -12,6 +20,8 @@ import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import StatusTag from "../../components/Layout/Feedback/StatusTag";
+import { getSalesStatusColor } from "../Transaksi/helpers/salesPageHelpers";
 import {
   buildSalesChannelSummary,
   getSalesChannelLabel,
@@ -58,6 +68,7 @@ const getSalesMarketplaceReference = (sale = {}) => {
 };
 
 const SalesReport = () => {
+  const { message } = App.useApp();
   // =========================
   // SECTION: State utama laporan
   // =========================
@@ -88,7 +99,7 @@ const SalesReport = () => {
     };
 
     fetchSales();
-  }, [dateRangeBounds]);
+  }, [dateRangeBounds, message]);
 
   // =========================
   // SECTION: Summary data
@@ -281,10 +292,9 @@ const SalesReport = () => {
         record.customerName || "Tanpa pelanggan",
         getSalesChannelLabel(record.salesChannel),
       ],
-      tags: (record) => {
-        const statusColors = { Selesai: "green", Dikirim: "orange", Diproses: "blue" };
-        return <Tag color={statusColors[record.status] || "default"}>{record.status || "-"}</Tag>;
-      },
+      tags: (record) => (
+        <StatusTag color={getSalesStatusColor(record.status)}>{record.status || "-"}</StatusTag>
+      ),
       meta: [
         { label: "Total", value: (record) => formatCurrencyId(record.total) },
         { label: "Marketplace/Resi", value: (record) => getSalesMarketplaceReference(record) },
@@ -369,15 +379,9 @@ const SalesReport = () => {
         dataIndex: "status",
         key: "status",
         width: 120,
-        render: (status) => {
-          const statusColors = {
-            Selesai: "green",
-            Dikirim: "orange",
-            Diproses: "blue",
-          };
-
-          return <Tag color={statusColors[status] || "default"}>{status || "-"}</Tag>;
-        },
+        render: (status) => (
+          <StatusTag color={getSalesStatusColor(status)}>{status || "-"}</StatusTag>
+        ),
       },
     ],
     [],
@@ -389,6 +393,8 @@ const SalesReport = () => {
         title="Laporan Penjualan"
         subtitle="Laporan membaca data sales aktif."
       />
+
+      <PageContentCanvas>
 
       <PageSection
         title="Filter Periode"
@@ -462,10 +468,11 @@ const SalesReport = () => {
           scroll={{ x: 1245 }}
           mobileCardConfig={salesReportMobileCardConfig}
           locale={{
-            emptyText: getDataTableEmptyText(loading, <EmptyStateBlock description="Belum ada data penjualan untuk ditampilkan." />),
+            emptyText: getDataTableEmptyText(loading, "Belum ada data penjualan untuk ditampilkan."),
           }}
         />
       </PageSection>
+      </PageContentCanvas>
     </>
   );
 };

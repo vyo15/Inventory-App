@@ -55,7 +55,11 @@ const applyStockDeltaToPayload = (payload = {}, {
   }
 
   if (hasVariants && !normalizedVariantKey) {
-    throw new Error("Item memiliki varian. Pilih varian agar mutasi stok masuk ke sumber yang benar.");
+    throw createInventoryGuardError(
+      "Item memiliki varian. Pilih varian agar mutasi stok masuk ke sumber yang benar.",
+      "STOCK_VARIANT_REQUIRED",
+      400,
+    );
   }
 
   if (hasVariants && normalizedVariantKey) {
@@ -234,9 +238,13 @@ const commitStockMutation = async (db, {
   allowArchivedVariantRestore = false,
   inactiveOverrideReason = "",
 } = {}) => {
-  if (!sourceId) throw new Error("Source ID stok wajib tersedia.");
+  if (!sourceId) {
+    throw createInventoryGuardError("Source ID stok wajib tersedia.", "STOCK_SOURCE_ID_REQUIRED", 400);
+  }
   const delta = toInteger(deltaCurrent);
-  if (delta === 0) throw new Error("Qty mutasi stok tidak boleh 0.");
+  if (delta === 0) {
+    throw createInventoryGuardError("Qty mutasi stok tidak boleh 0.", "STOCK_QUANTITY_ZERO", 400);
+  }
 
   const { tableName, payload } = await loadSourceItem(db, sourceType, sourceId);
   const sourceInactive = payload.isActive === false

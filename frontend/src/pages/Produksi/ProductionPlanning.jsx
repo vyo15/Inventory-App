@@ -10,9 +10,15 @@
 // - aktif untuk monitoring target; tidak mengubah stok, payroll, expense, atau HPP.
 // =====================================================
 
-import { useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import dayjs from "dayjs";
 import {
+  App as AntdApp,
   Badge,
   Button,
   Card,
@@ -21,11 +27,9 @@ import {
   Descriptions,
   Drawer,
   Dropdown,
-  Empty,
   Form,
   Input,
   InputNumber,
-  message,
   Modal,
   Progress,
   Row,
@@ -41,7 +45,9 @@ import {
   MoreOutlined,
   StopOutlined,
 } from "@ant-design/icons";
+import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
+import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
@@ -293,6 +299,7 @@ const getMatchingBomOptions = ({ plan, referenceData }) => {
 // - aktif; tidak mengubah flow complete Work Log.
 // =====================================================
 const ProductionPlanning = () => {
+  const { message, modal } = AntdApp.useApp();
   const [plans, setPlans] = useState([]);
   const [referenceData, setReferenceData] = useState({
     products: [],
@@ -335,7 +342,7 @@ const ProductionPlanning = () => {
     [selectedTargetItem],
   );
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const [nextPlans, nextReferenceData] = await Promise.all([
@@ -351,11 +358,11 @@ const ProductionPlanning = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [message]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const summary = useMemo(() => {
     const activePlans = plans.filter((plan) => getPlanStatus(plan) !== "cancelled");
@@ -555,7 +562,7 @@ const ProductionPlanning = () => {
       return;
     }
 
-    Modal.confirm({
+    modal.confirm({
       title: "Batalkan planning?",
       content:
         "Planning ini belum punya Production Order terkait, sehingga aman dibatalkan. Aksi ini hanya mengubah status planning menjadi cancelled dan tidak mengubah stok, PO, Work Log, Payroll, atau HPP.",
@@ -871,6 +878,8 @@ const ProductionPlanning = () => {
         addLabel="Tambah Planning"
       />
 
+      <PageContentCanvas>
+
 
       {/* =====================================================
           ACTIVE - summary cards planning standar IMS.
@@ -929,11 +938,13 @@ const ProductionPlanning = () => {
           mobileCardConfig={planningMobileCardConfig}
           locale={{
             emptyText: getDataTableEmptyText(loading, (
-              <Empty description="Belum ada planning produksi untuk filter ini." />
+              <EmptyStateBlock compact description="Belum ada planning produksi untuk filter ini." />
             )),
           }}
         />
       </PageSection>
+
+      </PageContentCanvas>
 
       <Drawer
         title={editingPlan ? "Edit Production Planning" : "Tambah Production Planning"}
@@ -1076,7 +1087,7 @@ const ProductionPlanning = () => {
         }
       >
         {!selectedPlan ? (
-          <Empty description="Tidak ada data planning" />
+          <EmptyStateBlock compact description="Tidak ada data planning" />
         ) : (
           <Space direction="vertical" size={16} style={{ width: "100%" }}>
             <Descriptions bordered column={1} size="small">
@@ -1138,7 +1149,7 @@ const ProductionPlanning = () => {
         }
       >
         {!selectedPlanForPo ? (
-          <Empty description="Pilih planning lebih dulu" />
+          <EmptyStateBlock compact description="Pilih planning lebih dulu" />
         ) : (
           <Space direction="vertical" size={16} style={{ width: "100%" }}>
             <ImsNotice

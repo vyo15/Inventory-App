@@ -1,10 +1,11 @@
-import { useCallback, useMemo } from "react";
+import {
+  useCallback,
+  useMemo } from "react";
 import {
   Card,
   Col,
   Descriptions,
   Divider,
-  Empty,
   Row,
   Space,
   Tag,
@@ -16,12 +17,18 @@ import {
   WORK_LOG_STATUS_MAP,
   WORK_LOG_TARGET_TYPE_MAP,
 } from "../../../constants/productionWorkLogOptions";
+import EmptyStateBlock from "../../../components/Layout/Feedback/EmptyStateBlock";
 import formatCurrency from "../../../utils/formatters/currencyId";
 import formatNumber from "../../../utils/formatters/numberId";
 import { resolveWorkLogLaborCostDisplay } from "../../../utils/produksi/productionPayrollRuleHelpers";
 import { resolveDisplayReference } from "../../../utils/references/displayReferenceResolver";
 import DataTableView from "../../../components/Layout/Table/DataTableView";
 import MobileDetailDrawer from "../../../components/Layout/Mobile/MobileDetailDrawer";
+import {
+  getWorkLogSourceTagColor,
+  getWorkLogStatusTagColor,
+} from "../helpers/productionWorkLogsPageHelpers";
+
 
 const safeNumber = (value, fallback = 0) => {
   const parsed = Number(value);
@@ -34,23 +41,6 @@ const formatDisplayDate = (value, format = "DD/MM/YYYY") => {
   const rawValue = value?.toDate ? value.toDate() : value;
   return rawValue ? dayjs(rawValue).format(format) : "-";
 };
-
-const getWorkLogStatusTagColor = (status) => {
-  switch (status) {
-    case "completed":
-      return "green";
-    case "in_progress":
-      return "blue";
-    case "cancelled":
-      return "red";
-    case "draft":
-    default:
-      return "default";
-  }
-};
-
-const getWorkLogSourceTagColor = (sourceType) =>
-  sourceType === "production_order" ? "purple" : "blue";
 
 const findWorkLogStepMaster = (workLog = {}, productionSteps = []) =>
   (productionSteps || []).find((item) => {
@@ -350,7 +340,7 @@ const ProductionWorkLogDetailDrawer = ({
       width={980}
     >
       {!selectedRecord ? (
-        <Empty description="Tidak ada data" />
+        <EmptyStateBlock compact description="Tidak ada data" />
       ) : (
         <>
           <Space wrap size={[8, 8]} style={{ marginBottom: 16 }}>

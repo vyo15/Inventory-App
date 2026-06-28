@@ -1,3 +1,4 @@
+const { respondIfServiceError } = require("../../utils/httpError");
 const { failure, success } = require("../../utils/response");
 const {
   createCategory,
@@ -9,17 +10,10 @@ const {
 
 const getActor = (req) => req.localAuth?.user?.username || "system";
 
-const handleCategoryError = (res, error) => {
-  if (error?.code === "DUPLICATE_CODE" || String(error?.message || "").includes("UNIQUE")) {
-    return failure(res, "Kode kategori sudah ada di database lokal", "DUPLICATE_CODE", 409);
-  }
-
-  if (error?.isServiceError) {
-    return failure(res, error.message, error.code, error.statusCode || 400);
-  }
-
-  return null;
-};
+const handleCategoryError = (res, error) => respondIfServiceError(res, error, {
+  duplicateMessage: "Kode kategori sudah ada di database lokal",
+  duplicateCode: "DUPLICATE_CODE",
+});
 
 const listCategoriesController = async (req, res, next) => {
   try {

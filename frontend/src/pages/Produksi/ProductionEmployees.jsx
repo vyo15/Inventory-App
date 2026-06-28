@@ -3,8 +3,14 @@
 // Master operator/karyawan produksi
 // =====================================================
 
-import { useEffect, useMemo, useState } from "react";
 import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  App as AntdApp,
   Badge,
   Button,
   Card,
@@ -17,7 +23,6 @@ import {
   Form,
   Input,
   InputNumber,
-  message,
   Row,
   Select,
   Space,
@@ -52,6 +57,8 @@ import {
   toggleProductionEmployeeActive,
   updateProductionEmployee,
 } from "../../services/Produksi/productionEmployeesService";
+import StatusTag from "../../components/Layout/Feedback/StatusTag";
+import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import { getAllProductionPayrolls } from "../../services/Produksi/productionPayrollsService";
 import { getAllProductionWorkLogs } from "../../services/Produksi/productionWorkLogsService";
 import { getActiveProductionSteps } from "../../services/Produksi/productionStepsService";
@@ -59,6 +66,7 @@ import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/number
 import formatCurrency from "../../utils/formatters/currencyId";
 import ProductionFilterCard from "../../components/Produksi/shared/ProductionFilterCard";
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
+import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import DataTableView from "../../components/Layout/Table/DataTableView";
@@ -91,6 +99,7 @@ import {
 // Behavior: input baru no-decimal; business rules dan schema/alur data utama tetap sama.
 
 const ProductionEmployees = () => {
+  const { message } = AntdApp.useApp();
   const [loading, setLoading] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [stepOptions, setStepOptions] = useState([]);
@@ -113,7 +122,7 @@ const ProductionEmployees = () => {
 
   const [form] = Form.useForm();
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -214,11 +223,11 @@ const ProductionEmployees = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [message]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const summary = useMemo(() => {
     const total = employees.length;
@@ -581,7 +590,7 @@ const ProductionEmployees = () => {
       <Tag key="role" color="blue">{EMPLOYEE_ROLE_MAP[record.role] || "Role belum diset"}</Tag>,
       <Tag key="type">{EMPLOYEE_TYPE_MAP[record.employmentType] || "Jenis kerja belum diset"}</Tag>,
       record.isActive ? (
-        <Tag key="status" color="green">Aktif</Tag>
+        <StatusTag key="status" tone="success">Aktif</StatusTag>
       ) : (
         <Tag key="status" color="default">Nonaktif</Tag>
       ),
@@ -689,6 +698,8 @@ const ProductionEmployees = () => {
         addLabel="Tambah Karyawan"
       />
 
+      <PageContentCanvas>
+
 
       {/* AKTIF / GUARDED: summary hanya ganti wrapper presentational, nilai tetap dari kalkulasi existing. */}
       <ProductionSummaryCards items={summaryItems} />
@@ -794,7 +805,7 @@ const ProductionEmployees = () => {
           rowKey="id"
           columns={columns}
           dataSource={filteredData}
-          emptyText={<Empty description="Belum ada data karyawan produksi" />}
+          emptyState={{ description: "Belum ada data karyawan produksi" }}
           pagination={{
             pageSize: 10,
             showSizeChanger: true,
@@ -802,6 +813,8 @@ const ProductionEmployees = () => {
           mobileCardConfig={productionEmployeeMobileCardConfig}
         />
       </PageSection>
+
+      </PageContentCanvas>
 
       <Drawer
         title={
@@ -1156,7 +1169,7 @@ const ProductionEmployees = () => {
         width={760}
       >
         {!selectedEmployee ? (
-          <Empty description="Tidak ada data" />
+          <EmptyStateBlock compact description="Tidak ada data" />
         ) : (
           <>
             {/* =====================================================
@@ -1229,7 +1242,7 @@ const ProductionEmployees = () => {
                   ))}
                 </Space>
               ) : (
-                <Empty
+                <EmptyStateBlock compact
                   image={Empty.PRESENTED_IMAGE_SIMPLE}
                   description="Belum ada tahapan assignment."
                 />
@@ -1312,7 +1325,7 @@ const ProductionEmployees = () => {
                         </Card>
                       ))
                     ) : (
-                      <Empty
+                      <EmptyStateBlock compact
                         image={Empty.PRESENTED_IMAGE_SIMPLE}
                         description="Belum ada Work Log untuk operator ini."
                       />
@@ -1339,7 +1352,7 @@ const ProductionEmployees = () => {
                         </Card>
                       ))
                     ) : (
-                      <Empty
+                      <EmptyStateBlock compact
                         image={Empty.PRESENTED_IMAGE_SIMPLE}
                         description="Belum ada line payroll untuk operator ini."
                       />

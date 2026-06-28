@@ -4,15 +4,33 @@
 // untuk analisa biaya realisasi per output
 // =====================================================
 
-import { useEffect, useMemo, useState } from "react";
-import { Button, Col, Empty, Input, Select, Space, Tooltip, Typography, message, Tag } from "antd";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  App as AntdApp,
+  Button,
+  Col,
+  Input,
+  Select,
+  Space,
+  Tooltip,
+  Typography,
+  Tag,
+} from "antd";
 import { FileExcelOutlined } from "@ant-design/icons";
+import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
+import StatusTag from "../../components/Layout/Feedback/StatusTag";
 import { getCompletedProductionWorkLogs } from "../../services/Produksi/productionWorkLogsService";
 import { getAllProductionPayrolls } from "../../services/Produksi/productionPayrollsService";
 import { getAllProductionSteps } from "../../services/Produksi/productionStepsService";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import ProductionFilterCard from "../../components/Produksi/shared/ProductionFilterCard";
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
+import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import { exportJsonToExcel } from "../../utils/export/exportExcel";
@@ -146,6 +164,7 @@ const buildHppCostWarnings = ({
 };
 
 const ProductionHppAnalysis = () => {
+  const { message } = AntdApp.useApp();
   const [loading, setLoading] = useState(false);
   const [workLogs, setWorkLogs] = useState([]);
   const [payrolls, setPayrolls] = useState([]);
@@ -154,7 +173,7 @@ const ProductionHppAnalysis = () => {
   const [search, setSearch] = useState("");
   const [targetTypeFilter, setTargetTypeFilter] = useState("all");
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const [workLogResult, payrollResult, productionStepResult] = await Promise.all([
@@ -172,11 +191,11 @@ const ProductionHppAnalysis = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [message]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const rows = useMemo(() => {
     return workLogs.map((workLog) => {
@@ -469,7 +488,7 @@ const ProductionHppAnalysis = () => {
     subtext: (record) => record.stepName ? `Step: ${record.stepName}` : null,
     content: (record) => Array.isArray(record.costWarnings) && record.costWarnings.length > 0 ? (
       <span className="ims-cell-meta">{formatNumber(record.costWarnings.length)} warning: {record.costWarnings[0]}</span>
-    ) : <Tag color="green">Cost valid</Tag>,
+    ) : <StatusTag tone="success">Cost valid</StatusTag>,
   };
 
   const columns = [
@@ -578,7 +597,7 @@ const ProductionHppAnalysis = () => {
       width: "14%",
       render: (warnings) => {
         if (!Array.isArray(warnings) || warnings.length === 0) {
-          return <Tag color="green" style={compactTagStyle}>Cost valid</Tag>;
+          return <StatusTag tone="success" style={compactTagStyle}>Cost valid</StatusTag>;
         }
 
         return (
@@ -611,6 +630,8 @@ const ProductionHppAnalysis = () => {
         title="Analisis HPP Produksi"
         description="Analisa biaya Work Log."
       />
+
+      <PageContentCanvas>
 
       <PageSection
         title="Ringkasan HPP"
@@ -717,7 +738,7 @@ const ProductionHppAnalysis = () => {
           dataSource={filteredRows}
           mobileCardConfig={hppAnalysisMobileCardConfig}
           locale={{
-            emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada data analisis HPP" />),
+            emptyText: getDataTableEmptyText(loading, "Belum ada data analisis HPP"),
           }}
           pagination={{
             pageSize: 10,
@@ -725,6 +746,7 @@ const ProductionHppAnalysis = () => {
           }}
         />
       </PageSection>
+      </PageContentCanvas>
     </>
   );
 };

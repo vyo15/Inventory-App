@@ -72,7 +72,7 @@ Breakpoint:
 
 .desktop-module-dock-button:hover,
 .desktop-module-dock-button:focus-visible {
-  color: #ffffff;
+  color: var(--ims-nav-rail-text);
   background: rgba(255, 255, 255, 0.12);
   transform: translateX(1px);
 }
@@ -83,8 +83,8 @@ Breakpoint:
 }
 
 .desktop-module-dock-button.is-active {
-  color: #173f6b;
-  background: #ffffff;
+  color: var(--ims-nav-active-contrast-text);
+  background: var(--ims-nav-active-contrast-bg);
   box-shadow: 0 9px 20px rgba(9, 37, 67, 0.2);
 }
 
@@ -110,18 +110,18 @@ Breakpoint:
 
 .app-shell.dark .desktop-module-dock-button:hover,
 .app-shell.dark .desktop-module-dock-button:focus-visible {
-  color: #ffffff;
+  color: var(--ims-nav-rail-text);
   background: rgba(94, 163, 230, 0.14);
 }
 
 .app-shell.dark .desktop-module-dock-button.is-active {
-  color: #102a48;
-  background: #eaf2fb;
+  color: var(--ims-nav-active-contrast-text);
+  background: var(--ims-nav-active-contrast-bg);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
 }
 
 .app-shell.dark .desktop-module-dock-button.is-active::after {
-  background: #f1c75b;
+  background: var(--ims-nav-active-marker);
 }
 
 @media (max-width: 1199px) and (min-width: 993px) {

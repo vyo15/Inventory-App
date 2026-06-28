@@ -16,7 +16,7 @@ const ResetExportPanel = ({
       <div>
         <Space size={8} wrap>
           <Text strong>Export Data Master</Text>
-          <Tag color="green">Read-only</Tag>
+          <StatusTag tone="success">Read-only</StatusTag>
         </Space>
         <Text type="secondary">
           Export untuk arsip dan review master data. File JSON ini bukan paket restore; pemulihan penuh tetap memakai File Backup IMS.
@@ -41,4 +41,5 @@ const ResetExportPanel = ({
   </div>
 );
 
+import StatusTag from "../../../components/Layout/Feedback/StatusTag";
 export default ResetExportPanel;

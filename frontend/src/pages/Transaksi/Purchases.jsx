@@ -1,5 +1,19 @@
-import { useEffect, useRef, useState, useMemo } from "react";
-import { Button, Form, message, Modal, Space, Tag, Upload, Typography } from "antd";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useMemo,
+} from "react";
+import {
+  App as AntdApp,
+  Button,
+  Form,
+  Modal,
+  Space,
+  Tag,
+  Upload,
+  Typography,
+} from "antd";
 import { EyeOutlined, PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useSearchParams } from "react-router-dom";
@@ -10,10 +24,11 @@ import {
   listenSupplierCatalog,
 } from "../../services/MasterData/suppliersService";
 import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
-import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { DataRefreshIndicator } from "../../components/Layout/Feedback/DataLoadingState";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import {
@@ -56,6 +71,7 @@ const { Text } = Typography;
 // SECTION: Purchases Page
 // =========================
 const Purchases = () => {
+  const { message, modal } = AntdApp.useApp();
   const [form] = Form.useForm();
   const [searchParams] = useSearchParams();
   const restockPrefillAppliedRef = useRef(false);
@@ -80,6 +96,7 @@ const Purchases = () => {
   const [suppliers, setSuppliers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [subscriptionRevision, setSubscriptionRevision] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmittingPurchase, setIsSubmittingPurchase] = useState(false);
   const [shopeeOcrState, setShopeeOcrState] = useState(SHOPEE_OCR_IDLE_STATE);
@@ -418,7 +435,7 @@ const Purchases = () => {
       unsubscribeMaterials();
       unsubscribeSuppliers();
     };
-  }, []);
+  }, [message, subscriptionRevision]);
 
   // =========================
   // SECTION: Isi field otomatis saat item berubah
@@ -1057,7 +1074,7 @@ const Purchases = () => {
     }
 
     if (parsed.needsManualReview) {
-      Modal.confirm({
+      modal.confirm({
         title: "OCR perlu dicek manual",
         content: parsed.reviewMessage || "Hasil OCR belum sepenuhnya cocok. Tetap terapkan ke form setelah kamu cek manual?",
         okText: "Terapkan Setelah Dicek",
@@ -1262,6 +1279,8 @@ const Purchases = () => {
         ]}
       />
 
+      <PageContentCanvas>
+
       <PageSection
         title="Data Pembelian"
         subtitle="Stok dan biaya mengikuti pembelian."
@@ -1281,10 +1300,14 @@ const Purchases = () => {
           columns={purchaseTableColumns}
           rowKey="id"
           tableLayout="fixed"
-          locale={{ emptyText: getDataTableEmptyText(isLoading, loadError || "Belum ada data pembelian.") }}
+          emptyState={{ description: "Belum ada data pembelian." }}
+          error={loadError ? new Error(loadError) : null}
+          onRetry={() => setSubscriptionRevision((value) => value + 1)}
           mobileCardConfig={purchaseMobileCardConfig}
         />
       </PageSection>
+
+      </PageContentCanvas>
 
       <MobileDetailDrawer
         title="Detail Pembelian"

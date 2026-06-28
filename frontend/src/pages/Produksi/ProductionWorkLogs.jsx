@@ -6,15 +6,26 @@
 // - Produksi lebih fokus ke eksekusi, bukan planning dari nol
 // =====================================================
 
-import { useEffect, useMemo, useState } from "react";
-import { buildCountSummary, createKeywordMatcher, matchFieldValue } from '../../utils/produksi/productionPageHelpers';
-import { getWorkLogMaterialOptions, getWorkLogTargetOptions, toReferenceOptions } from '../../utils/produksi/productionReferenceHelpers';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { buildCountSummary,
+  createKeywordMatcher,
+  matchFieldValue } from '../../utils/produksi/productionPageHelpers';
+import { getWorkLogMaterialOptions,
+  getWorkLogTargetOptions,
+  toReferenceOptions } from '../../utils/produksi/productionReferenceHelpers';
 import ProductionPageHeader from '../../components/Produksi/shared/ProductionPageHeader';
+import PageContentCanvas from '../../components/Layout/Page/PageContentCanvas';
 import SummaryStatGrid from '../../components/Layout/Display/SummaryStatGrid';
 import ProductionFilterCard from '../../components/Produksi/shared/ProductionFilterCard';
 import ProductionWorkLogDetailDrawer from './components/ProductionWorkLogDetailDrawer';
 import EditableLineSection from '../../components/Produksi/shared/EditableLineSection';
 import {
+  App as AntdApp,
   Button,
   Card,
   Col,
@@ -24,7 +35,6 @@ import {
   Form,
   Input,
   InputNumber,
-  message,
   Popconfirm,
   Row,
   Select,
@@ -155,6 +165,7 @@ const getProductionPayrollsForWorkLogDisplaySafely = async () => {
 };
 
 const ProductionWorkLogs = () => {
+  const { message } = AntdApp.useApp();
   const { profile, authUser } = useAuth();
 
   // =====================================================
@@ -221,7 +232,7 @@ const ProductionWorkLogs = () => {
   const leftoverStemQtyValue = Form.useWatch("leftoverStemQty", form);
   const leftoverPetalFlowerEquivalentValue = Form.useWatch("leftoverPetalFlowerEquivalent", form);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const [workLogResult, refResult, payrollResult] = await Promise.all([
@@ -243,11 +254,11 @@ const ProductionWorkLogs = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [message]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
 
   const summary = useMemo(() => {
@@ -1009,6 +1020,8 @@ const ProductionWorkLogs = () => {
         description="Realisasi kerja produksi dari order produksi. Work Log baru dibuat lewat tombol Mulai Produksi di menu Order Produksi."
       />
 
+      <PageContentCanvas>
+
       <SummaryStatGrid
         items={summaryItems}
         className="ims-summary-row"
@@ -1054,6 +1067,8 @@ const ProductionWorkLogs = () => {
           mobileCardConfig={productionWorkLogMobileCardConfig}
         />
       </Card>
+
+      </PageContentCanvas>
 
       <Drawer
         title={

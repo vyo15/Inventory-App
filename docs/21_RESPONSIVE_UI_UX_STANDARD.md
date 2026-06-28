@@ -1,7 +1,7 @@
 # 21 Responsive UI/UX Standard — IMS Bunga Flanel
 
 Status: **AKTIF / SOURCE-ALIGNED / GUARDED**  
-Tanggal lock: **2026-06-21**
+Tanggal lock: **2026-06-29**
 
 Dokumen ini menjadi rundown utama agar tampilan IMS konsisten pada desktop, laptop, tablet, telepon, viewport pendek, dan layar lebar. Standar ini tidak memakai deteksi jenis perangkat atau user-agent. Keputusan layout selalu berdasarkan **lebar dan tinggi viewport aktual**.
 
@@ -11,6 +11,8 @@ Implementasi responsive aktif bersumber dari:
 
 - `frontend/src/layouts/AppLayout.jsx`
 - `frontend/src/styles/app-shell.css`
+- `frontend/src/components/Layout/Page/PageContentCanvas.jsx`
+- `frontend/src/components/Layout/Page/PageContentCanvas.css`
 - `frontend/src/components/Layout/Navigation/DesktopModuleDock.jsx`
 - `frontend/src/components/Layout/Navigation/DesktopModuleDock.css`
 - `frontend/src/components/Layout/Navigation/MobileBottomNavigation.jsx`
@@ -91,7 +93,7 @@ Docs tidak boleh mengalahkan source aktual. Jika dokumen ini berbeda dengan file
 - Tabel profesional tetap menjadi tampilan utama untuk data banyak.
 - Module Hub maksimal 3 kolom pada area yang cukup lebar dan section mengikuti kelompok fungsi pada metadata role-aware.
 - Summary/KPI boleh 3–4 kolom sesuai isi, tetapi tidak boleh menjadi report penuh.
-- Wrapper global tetap transparan; jangan mengembalikan card besar yang membungkus seluruh halaman.
+- Page Header tetap berada di luar canvas. Ringkasan, filter, tabel, chart, dan pagination halaman operasional disatukan di dalam `PageContentCanvas` dengan divider tipis, bukan card bertumpuk.
 
 ### Desktop compact dan tablet
 
@@ -109,6 +111,30 @@ Docs tidak boleh mengalahkan source aktual. Jika dokumen ini berbeda dengan file
 - Filter utama/search boleh tetap terlihat; filter lanjutan masuk `MobileFilterDrawer`.
 - Module Hub memakai 1 kolom pada telepon karena setiap card membawa deskripsi fungsi. Pola 2 kolom hanya dipakai mulai tablet/desktop compact ketika ruang baca mencukupi.
 - Jangan tampilkan technical ID, Firestore/SQLite internal ID, atau audit ref ganda pada card utama.
+
+## 5A. Unified page content canvas
+
+Halaman data operasional memakai `PageContentCanvas` sebagai satu boundary isi halaman setelah `PageHeader`. Tujuannya bukan membuat satu card tebal, melainkan menyatukan hierarchy berikut dalam satu workspace ringan:
+
+1. ringkasan/KPI;
+2. filter atau tab status;
+3. section tabel/chart;
+4. pagination dan catatan operasional.
+
+Aturan aktif:
+
+- `PageHeader`, App Header, sidebar/dock, route, dan role guard tetap berada di luar canvas dan tidak boleh diubah hanya untuk menyatukan isi halaman;
+- summary card tetap berupa kartu kecil dengan gap internal, tetapi grup summary tidak menjadi card terpisah dari filter dan tabel;
+- `FilterBar`, `ProductionFilterCard`, dan `PageSection` menjadi band internal dengan divider tipis, tanpa negative margin atau border sambungan palsu;
+- modal, drawer, popover, dan confirm guard tetap memakai komponen existing serta tidak dipindahkan ke business layer;
+- Dashboard, Module Hub, Login, Error Page, dan Maintenance Center boleh mempertahankan layout khusus bila hierarchy atau guard-nya berbeda;
+- canvas tidak boleh mengubah query, state filter, pagination, dataSource, handler, payload, schema, stok, purchase, production, payroll, HPP, finance, reset, atau audit log.
+
+Breakpoint minimum:
+
+- desktop: summary maksimal 4 kolom dalam satu strip;
+- tablet: summary turun menjadi 2 kolom;
+- mobile: summary 2 kolom compact, filter lanjutan tetap memakai `MobileFilterDrawer`, dan table tetap memakai `DataTableView`/mobile card existing.
 
 ## 6. Spacing, touch target, dan safe area
 
@@ -223,3 +249,24 @@ Patch UI/UX baru dinyatakan selesai bila:
 - [ ] Mobile card/form memakai foundation existing, bukan komponen duplikat.
 - [ ] Tidak ada perubahan schema, service bisnis, stock, transaksi, production, payroll, HPP, finance, reset, atau audit log hanya untuk responsive.
 - [ ] Docs dan checklist QA ikut diperbarui.
+
+## Breakpoint convention aktif — 2026-06-29
+
+Breakpoint untuk component baru:
+
+| Kategori | Range acuan |
+|---|---|
+| Phone | sampai `575px` |
+| Large phone / small tablet | `576px–767px` |
+| Tablet | `768px–991px` |
+| Compact desktop | `992px–1199px` |
+| Wide desktop | mulai `1200px` |
+
+Nilai legacy lain boleh dipertahankan sampai component tersebut disentuh. Jangan menambah breakpoint baru yang berbeda 1–8px tanpa alasan layout yang terdokumentasi.
+
+## Empty/error dan akses keyboard
+
+- Tabel/card mobile memakai state yang sama dengan desktop: loading, error, empty, dan data.
+- Card mobile yang membuka detail wajib memiliki `role`, `tabIndex`, accessible label, Enter, Space, dan focus-visible state.
+- Tombol/action di dalam clickable card harus menghentikan propagation agar tidak membuka detail secara tidak sengaja.
+- Error load tidak boleh ditampilkan sebagai “belum ada data”; sediakan retry bila request aman diulang.

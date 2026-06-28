@@ -1,3 +1,4 @@
+const { createServiceError } = require("../../utils/httpError");
 const { getDb, runInTransaction } = require("../../db/connection");
 const { createAuditLog } = require("../../utils/auditLog");
 const { safeJsonParse } = require("../../utils/jsonUtils");
@@ -29,13 +30,6 @@ const normalizeStatus = (value, fallback = "active") => {
   return normalized === "inactive" || normalized === "active" ? normalized : fallback;
 };
 
-const createServiceError = (message, code = "ERROR", statusCode = 400) => {
-  const error = new Error(message);
-  error.code = code;
-  error.statusCode = statusCode;
-  error.isServiceError = true;
-  return error;
-};
 
 const toCategoryRecord = (row = {}, meta = {}) => ({
   id: row.id,

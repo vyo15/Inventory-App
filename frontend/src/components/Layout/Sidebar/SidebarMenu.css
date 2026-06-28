@@ -378,7 +378,7 @@ Guard:
 }
 
 .sidebar-rail-button:hover {
-  color: #ffffff;
+  color: var(--ims-nav-rail-text);
   background: rgba(255, 255, 255, 0.12);
 }
 
@@ -389,7 +389,7 @@ Guard:
 
 .sidebar-rail-button.active {
   color: var(--ims-color-primary-active);
-  background: #ffffff;
+  background: var(--ims-nav-active-contrast-bg);
   box-shadow: 0 9px 20px rgba(9, 37, 67, 0.2);
 }
 
@@ -418,7 +418,7 @@ Guard:
 }
 
 .sidebar-rail-menu.dark .sidebar-rail-button:hover {
-  color: #ffffff;
+  color: var(--ims-nav-rail-text);
   background: rgba(94, 163, 230, 0.14);
 }
 
@@ -427,14 +427,14 @@ Guard:
 }
 
 .app-shell.dark .sidebar-rail-button.active {
-  color: #173f6b;
-  background: #eaf2fb;
+  color: var(--ims-nav-active-contrast-text);
+  background: var(--ims-nav-active-contrast-bg);
   box-shadow:
     0 10px 24px rgba(0, 0, 0, 0.34),
     inset 0 0 0 1px rgba(94, 163, 230, 0.22);
 }
 
 .app-shell.dark .sidebar-rail-button.active::after {
-  background: #f1c75b;
+  background: var(--ims-nav-active-marker);
   box-shadow: 0 0 0 1px rgba(241, 199, 91, 0.16);
 }

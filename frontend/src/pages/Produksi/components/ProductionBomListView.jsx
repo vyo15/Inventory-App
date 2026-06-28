@@ -1,4 +1,6 @@
-import { Card, Collapse, Empty, Space, Tag, Typography } from "antd";
+import { Card, Collapse, Space, Tag, Typography } from "antd";
+import EmptyStateBlock from "../../../components/Layout/Feedback/EmptyStateBlock";
+import StatusTag from "../../../components/Layout/Feedback/StatusTag";
 import DataTableView from "../../../components/Layout/Table/DataTableView";
 import { DataRefreshIndicator } from "../../../components/Layout/Feedback/DataLoadingState";
 import formatNumber from "../../../utils/formatters/numberId";
@@ -28,7 +30,7 @@ const ProductionBomListView = ({
         rowKey="id"
         columns={columns}
         dataSource={filteredData}
-        emptyText={<Empty description="Belum ada data BOM produksi" />}
+        emptyState={{ description: "Belum ada data BOM produksi" }}
         mobileCardConfig={mobileCardConfig}
         pagination={{
           pageSize: 10,
@@ -36,7 +38,7 @@ const ProductionBomListView = ({
         }}
       />
     ) : filteredData.length === 0 ? (
-      <Empty description={loading ? "Memuat data..." : "Belum ada data BOM produksi"} />
+      <EmptyStateBlock compact description={loading ? "Memuat data..." : "Belum ada data BOM produksi"} />
     ) : (
       <Collapse
         className="ims-production-group-collapse"
@@ -50,7 +52,7 @@ const ProductionBomListView = ({
               <Typography.Text strong>{typeGroup.label}</Typography.Text>
               <Space size={6} wrap>
                 <Tag>{formatNumber(typeGroup.items.length)} BOM</Tag>
-                <Tag color="green">Aktif {formatNumber(typeGroup.counts.active)}</Tag>
+                <StatusTag tone="success">Aktif {formatNumber(typeGroup.counts.active)}</StatusTag>
                 <Tag color="blue">Default {formatNumber(typeGroup.counts.default)}</Tag>
                 {typeGroup.counts.inactive > 0 ? (
                   <Tag color="default">Nonaktif {formatNumber(typeGroup.counts.inactive)}</Tag>
@@ -73,7 +75,7 @@ const ProductionBomListView = ({
                     columns={columns}
                     dataSource={targetGroup.items}
                     pagination={false}
-                    emptyText={<Empty description="Tidak ada BOM pada target ini" />}
+                    emptyState={{ description: "Tidak ada BOM pada target ini" }}
                     mobileCardConfig={mobileCardConfig}
                   />
                 </Card>

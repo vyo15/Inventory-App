@@ -78,16 +78,17 @@ test("git archive mengecualikan seluruh folder runtime data, backups, dan logs",
   assert.match(attributes, /^\/logs export-ignore$/m);
 });
 
-test("JavaScript source memakai kebijakan LF yang konsisten", () => {
+test("JavaScript dan CSS source memakai kebijakan LF yang konsisten", () => {
   const attributes = readRootFile(".gitattributes");
   const editorConfig = readRootFile(".editorconfig");
 
-  for (const extension of ["js", "jsx", "cjs", "mjs"]) {
+  for (const extension of ["js", "jsx", "cjs", "mjs", "css"]) {
     assert.match(attributes, new RegExp(`^\\*\\.${extension} text eol=lf$`, "m"));
   }
 
   assert.match(editorConfig, /^root = true$/m);
   assert.match(editorConfig, /^\[\*\.\{js,jsx,cjs,mjs\}\]$/m);
+  assert.match(editorConfig, /^\[\*\.css\]$/m);
   assert.match(editorConfig, /^end_of_line = lf$/m);
 
   const ignoredDirectoryNames = new Set([
@@ -99,7 +100,7 @@ test("JavaScript source memakai kebijakan LF yang konsisten", () => {
     ".artifacts",
   ]);
   const ignoredRootDirectories = new Set(["data", "backups", "logs"]);
-  const supportedExtensions = new Set([".js", ".jsx", ".cjs", ".mjs"]);
+  const supportedExtensions = new Set([".js", ".jsx", ".cjs", ".mjs", ".css"]);
   const pendingDirectories = [ROOT_DIR];
   const invalidFiles = [];
 
@@ -133,6 +134,67 @@ test("JavaScript source memakai kebijakan LF yang konsisten", () => {
   }
 
   assert.deepEqual(invalidFiles.sort(), []);
+});
+
+
+test("CSS komponen brand tidak menyalin literal warna pusat", () => {
+  const guardedCssFiles = [
+    "frontend/src/components/Layout/Sidebar/SidebarMenu.css",
+    "frontend/src/components/Layout/Navigation/DesktopModuleDock.css",
+    "frontend/src/components/Layout/Navigation/MobileBottomNavigation.css",
+    "frontend/src/pages/Auth/Login.css",
+    "frontend/src/pages/Dashboard/Dashboard.css",
+  ];
+  const forbiddenBrandLiterals = /#(?:173f6b|f1c75b|eaf2fb|07111f|fff(?:fff)?)(?![0-9a-f])/i;
+
+  for (const relativePath of guardedCssFiles) {
+    assert.doesNotMatch(readRootFile(relativePath), forbiddenBrandLiterals, relativePath);
+  }
+});
+
+
+test("frontend memakai shared empty/status dan context feedback untuk pola baru", () => {
+  const frontendRoot = path.join(ROOT_DIR, "frontend", "src");
+  const pendingDirectories = [frontendRoot];
+  const directEmptyConsumers = [];
+  const directGreenStatusTags = [];
+  const staticAntdFeedback = [];
+  const invalidAntdReactImports = [];
+
+  while (pendingDirectories.length > 0) {
+    const currentDirectory = pendingDirectories.pop();
+    for (const entry of fs.readdirSync(currentDirectory, { withFileTypes: true })) {
+      const fullPath = path.join(currentDirectory, entry.name);
+      if (entry.isDirectory()) {
+        pendingDirectories.push(fullPath);
+        continue;
+      }
+      if (!entry.isFile() || ![".js", ".jsx"].includes(path.extname(entry.name))) continue;
+
+      const relativePath = path.relative(ROOT_DIR, fullPath).replaceAll("\\", "/");
+      const source = fs.readFileSync(fullPath, "utf8");
+      if (entry.name !== "EmptyStateBlock.jsx" && /<Empty(?:\s|\/>)/.test(source)) {
+        directEmptyConsumers.push(relativePath);
+      }
+      if (/<Tag\s+[^>]*color=["']green["']/.test(source)) {
+        directGreenStatusTags.push(relativePath);
+      }
+      if (/import\s*\{[\s\S]*?\bmessage\b[\s\S]*?\}\s*from\s*["']antd["']/.test(source)) {
+        staticAntdFeedback.push(relativePath);
+      }
+      if (/\bModal\.(?:confirm|error|info|warning|success)\s*\(/.test(source)) {
+        staticAntdFeedback.push(relativePath);
+      }
+      if (/import\s*\{[\s\S]*?\bApp\s+as\s+AntdApp\b[\s\S]*?\}\s*from\s*["']react["']/.test(source)) {
+        invalidAntdReactImports.push(relativePath);
+      }
+    }
+  }
+
+  assert.deepEqual(directEmptyConsumers.sort(), []);
+  assert.deepEqual(directGreenStatusTags.sort(), []);
+  assert.deepEqual([...new Set(staticAntdFeedback)].sort(), []);
+  assert.deepEqual(invalidAntdReactImports.sort(), []);
 });
 
 test("script clean ZIP selalu memakai git archive HEAD", () => {

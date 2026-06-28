@@ -8,8 +8,14 @@
 // - Total master dihitung otomatis dari seluruh varian
 // =====================================================
 
-import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  App as AntdApp,
   Button,
   Card,
   Col,
@@ -17,11 +23,9 @@ import {
   Descriptions,
   Divider,
   Drawer,
-  Empty,
   Form,
   Input,
   InputNumber,
-  message,
   Row,
   Select,
   Space,
@@ -50,14 +54,17 @@ import {
   toggleSemiFinishedMaterialActive,
   updateSemiFinishedMaterial,
 } from "../../services/Produksi/semiFinishedMaterialsService";
+import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/numberId";
 import formatCurrency, { formatHppUnitCurrencyId } from "../../utils/formatters/currencyId";
 import ProductionFilterCard from "../../components/Produksi/shared/ProductionFilterCard";
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
+import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import StockDisplayBlock from "../../components/Layout/Table/StockDisplayBlock";
 import DataTableView from "../../components/Layout/Table/DataTableView";
+import StatusTag from "../../components/Layout/Feedback/StatusTag";
 import TableActionMenu from "../../components/Layout/Table/TableActionMenu";
 import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
 import ImsNotice from "../../components/Layout/Feedback/ImsNotice";
@@ -98,6 +105,7 @@ import {
 // Behavior: input baru no-decimal; business rules dan schema/alur data utama tetap sama.
 
 const SemiFinishedMaterials = () => {
+  const { message } = AntdApp.useApp();
   const [loading, setLoading] = useState(false);
   const [materials, setMaterials] = useState([]);
   const [flowerTypes, setFlowerTypes] = useState([]);
@@ -184,7 +192,7 @@ const SemiFinishedMaterials = () => {
   // Semua data list di-refresh dari service yang sama agar source of truth tetap
   // satu pintu dan lebih mudah dilacak saat maintenance.
   // ---------------------------------------------------------------------------
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const [result, flowerTypeRows, componentGroupRows] = await Promise.all([
@@ -201,11 +209,11 @@ const SemiFinishedMaterials = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [message]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   // ---------------------------------------------------------------------------
   // Watcher form dipakai untuk membuat preview stok di drawer form tetap realtime
@@ -589,7 +597,7 @@ const SemiFinishedMaterials = () => {
 
         return (
           <div className="ims-cell-stack ims-cell-stack-tight">
-            <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
+            <StatusTag color={statusMeta.color}>{statusMeta.label}</StatusTag>
           </div>
         );
       },
@@ -651,8 +659,8 @@ const SemiFinishedMaterials = () => {
       const statusMeta = getStockStatusMeta(record);
 
       return [
-        <Tag key="status" color={statusMeta.color}>{statusMeta.label}</Tag>,
-        record.isActive === false ? <Tag key="inactive" color="default">Nonaktif</Tag> : null,
+        <StatusTag key="status" color={statusMeta.color}>{statusMeta.label}</StatusTag>,
+        record.isActive === false ? <StatusTag key="inactive" tone="neutral">Nonaktif</StatusTag> : null,
       ].filter(Boolean);
     },
     meta: [
@@ -793,9 +801,9 @@ const SemiFinishedMaterials = () => {
       key: "skuStatus",
       width: 120,
       render: (_, variant) => (
-        <Tag color={variant.isActive ? "green" : "default"}>
+        <StatusTag tone={variant.isActive ? "success" : "neutral"}>
           {variant.isActive ? "Aktif" : "Nonaktif"}
-        </Tag>
+        </StatusTag>
       ),
     },
     {
@@ -849,6 +857,8 @@ const SemiFinishedMaterials = () => {
         onAdd={handleAdd}
         addLabel="Tambah Item"
       />
+
+      <PageContentCanvas>
 
       {/* ------------------------------------------------------------------ */}
       {/* Summary cards. Tetap dipertahankan karena user produksi butuh ringkasan */}
@@ -957,6 +967,8 @@ const SemiFinishedMaterials = () => {
       {/* Drawer form create/edit. Tetap satu komponen agar logic form tidak */}
       {/* terpecah ke banyak tempat dan maintenance lebih ringan. */}
       {/* ------------------------------------------------------------------ */}
+      </PageContentCanvas>
+
       <Drawer
         title={
           editingMaterial?.id
@@ -1459,7 +1471,7 @@ const SemiFinishedMaterials = () => {
         width={900}
       >
         {!selectedMaterial ? (
-          <Empty description="Tidak ada data" />
+          <EmptyStateBlock compact description="Tidak ada data" />
         ) : (
           <Space direction="vertical" style={{ width: "100%" }} size={16}>
             {/*
@@ -1554,9 +1566,9 @@ Risiko:
                   {resolveComponentGroupLabel(selectedMaterial) || '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Status">
-                  <Tag color={selectedMaterialStatusMeta?.color || "default"}>
+                  <StatusTag color={selectedMaterialStatusMeta?.color || "default"}>
                     {selectedMaterialStatusMeta?.label || "-"}
-                  </Tag>
+                  </StatusTag>
                 </Descriptions.Item>
               </Descriptions>
             </Card>
@@ -1600,9 +1612,9 @@ Risiko:
                 mobileCardConfig={{
                   title: (record, index) => getVariantDisplayLabel(record, index),
                   tags: (record) => (
-                    <Tag color={record.isActive === false ? "default" : "green"}>
+                    <StatusTag tone={record.isActive === false ? "neutral" : "success"}>
                       {record.isActive === false ? "Nonaktif" : "Aktif"}
-                    </Tag>
+                    </StatusTag>
                   ),
                   meta: [
                     { label: "Stok", value: (record) => formatStockWithUnit(record.currentStock, selectedMaterialUnit) },

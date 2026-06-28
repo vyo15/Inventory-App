@@ -106,3 +106,35 @@ Automated test wajib menjaga:
 3. Jangan membuat generic CRUD/business engine yang melewati domain service.
 4. Page besar hanya dipecah berdasarkan tanggung jawab nyata; jangan memindahkan business logic ke UI.
 5. Setiap cleanup guarded wajib melewati full backend test, frontend lint/test/build, dan manual regression domain terkait.
+
+## Convention konsistensi aktif — 2026-06-29
+
+### Error backend
+
+- Error domain memakai `backend/src/utils/httpError.js`; validasi pengguna tidak boleh memakai plain `Error` yang jatuh menjadi HTTP 500.
+- Controller baru meneruskan error ke global handler. Local responder lama hanya compatibility dan tidak boleh disalin ke module baru.
+- Detail error hanya boleh dikirim jika sudah disanitasi dan memakai `exposeDetails: true`.
+- Kontrak lengkap berada di `docs/23_BACKEND_ERROR_CONTRACT.md`.
+
+### Naming teknis
+
+- Folder/file teknis baru memakai English.
+- Label, title, helper text, dan copy UI tetap Bahasa Indonesia.
+- Folder legacy `Produksi`, `Transaksi`, dan `Laporan` dipertahankan untuk compatibility; jangan dijadikan contoh naming module baru dan jangan di-rename tanpa audit import/dynamic import/route/test/casing lintas Windows-Linux.
+
+### Shared UI
+
+- Status visual memakai `StatusTag` dan resolver domain; jangan membuat satu `getStatusColor()` universal lintas domain.
+- Empty state utama memakai `EmptyStateBlock`; `DataTableView` memakai contract `loading/error/empty/data` dan retry terpisah.
+- Feedback Ant Design dari component memakai `App.useApp()`. Static `message`/`Modal.*` tidak boleh ditambahkan kembali.
+- Mobile card yang clickable wajib keyboard-accessible melalui shared `DataTableView`.
+
+### CSS dan source hygiene
+
+- JavaScript serta CSS wajib LF melalui `.editorconfig`, `.gitattributes`, dan `sourceHygiene.test.js`.
+- Warna brand pada component memakai semantic CSS token, bukan menyalin literal hex dari `index.css`.
+- Normalisasi EOL tidak boleh dicampur dengan perubahan business rule guarded.
+
+### Dokumentasi inline backend
+
+`// SECTION:` diprioritaskan saat file backend kompleks sedang disentuh, terutama Maintenance, Testing Lab, Realtime, Auth, Stock Engine, dan Production lifecycle. Komentar harus menjelaskan invariant, transaction boundary, destructive side effect, atau audit behavior—bukan mengulang nama fungsi. Jangan menambahkan komentar massal tanpa review logic.

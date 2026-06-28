@@ -1,5 +1,6 @@
-import { Alert, Button, Empty } from "antd";
+import { Alert, Button } from "antd";
 import DataLoadingState from "../Feedback/DataLoadingState";
+import EmptyStateBlock from "../Feedback/EmptyStateBlock";
 import "./MobileStateBlock.css";
 
 // =====================================================
@@ -42,14 +43,15 @@ const MobileStateBlock = ({
   }
 
   return (
-    <div className="ims-mobile-state-block ims-mobile-state-block--empty">
-      <Empty
-        description={description || title || "Belum ada data."}
-      />
-      {actionLabel && onAction ? (
-        <Button type="primary" onClick={onAction}>{actionLabel}</Button>
-      ) : null}
-    </div>
+    <EmptyStateBlock
+      compact
+      className="ims-mobile-state-block ims-mobile-state-block--empty"
+      title={title}
+      description={description || "Belum ada data."}
+      actionLabel={actionLabel}
+      onAction={onAction}
+      minHeight={160}
+    />
   );
 };
 

@@ -1,5 +1,18 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Col, Input, Select, Tag, Typography, message } from "antd";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  App as AntdApp,
+  Button,
+  Col,
+  Input,
+  Select,
+  Tag,
+  Typography,
+} from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
@@ -7,6 +20,7 @@ import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import {
@@ -73,6 +87,7 @@ const buildYearOptions = () => {
 };
 
 const MoneyMovementLedger = () => {
+  const { message } = AntdApp.useApp();
   const [ledgerRows, setLedgerRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedYear, setSelectedYear] = useState(dayjs().year());
@@ -103,7 +118,7 @@ const MoneyMovementLedger = () => {
     } finally {
       if (isActive()) setLoading(false);
     }
-  }, [searchKeyword, selectedDirection, selectedLimit, selectedMonth, selectedSource, selectedYear]);
+  }, [message, searchKeyword, selectedDirection, selectedLimit, selectedMonth, selectedSource, selectedYear]);
 
   useEffect(() => {
     let active = true;
@@ -304,6 +319,8 @@ const MoneyMovementLedger = () => {
         subtitle="Audit pergerakan uang read-only dari pemasukan dan pengeluaran resmi."
       />
 
+      <PageContentCanvas>
+
       <PageSection
         title="Ringkasan Buku Besar Kas"
         subtitle="Ringkasan uang masuk, uang keluar, dan selisih bersih sesuai filter aktif."
@@ -401,6 +418,7 @@ const MoneyMovementLedger = () => {
           }}
         />
       </PageSection>
+      </PageContentCanvas>
     </>
   );
 };

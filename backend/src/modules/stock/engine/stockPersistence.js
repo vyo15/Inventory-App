@@ -1,3 +1,4 @@
+const { createHttpError } = require("../../../utils/httpError");
 const crypto = require("crypto");
 const { safeJsonParse } = require("../../../utils/jsonUtils");
 const {
@@ -164,7 +165,9 @@ const insertEventRecord = async (db, tableName, payload = {}) => {
 const loadSourceItem = async (db, sourceType, sourceId) => {
   const tableName = getTableForSourceType(sourceType);
   const row = await db.get(`SELECT * FROM ${tableName} WHERE id = ? AND status != 'deleted'`, [sourceId]);
-  if (!row) throw new Error("Item stok database lokal tidak ditemukan.");
+  if (!row) {
+    throw createHttpError("Item stok database lokal tidak ditemukan.", "STOCK_ITEM_NOT_FOUND", 404);
+  }
   return { tableName, row, payload: toRowPayload(row) };
 };
 

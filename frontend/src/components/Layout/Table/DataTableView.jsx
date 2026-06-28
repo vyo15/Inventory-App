@@ -1,8 +1,17 @@
-import { isValidElement, useEffect, useMemo, useState } from "react";
-import { Pagination, Table } from "antd";
+import {
+  isValidElement,
+  useEffect,
+  useMemo,
+  useState } from "react";
+import { Alert,
+  Button,
+  Pagination,
+  Table,
+} from "antd";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../Feedback/DataLoadingState";
 import MobileActionMenu from "../Mobile/MobileActionMenu";
 import MobileStateBlock from "../Mobile/MobileStateBlock";
+import EmptyStateBlock from "../Feedback/EmptyStateBlock";
 
 const combineClassNames = (...classNames) => classNames.filter(Boolean).join(" ");
 
@@ -127,7 +136,7 @@ const renderMobileActions = (mobileCardConfig, record, index) => {
   );
 };
 
-const renderMobileEmptyState = (resolvedLocale, loading) => {
+const renderMobileEmptyState = ({ loading, error, errorState, emptyState, legacyEmptyText }) => {
   if (loading) {
     return (
       <MobileStateBlock
@@ -137,10 +146,27 @@ const renderMobileEmptyState = (resolvedLocale, loading) => {
     );
   }
 
+  if (error) {
+    return (
+      <MobileStateBlock
+        type="error"
+        title={errorState?.title || "Data belum bisa dimuat"}
+        description={errorState?.description || error?.message || String(error)}
+        actionLabel={errorState?.actionLabel}
+        onAction={errorState?.onAction}
+      />
+    );
+  }
+
+  if (isValidElement(emptyState)) return emptyState;
+
   return (
     <MobileStateBlock
       type="empty"
-      description={resolvedLocale.emptyText || "Belum ada data."}
+      title={emptyState?.title}
+      description={emptyState?.description || legacyEmptyText || "Belum ada data."}
+      actionLabel={emptyState?.actionLabel}
+      onAction={emptyState?.onAction}
     />
   );
 };
@@ -157,6 +183,9 @@ const renderMobileCards = ({
   rowKey,
   pagination,
   resolvedLocale,
+  emptyState,
+  error,
+  errorState,
   mobileCurrentPage,
   mobilePageSize,
   onMobilePageChange,
@@ -173,7 +202,13 @@ const renderMobileCards = ({
   if (!resolvedDataSource.length) {
     return (
       <div className="ims-mobile-card-list" aria-live="polite">
-        {renderMobileEmptyState(resolvedLocale, loading)}
+        {renderMobileEmptyState({
+          loading,
+          error,
+          errorState,
+          emptyState,
+          legacyEmptyText: resolvedLocale.emptyText,
+        })}
       </div>
     );
   }
@@ -209,6 +244,17 @@ const renderMobileCards = ({
               mobileCardConfig.onCardClick(record, absoluteIndex, event);
             }
           : undefined;
+        const handleCardKeyDown = handleCardClick
+          ? (event) => {
+              if (event.key !== "Enter" && event.key !== " ") return;
+              event.preventDefault();
+              handleCardClick(event);
+            }
+          : undefined;
+        const cardAriaLabel = handleCardClick
+          ? renderMobileField(mobileCardConfig.ariaLabel, record, absoluteIndex)
+            || `Buka detail ${typeof title === "string" ? title : "data"}`
+          : undefined;
         const metaItems = limitMobileItems(
           (mobileCardConfig.meta || [])
             .map((item) => ({
@@ -229,6 +275,10 @@ const renderMobileCards = ({
             ].filter(Boolean).join(" ")}
             key={getRecordKey(rowKey, record, absoluteIndex)}
             onClick={handleCardClick}
+            onKeyDown={handleCardKeyDown}
+            role={handleCardClick ? "button" : undefined}
+            tabIndex={handleCardClick ? 0 : undefined}
+            aria-label={cardAriaLabel}
           >
             <div className="ims-mobile-card__header">
               <div className="ims-mobile-card__identity">
@@ -317,6 +367,10 @@ const DataTableView = ({
   loading = false,
   dataSource = [],
   emptyText,
+  emptyState,
+  error = null,
+  errorState,
+  onRetry,
   locale,
   showRefreshIndicator = true,
   mobileCardConfig,
@@ -325,9 +379,42 @@ const DataTableView = ({
   pagination,
   ...tableProps
 }) => {
+  const normalizedEmptyState = isValidElement(emptyState)
+    ? emptyState
+    : {
+        ...(typeof emptyState === "object" && emptyState ? emptyState : {}),
+        description: typeof emptyState === "string"
+          ? emptyState
+          : emptyState?.description || emptyText,
+      };
+  const normalizedErrorState = {
+    ...(errorState || {}),
+    onAction: errorState?.onAction || onRetry,
+    actionLabel: errorState?.actionLabel || (onRetry ? "Coba lagi" : undefined),
+  };
+  const legacyEmptyText = locale?.emptyText ?? getDataTableEmptyText(loading, emptyText);
+  const desktopEmptyNode = error ? (
+    <Alert
+      showIcon
+      type="error"
+      message={normalizedErrorState.title || "Data belum bisa dimuat"}
+      description={normalizedErrorState.description || error?.message || String(error)}
+      action={normalizedErrorState.actionLabel && normalizedErrorState.onAction ? (
+        <Button onClick={normalizedErrorState.onAction}>{normalizedErrorState.actionLabel}</Button>
+      ) : null}
+    />
+  ) : isValidElement(normalizedEmptyState) ? normalizedEmptyState : (
+    <EmptyStateBlock
+      compact
+      title={normalizedEmptyState.title}
+      description={normalizedEmptyState.description || legacyEmptyText || "Belum ada data."}
+      actionLabel={normalizedEmptyState.actionLabel}
+      onAction={normalizedEmptyState.onAction}
+    />
+  );
   const resolvedLocale = {
     ...locale,
-    emptyText: locale?.emptyText ?? getDataTableEmptyText(loading, emptyText),
+    emptyText: desktopEmptyNode,
   };
   const resolvedPagination = pagination === false ? false : pagination;
   const mobilePageSize = Number(resolvedPagination?.pageSize || resolvedPagination?.defaultPageSize || 10);
@@ -380,6 +467,9 @@ const DataTableView = ({
         rowKey,
         pagination: resolvedPagination,
         resolvedLocale,
+        emptyState: normalizedEmptyState,
+        error,
+        errorState: normalizedErrorState,
         mobileCurrentPage,
         mobilePageSize,
         onMobilePageChange: handleMobilePageChange,

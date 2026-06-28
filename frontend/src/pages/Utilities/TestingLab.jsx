@@ -1,4 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState } from "react";
 import {
   Alert,
   App,
@@ -7,7 +11,6 @@ import {
   Col,
   Descriptions,
   Divider,
-  Empty,
   Input,
   List,
   Modal,
@@ -34,7 +37,10 @@ import {
   SafetyCertificateOutlined,
   StopOutlined,
 } from "@ant-design/icons";
+import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import PageHeader from "../../components/Layout/Page/PageHeader";
+import StatusTag from "../../components/Layout/Feedback/StatusTag";
+import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import {
   cancelTestingSession,
   cloneTestingLabOperationalSource,
@@ -48,19 +54,12 @@ import {
   selectTestingBaseline,
   startTestingSession,
 } from "../../services/System/testingLabService";
+import { formatDateTimeId } from "../../utils/formatters/dateId";
 import "./TestingLab.css";
 
 const { Paragraph, Text, Title } = Typography;
 
-const formatDateTime = (value) => {
-  if (!value) return "Belum ada";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat("id-ID", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
-};
+const formatDateTime = (value) => formatDateTimeId(value, { fallback: "Belum ada" });
 
 const downloadJson = (filename, payload) => {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
@@ -76,11 +75,11 @@ const downloadJson = (filename, payload) => {
 
 const statusTag = (status) => {
   const normalized = String(status || "unknown").toLowerCase();
-  if (["passed", "completed"].includes(normalized)) return <Tag color="green">Lulus</Tag>;
-  if (normalized === "warning") return <Tag color="gold">Peringatan</Tag>;
-  if (normalized === "failed") return <Tag color="red">Gagal</Tag>;
-  if (normalized === "active") return <Tag color="blue">Aktif</Tag>;
-  return <Tag>Belum diperiksa</Tag>;
+  if (["passed", "completed"].includes(normalized)) return <StatusTag tone="success">Lulus</StatusTag>;
+  if (normalized === "warning") return <StatusTag tone="brand">Peringatan</StatusTag>;
+  if (normalized === "failed") return <StatusTag tone="danger">Gagal</StatusTag>;
+  if (normalized === "active") return <StatusTag tone="info">Aktif</StatusTag>;
+  return <StatusTag tone="neutral">Belum diperiksa</StatusTag>;
 };
 
 const TestingLab = () => {
@@ -210,6 +209,8 @@ const TestingLab = () => {
           </Button>
         )}
       />
+
+      <PageContentCanvas>
 
       {!status.guard?.available ? (
         <Result
@@ -456,7 +457,7 @@ const TestingLab = () => {
                 />
               </>
             ) : (
-              <Empty description="Belum ada hasil validasi." />
+              <EmptyStateBlock compact description="Belum ada hasil validasi." />
             )}
           </Card>
 
@@ -504,7 +505,7 @@ const TestingLab = () => {
                 ]}
               />
             ) : (
-              <Empty description="Belum ada riwayat sesi testing." />
+              <EmptyStateBlock compact description="Belum ada riwayat sesi testing." />
             )}
           </Card>
         </>
@@ -563,6 +564,7 @@ const TestingLab = () => {
         <Paragraph style={{ marginTop: 16 }}>Ketik <Text code>{confirmKeyword}</Text></Paragraph>
         <Input value={confirmText} onChange={(event) => setConfirmText(event.target.value)} />
       </Modal>
+      </PageContentCanvas>
     </div>
   );
 };

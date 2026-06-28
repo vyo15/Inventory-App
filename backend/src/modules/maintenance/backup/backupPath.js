@@ -1,3 +1,4 @@
+const { createHttpError } = require("../../../utils/httpError");
 const fs = require("fs");
 const path = require("path");
 const env = require("../../../config/env");
@@ -36,8 +37,7 @@ const resolveThroughExistingAncestor = (candidatePath) => {
 };
 
 const createBackupPathError = (code, message, details = {}) => {
-  const error = new Error(message);
-  error.code = code;
+  const error = createHttpError(message, code, 400, { details, exposeDetails: false });
   Object.assign(error, details);
   return error;
 };

@@ -7,22 +7,27 @@
 // baru di luar collection payroll.
 // =====================================================
 
-import { useEffect, useMemo, useState } from "react";
 import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  App as AntdApp,
   Button,
   Col,
   DatePicker,
-  Empty,
-  message,
   Select,
   Space,
   Tag,
   Tooltip,
 } from "antd";
 import dayjs from "dayjs";
+import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import { CompactCellText } from "../../components/Layout/Table/CompactCell";
@@ -147,6 +152,7 @@ const downloadCsv = (rows = [], fileName = "payroll-report") => {
 };
 
 const PayrollReport = () => {
+  const { message } = AntdApp.useApp();
   const [loading, setLoading] = useState(false);
   const [payrolls, setPayrolls] = useState([]);
   const [periodPreset, setPeriodPreset] = useState("monthly");
@@ -178,7 +184,7 @@ const PayrollReport = () => {
     };
 
     loadPayrollReport();
-  }, [dateRange]);
+  }, [dateRange, message]);
 
   const operatorOptions = useMemo(() => {
     const names = Array.from(new Set(payrolls.map((item) => item.workerName).filter(Boolean)));
@@ -586,6 +592,8 @@ const PayrollReport = () => {
         subtitle="Laporan payroll line final per periode."
       />
 
+      <PageContentCanvas>
+
       <PageSection
         title="Filter Periode Payroll"
         subtitle="Periode dipakai untuk filter laporan."
@@ -695,10 +703,11 @@ const PayrollReport = () => {
           pagination={{ pageSize: 10 }}
           mobileCardConfig={payrollReportMobileCardConfig}
           locale={{
-            emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada data payroll pada filter aktif" />),
+            emptyText: getDataTableEmptyText(loading, "Belum ada data payroll pada filter aktif"),
           }}
         />
       </PageSection>
+      </PageContentCanvas>
     </>
   );
 };

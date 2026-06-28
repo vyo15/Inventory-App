@@ -1,3 +1,4 @@
+const { createHttpError } = require("../../../utils/httpError");
 const {
   normalizeText,
   nowIso,
@@ -12,17 +13,8 @@ const INVENTORY_STOCK_FIELDS = Object.freeze([
   "availableStock",
 ]);
 
-const createInventoryGuardError = (
-  publicMessage,
-  errorCode = "INVENTORY_MASTER_GUARD_REJECTED",
-  statusCode = 409,
-) => {
-  const error = new Error(publicMessage);
-  error.publicMessage = publicMessage;
-  error.errorCode = errorCode;
-  error.statusCode = statusCode;
-  return error;
-};
+const createInventoryGuardError = (publicMessage, errorCode, statusCode = 400) =>
+  createHttpError(publicMessage, errorCode, statusCode);
 
 const normalizeVariantToken = (value = "") => normalizeText(value)
   .toLowerCase()

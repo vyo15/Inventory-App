@@ -1,5 +1,6 @@
 import { Button, Card, Col, Descriptions, Row, Space, Statistic, Tag, Typography } from 'antd';
 import DataTableView from '../../../components/Layout/Table/DataTableView';
+import StatusTag from "../../../components/Layout/Feedback/StatusTag";
 import MobileDetailDrawer from '../../../components/Layout/Mobile/MobileDetailDrawer';
 import { formatCurrencyId } from '../../../utils/formatters/currencyId';
 import { formatDateId } from '../../../utils/formatters/dateId';
@@ -35,7 +36,7 @@ const ProductDetailDrawer = ({
             <Space direction="vertical" size={8} style={{ width: '100%' }}>
               <Space size={[8, 8]} wrap>
                 <Text strong style={{ fontSize: 18 }}>{product.name || '-'}</Text>
-                <Tag className="ims-status-tag" color={statusMeta.color}>{statusMeta.label}</Tag>
+                <StatusTag color={statusMeta.color}>{statusMeta.label}</StatusTag>
                 {product.hasVariants ? <Tag color="blue">Pakai Varian</Tag> : <Tag>Tanpa Varian</Tag>}
               </Space>
               <Text type="secondary">{categoryLabel}</Text>
@@ -78,9 +79,9 @@ const ProductDetailDrawer = ({
                 mobileCardConfig={{
                   title: (variant, index) => getVariantDisplayLabel(variant, index),
                   tags: (variant) => (
-                    <Tag className="ims-status-tag" color={variant.isActive === false ? 'default' : 'green'}>
+                    <StatusTag tone={variant.isActive === false ? 'neutral' : 'success'}>
                       {variant.isActive === false ? 'Nonaktif' : 'Aktif'}
-                    </Tag>
+                    </StatusTag>
                   ),
                   meta: [
                     { label: 'Stok', value: (variant) => formatStockWithUnit(variant.currentStock || 0) },
@@ -111,7 +112,7 @@ const ProductDetailDrawer = ({
                   {
                     title: 'Status',
                     dataIndex: 'isActive',
-                    render: (value) => <Tag className="ims-status-tag" color={value === false ? 'default' : 'green'}>{value === false ? 'Nonaktif' : 'Aktif'}</Tag>,
+                    render: (value) => <StatusTag tone={value === false ? 'neutral' : 'success'}>{value === false ? 'Nonaktif' : 'Aktif'}</StatusTag>,
                   },
                 ]}
               />

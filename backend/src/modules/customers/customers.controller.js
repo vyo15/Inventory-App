@@ -1,3 +1,4 @@
+const { respondIfServiceError } = require("../../utils/httpError");
 const { failure, success } = require("../../utils/response");
 const {
   createCustomer,
@@ -10,17 +11,10 @@ const {
 
 const getActor = (req) => req.localAuth?.user?.username || "system";
 
-const handleCustomerError = (res, error) => {
-  if (error?.code === "DUPLICATE_CODE" || String(error?.message || "").includes("UNIQUE")) {
-    return failure(res, "Kode customer sudah ada di database lokal", "DUPLICATE_CODE", 409);
-  }
-
-  if (error?.isServiceError) {
-    return failure(res, error.message, error.code, error.statusCode || 400);
-  }
-
-  return null;
-};
+const handleCustomerError = (res, error) => respondIfServiceError(res, error, {
+  duplicateMessage: "Kode customer sudah ada di database lokal",
+  duplicateCode: "DUPLICATE_CODE",
+});
 
 const generateCustomerCodeController = async (req, res, next) => {
   try {

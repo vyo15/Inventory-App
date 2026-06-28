@@ -22,3 +22,4 @@
 *.jsx text eol=lf
 *.cjs text eol=lf
 *.mjs text eol=lf
+*.css text eol=lf

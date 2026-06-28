@@ -1,5 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+import {
+  App as AntdApp,
   Alert,
   Button,
   Card,
@@ -17,13 +23,13 @@ import {
   Switch,
   Tag,
   Typography,
-  message,
-} from 'antd';
+} from "antd";
 import { PlusOutlined } from '@ant-design/icons';
 import { formatNumberId, parseIntegerIdInput } from '../../utils/formatters/numberId';
 import { formatCurrencyId } from '../../utils/formatters/currencyId';
 import FilterBar from '../../components/Layout/Filters/FilterBar';
 import PageHeader from '../../components/Layout/Page/PageHeader';
+import PageContentCanvas from '../../components/Layout/Page/PageContentCanvas';
 import PageSection from '../../components/Layout/Page/PageSection';
 import SummaryStatGrid from '../../components/Layout/Display/SummaryStatGrid';
 import StockDisplayBlock from '../../components/Layout/Table/StockDisplayBlock';
@@ -80,6 +86,7 @@ const { TextArea } = Input;
 // -----------------------------------------------------------------------------
 
 const Products = () => {
+  const { message } = AntdApp.useApp();
   // ---------------------------------------------------------------------------
   // State utama data produk dan tampilan halaman.
   // ---------------------------------------------------------------------------
@@ -177,7 +184,7 @@ const Products = () => {
       disposed = true;
       unsubProducts();
     };
-  }, []);
+  }, [message]);
 
   // ---------------------------------------------------------------------------
   // Map nama pricing rule agar tampilan list dan detail lebih ringkas.
@@ -590,6 +597,8 @@ const Products = () => {
         ]}
       />
 
+      <PageContentCanvas>
+
 
       {/* ---------------------------------------------------------------------
           Summary cards produk.
@@ -661,7 +670,7 @@ const Products = () => {
           size="small"
           pagination={{ pageSize: 10 }}
           tableLayout="fixed"
-          emptyText={<Empty description="Belum ada data produk" />}
+          emptyState={{ description: "Belum ada data produk" }}
           mobileCardConfig={productMobileCardConfig}
         />
       </PageSection>
@@ -670,6 +679,8 @@ const Products = () => {
           Drawer form create/edit produk.
           Ukuran dan pembagian section dibuat seragam dengan raw materials.
       --------------------------------------------------------------------- */}
+      </PageContentCanvas>
+
       <Drawer
         title={editingProduct ? 'Edit Produk' : 'Tambah Produk'}
         open={formVisible}

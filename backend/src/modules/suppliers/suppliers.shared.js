@@ -1,3 +1,4 @@
+const { createServiceError } = require("../../utils/httpError");
 const { safeJsonParse } = require("../../utils/jsonUtils");
 const businessCodeContract = require("../../../../shared/businessCodeContract.json");
 const { calculateSupplierCatalogMetrics } = require("../../../../shared/supplierCatalogPricing.cjs");
@@ -38,13 +39,6 @@ const normalizeItemType = (value = "") => {
   return normalized;
 };
 
-const createServiceError = (message, code = "ERROR", statusCode = 400) => {
-  const error = new Error(message);
-  error.code = code;
-  error.statusCode = statusCode;
-  error.isServiceError = true;
-  return error;
-};
 
 const assertSafeHttpUrl = (value, fieldLabel) => {
   const normalized = normalizeText(value);

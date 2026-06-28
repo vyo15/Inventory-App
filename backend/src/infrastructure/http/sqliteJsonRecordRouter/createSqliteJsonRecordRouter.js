@@ -1,3 +1,4 @@
+const { isSqliteUniqueError } = require("../../../utils/httpError");
 const crypto = require("crypto");
 const express = require("express");
 const { getDb } = require("../../../db/connection");
@@ -232,7 +233,7 @@ const createSqliteJsonRecordRouter = ({
 
         return sendOperationResult(res, result);
       } catch (error) {
-        if (String(error?.message || "").includes("UNIQUE")) {
+        if (isSqliteUniqueError(error)) {
           return failure(res, `Kode/ID ${entityType} sudah ada di database lokal`, "DUPLICATE_CODE", 409);
         }
         return next(error);

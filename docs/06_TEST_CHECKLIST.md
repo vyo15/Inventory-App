@@ -438,3 +438,17 @@ Referensi detail: `docs/21_RESPONSIVE_UI_UX_STANDARD.md`.
 - [ ] Semi Finished tanpa Jenis Bunga tersimpan dan tampil sebagai `Umum / Reusable`.
 - [ ] Mawar dan Tulip dapat memakai master Tahapan yang sama dengan BOM/item berbeda.
 - [ ] Monitoring Profile memakai `monitoringMetric` eksplisit; rename nama step tidak mengubah jenis yield.
+
+## Regression konsistensi UI/API — 2026-06-29
+
+- [ ] Stock qty 0 menghasilkan HTTP 400 `STOCK_QUANTITY_ZERO`, bukan 500.
+- [ ] Stock item tidak ditemukan menghasilkan 404 `STOCK_ITEM_NOT_FOUND`.
+- [ ] Duplicate reference Stock menghasilkan 409 `DUPLICATE_REFERENCE` dengan pesan domain.
+- [ ] Cash amount 0 menghasilkan 400 `FINANCE_AMOUNT_INVALID`.
+- [ ] Error 4xx tercatat sebagai warning; error 500 tercatat sebagai error dan tidak membocorkan detail internal.
+- [ ] OpenAPI commit create memakai HTTP 201 sesuai controller.
+- [ ] Empty state desktop/mobile sama dan error load memiliki retry terpisah.
+- [ ] Card mobile detail dapat dibuka dengan mouse, touch, Enter, dan Space.
+- [ ] Status Sales/Work Log/Backup konsisten antara table, report, drawer, dan mobile.
+- [ ] Toast/modal mengikuti light/dark mode melalui Ant Design App context.
+- [ ] Seluruh file CSS memakai LF dan lima component brand tidak menyalin literal warna pusat.

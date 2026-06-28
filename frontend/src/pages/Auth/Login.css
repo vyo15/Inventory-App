@@ -490,7 +490,7 @@ body.app-theme-dark .ims-login-card.ant-card {
 html[data-app-theme="dark"] .ims-login-submit.ant-btn-primary,
 html.app-theme-dark .ims-login-submit.ant-btn-primary,
 body.app-theme-dark .ims-login-submit.ant-btn-primary {
-  color: #ffffff;
+  color: var(--ims-login-submit-text);
   background: var(--ims-color-primary-active);
 }
 
@@ -500,7 +500,7 @@ html.app-theme-dark .ims-login-submit.ant-btn-primary:hover,
 html.app-theme-dark .ims-login-submit.ant-btn-primary:focus,
 body.app-theme-dark .ims-login-submit.ant-btn-primary:hover,
 body.app-theme-dark .ims-login-submit.ant-btn-primary:focus {
-  color: #ffffff;
+  color: var(--ims-login-submit-text);
   background: var(--ims-color-primary-hover);
 }
 

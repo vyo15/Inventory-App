@@ -1,5 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+import {
+  App as AntdApp,
   Button,
   Card,
   Col,
@@ -16,8 +22,7 @@ import {
   Tabs,
   Tag,
   Typography,
-  message,
-} from 'antd';
+} from "antd";
 import {
   StopOutlined,
   EditOutlined,
@@ -41,14 +46,16 @@ import { formatNumberId, parseIntegerIdInput } from '../../utils/formatters/numb
 import { formatCurrencyIDR } from '../../utils/formatters/currencyId';
 import FilterBar from '../../components/Layout/Filters/FilterBar';
 import PageHeader from '../../components/Layout/Page/PageHeader';
+import PageContentCanvas from '../../components/Layout/Page/PageContentCanvas';
 import PageSection from '../../components/Layout/Page/PageSection';
 import DataTableView from '../../components/Layout/Table/DataTableView';
+import StatusTag from '../../components/Layout/Feedback/StatusTag';
 import TableActionMenu from '../../components/Layout/Table/TableActionMenu';
 import SupplierDetailDrawer from './components/SupplierDetailDrawer';
 import ResponsiveFormSection from '../../components/Layout/Mobile/ResponsiveFormSection';
 import RupiahInputNumber from '../../components/Layout/Forms/RupiahInputNumber';
 import ImsNotice from '../../components/Layout/Feedback/ImsNotice';
-import { DataRefreshIndicator, getDataTableEmptyText } from '../../components/Layout/Feedback/DataLoadingState';
+import { DataRefreshIndicator } from '../../components/Layout/Feedback/DataLoadingState';
 import { listenProducts } from '../../services/MasterData/productsService';
 import { listenRawMaterials } from '../../services/MasterData/rawMaterialsService';
 import {
@@ -126,6 +133,7 @@ const getOfferStatusMeta = (offer = {}) => {
 };
 
 const SupplierPurchases = () => {
+  const { message } = AntdApp.useApp();
   const [form] = Form.useForm();
   const [priceCheckForm] = Form.useForm();
   const location = useLocation();
@@ -176,7 +184,7 @@ const SupplierPurchases = () => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [message]);
 
   useEffect(() => {
     fetchSuppliers();
@@ -192,7 +200,7 @@ const SupplierPurchases = () => {
       unsubscribeProducts();
       unsubscribeMaterials();
     };
-  }, [fetchSuppliers]);
+  }, [fetchSuppliers, message]);
 
   useEffect(() => {
     if (!supplierIdFromQuery || !suppliers.length || drawerVisible) return;
@@ -378,7 +386,7 @@ const SupplierPurchases = () => {
     } finally {
       setHistoryLoading(false);
     }
-  }, [historyLoadedSupplierId]);
+  }, [historyLoadedSupplierId, message]);
 
   const openSupplierDrawer = (record, initialTab = 'summary') => {
     setSelectedSupplier(record);
@@ -487,7 +495,7 @@ const SupplierPurchases = () => {
       title: 'Status',
       key: 'status',
       width: '12%',
-      render: (_, record) => <Tag color={record.isActive === false ? 'default' : 'green'}>{record.isActive === false ? 'Nonaktif' : 'Aktif'}</Tag>,
+      render: (_, record) => <StatusTag tone={record.isActive === false ? 'neutral' : 'success'}>{record.isActive === false ? 'Nonaktif' : 'Aktif'}</StatusTag>,
     },
     {
       title: 'Aksi',
@@ -652,7 +660,7 @@ const SupplierPurchases = () => {
   const mobileCardConfig = {
     title: (record) => getSupplierDisplayName(record),
     subtitle: (record) => record.contact || record.address || null,
-    tags: (record) => <Tag color={record.isActive === false ? 'default' : 'green'}>{record.isActive === false ? 'Nonaktif' : 'Aktif'}</Tag>,
+    tags: (record) => <StatusTag tone={record.isActive === false ? 'neutral' : 'success'}>{record.isActive === false ? 'Nonaktif' : 'Aktif'}</StatusTag>,
     meta: [
       { label: 'Penawaran', value: (record) => `${(record.catalogOffers || []).filter((offer) => offer.isActive !== false).length} katalog` },
       { label: 'Toko', value: (record) => getSupplierStoreLink(record) ? 'Link tersedia' : 'Belum ada link' },
@@ -711,6 +719,8 @@ const SupplierPurchases = () => {
         }]}
       />
 
+      <PageContentCanvas>
+
       <FilterBar>
         <Col xs={24} md={18}>
           <Search
@@ -734,10 +744,14 @@ const SupplierPurchases = () => {
           dataSource={filteredSuppliers}
           rowKey="id"
           tableLayout="fixed"
-          locale={{ emptyText: getDataTableEmptyText(isLoading, loadError || 'Belum ada data supplier.') }}
+          emptyState={{ description: 'Belum ada data supplier.' }}
+          error={loadError ? new Error(loadError) : null}
+          onRetry={fetchSuppliers}
           mobileCardConfig={mobileCardConfig}
         />
       </PageSection>
+
+      </PageContentCanvas>
 
       <Modal
         title={isEditing ? 'Edit Supplier dan Katalog' : 'Tambah Supplier dan Katalog'}

@@ -41,6 +41,7 @@ import {
   importSqliteBackendBackup,
   MAINTENANCE_STATUS_CONTRACT_VERSION,
 } from "../../../services/System/sqliteBackendStatusService";
+import StatusTag from "../../../components/Layout/Feedback/StatusTag";
 import SqliteBackendStatusPanel from "./SqliteBackendStatusPanel";
 import ImsNotice from "../../../components/Layout/Feedback/ImsNotice";
 import InfoPopoverButton from "../../../components/Layout/Feedback/InfoPopoverButton";
@@ -52,62 +53,26 @@ import {
   getImportedSourceFilename,
   isRestorePlanReady,
 } from "./restorePreviewHelpers";
+import { formatDateTimeId, getDateAgeDays, parseDateTimeId } from "../../../utils/formatters/dateId";
+import { formatFileSizeId } from "../../../utils/formatters/fileSizeId";
+import { formatNumberId } from "../../../utils/formatters/numberId";
+import { getBackupTypeLabel } from "../utils/backupUiFormatters";
+import { EXTERNAL_COPY_STORAGE_KEY } from "../utils/maintenanceUiConstants";
 import "./OfflineDatabaseCenter.css";
 
 const { Text } = Typography;
-const EXTERNAL_COPY_STORAGE_KEY = "ims.sqlite.externalBackupCopyConfirmedAt";
 const IMS_BACKUP_ACCEPT = ".imsbackup,.imsbak.zip";
 const LIVE_STATUS_REFRESH_INTERVAL_MS = 15_000;
 const BACKUP_PAGE_SIZE = 10;
 
-const formatNumber = (value) => Number(value || 0).toLocaleString("id-ID");
+const formatNumber = formatNumberId;
 const formatCount = (value) => (
   value === null || value === undefined ? "Belum tersedia" : formatNumber(value)
 );
-const formatBytes = (value) => {
-  const bytes = Number(value || 0);
-  if (!bytes) return "0 B";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-};
-
-const parseBackupDate = (value) => {
-  if (!value) return null;
-  const normalized = String(value).includes("T") ? String(value) : `${String(value).replace(" ", "T")}Z`;
-  const date = new Date(normalized);
-  return Number.isNaN(date.getTime()) ? null : date;
-};
-
-const formatDateTime = (value) => {
-  const date = parseBackupDate(value);
-  if (!date) return value || "-";
-  return new Intl.DateTimeFormat("id-ID", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
-};
-
-const getAgeDays = (value) => {
-  const date = parseBackupDate(value);
-  if (!date) return null;
-  return Math.floor((Date.now() - date.getTime()) / (24 * 60 * 60 * 1000));
-};
-
-const getBackupTypeLabel = (backupType) => {
-  const map = {
-    manual: "Manual",
-    daily: "Harian",
-    monthly: "Bulanan",
-    "manual-import": "Import Manual",
-    "pre-update": "Sebelum Update",
-    "pre-restore": "Sebelum Restore",
-    "pre-reset": "Sebelum Reset",
-    "pre-import": "Sebelum Import",
-    archived: "Arsip",
-  };
-  return map[backupType] || backupType || "Backup";
-};
+const formatBytes = formatFileSizeId;
+const parseBackupDate = parseDateTimeId;
+const formatDateTime = (value) => formatDateTimeId(value, { fallback: value || "-" });
+const getAgeDays = getDateAgeDays;
 
 const getBackupStorageClass = (backup = {}) => {
   if (["daily", "monthly", "manual"].includes(backup.storageClass)) return backup.storageClass;
@@ -291,7 +256,7 @@ const buildCoverageCollapseItems = (groups = [], { comparison = false } = {}) =>
             </div>
           ) : row.statusAware ? (
             <div className="offline-db-detail-status-values">
-              <Tag color="green">Aktif {formatCount(row.activeCount)}</Tag>
+              <StatusTag tone="success">Aktif {formatCount(row.activeCount)}</StatusTag>
               {Number(row.inactiveCount || 0) > 0 ? (
                 <Tag color="orange">Nonaktif {formatCount(row.inactiveCount)}</Tag>
               ) : null}
@@ -1069,7 +1034,7 @@ const OfflineDatabaseCenter = () => {
               <div className="offline-db-restore-preview">
                 <Descriptions size="small" bordered column={{ xs: 1, md: 2 }}>
                   <Descriptions.Item label="Jenis Preview"><Tag color="blue">Read-only</Tag></Descriptions.Item>
-                  <Descriptions.Item label="Database Aktif"><Tag color="green">Belum diubah</Tag></Descriptions.Item>
+                  <Descriptions.Item label="Database Aktif"><StatusTag tone="success">Belum diubah</StatusTag></Descriptions.Item>
                   <Descriptions.Item label="Validasi File">
                     <Tag color={restorePlan.validForRestore ? "green" : "red"}>{restorePlan.validForRestore ? "Valid" : "Tidak valid"}</Tag>
                   </Descriptions.Item>

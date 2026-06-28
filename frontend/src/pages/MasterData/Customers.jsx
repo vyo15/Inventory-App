@@ -1,13 +1,18 @@
-import { useCallback, useEffect, useState } from "react";
 import {
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
+import {
+  App as AntdApp,
   Button,
   Form,
   Input,
-  message,
 } from "antd";
 import { EditOutlined, PlusOutlined } from "@ant-design/icons";
 import PageFormModal from "../../components/Layout/Forms/PageFormModal";
 import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import TableActionMenu from "../../components/Layout/Table/TableActionMenu";
@@ -27,6 +32,7 @@ import {
 } from "../../utils/references/customerCodeReference";
 
 const Customers = () => {
+  const { message } = AntdApp.useApp();
   const [customers, setCustomers] = useState([]);
   const [repositoryMode, setRepositoryMode] = useState(REPOSITORY_MODES.SQLITE_SIDECAR);
   const [loading, setLoading] = useState(true);
@@ -50,7 +56,7 @@ const Customers = () => {
     } finally {
       setLoading(false);
     }
-  }, [getModeOptions]);
+  }, [getModeOptions, message]);
 
   useEffect(() => {
     fetchCustomers();
@@ -220,6 +226,8 @@ const Customers = () => {
         ]}
       />
 
+      <PageContentCanvas>
+
 
       <PageSection
         title="Daftar Customer"
@@ -242,6 +250,8 @@ const Customers = () => {
           mobileCardConfig={customerMobileCardConfig}
         />
       </PageSection>
+
+      </PageContentCanvas>
 
       <PageFormModal
         title={isEditing ? "Edit Customer" : "Tambah Customer"}

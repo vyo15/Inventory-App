@@ -4,8 +4,14 @@
 // relasi karyawan, dan relasi BOM.
 // =====================================================
 
-import { useEffect, useMemo, useState } from "react";
 import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  App as AntdApp,
   Badge,
   Button,
   Divider,
@@ -13,11 +19,9 @@ import {
   Col,
   Descriptions,
   Drawer,
-  Empty,
   Form,
   Input,
   InputNumber,
-  message,
   Row,
   Select,
   Space,
@@ -42,6 +46,7 @@ import {
   PRODUCTION_STEP_PROCESS_TYPES,
   formatProductionStepPayrollPreview,
 } from "../../constants/productionStepOptions";
+import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/numberId";
 import {
   createProductionStep,
@@ -53,6 +58,7 @@ import { getAllProductionEmployees } from "../../services/Produksi/productionEmp
 import { getAllProductionBoms } from "../../services/Produksi/productionBomsService";
 import ProductionFilterCard from "../../components/Produksi/shared/ProductionFilterCard";
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
+import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import TableActionMenu from "../../components/Layout/Table/TableActionMenu";
@@ -85,6 +91,7 @@ const categoryTagStyle = {
 
 
 const ProductionSteps = () => {
+  const { message } = AntdApp.useApp();
   const [loading, setLoading] = useState(false);
   const [steps, setSteps] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -107,7 +114,7 @@ const ProductionSteps = () => {
 
   const [form] = Form.useForm();
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -126,11 +133,11 @@ const ProductionSteps = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [message]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const enrichedSteps = useMemo(() => {
     return (steps || []).map((item) => ({
@@ -596,6 +603,8 @@ const ProductionSteps = () => {
         addLabel="Tambah Step"
       />
 
+      <PageContentCanvas>
+
       {/* AKTIF / GUARDED: summary hanya migrasi layout card, perhitungan statistik tidak diubah. */}
       <ProductionSummaryCards items={summaryItems} />
 
@@ -667,7 +676,7 @@ const ProductionSteps = () => {
           dataSource={filteredData}
           mobileCardConfig={stepsMobileCardConfig}
           locale={{
-            emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada data tahapan produksi" />),
+            emptyText: getDataTableEmptyText(loading, "Belum ada data tahapan produksi"),
           }}
           pagination={{
             pageSize: 10,
@@ -675,6 +684,8 @@ const ProductionSteps = () => {
           }}
         />
       </PageSection>
+
+      </PageContentCanvas>
 
       <MobileDetailDrawer
         title={`Detail Step Produksi: ${selectedStep?.name || "-"}`}
@@ -702,7 +713,7 @@ Risiko:
 =====================================================
 */}
         {!selectedStep ? (
-          <Empty description="Tidak ada data" />
+          <EmptyStateBlock compact description="Tidak ada data" />
         ) : (
           <Space direction="vertical" size={16} style={{ width: "100%" }}>
             <Row gutter={[12, 12]}>
@@ -930,7 +941,7 @@ Risiko:
             pagination={{ pageSize: 8, showSizeChanger: true }}
             showRefreshIndicator={false}
             mobileCardConfig={stepEmployeeMobileCardConfig}
-            locale={{ emptyText: <Empty description="Belum ada karyawan terkait step ini" /> }}
+            locale={{ emptyText: <EmptyStateBlock compact description="Belum ada karyawan terkait step ini" /> }}
           />
         </Space>
       </MobileDetailDrawer>
@@ -956,7 +967,7 @@ Risiko:
             pagination={{ pageSize: 8, showSizeChanger: true }}
             showRefreshIndicator={false}
             mobileCardConfig={stepBomMobileCardConfig}
-            locale={{ emptyText: <Empty description="Step ini belum dipakai di BOM mana pun" /> }}
+            locale={{ emptyText: <EmptyStateBlock compact description="Step ini belum dipakai di BOM mana pun" /> }}
           />
         </Space>
       </MobileDetailDrawer>

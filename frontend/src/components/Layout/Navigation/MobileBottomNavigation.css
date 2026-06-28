@@ -145,7 +145,7 @@ Fungsi:
   }
 
   .app-shell.dark .mobile-bottom-navigation-trigger {
-    color: #07111f;
+    color: var(--ims-color-on-primary);
     box-shadow: 0 12px 30px rgba(0, 0, 0, 0.42);
   }
 }

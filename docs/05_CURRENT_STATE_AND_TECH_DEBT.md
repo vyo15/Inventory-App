@@ -1,10 +1,10 @@
 # CURRENT STATE & TECH DEBT — IMS Bunga Flanel
 
-## Status source aktual — 2026-06-28
+## Status source aktual — 2026-06-29
 
 Status: **AKTIF / SOURCE-VERIFIED / SQLITE-FIRST**.
 
-Source aktual ZIP `Inventory-App-20260628-002207845-main-06635c58-dirty.zip` menunjukkan IMS berjalan dengan arsitektur:
+Source aktual ZIP `Inventory-App-20260629-010427823-main-1d8626a9-dirty.zip` menjadi baseline validasi cleanup konsistensi ini dan menunjukkan IMS berjalan dengan arsitektur:
 
 - Frontend React/Vite.
 - Backend Node.js Express sebagai satu-satunya akses database.
@@ -85,7 +85,7 @@ Konsekuensi:
 - Runner command Windows menjalankan `npm.cmd`/`npx.cmd` melalui `cmd.exe`, sehingga shortcut quality gate tidak gagal dengan `spawnSync ... EINVAL` pada Node.js Windows.
 - Production P4 memusatkan create PO dari Planning, Start Production, Complete Work Log, auto payroll, Payroll Paid, finance posting, dan HPP reconcile pada transaction backend SQLite.
 - Generic production CRUD tidak lagi dapat dipakai untuk melewati lifecycle sensitif Planning, Production Order, Work Log, atau Payroll.
-- Test discovery source saat ini mencakup 172 test backend pada 37 file, 151 test frontend pada 40 file, dan 11 test tooling. Coverage baru melindungi facade/split arsitektur Production dan Maintenance, kalkulasi produksi, snapshot audit, User Management guard, BOM, Work Log, Cash In/Out, shared input Rupiah, filter Produksi, aksi Master Data, serta kontrak Maintenance Center dan audit log resmi. Test backend yang memakai SQLite native tetap wajib dijalankan pada runtime lokal dengan binding `sqlite3` aktif.
+- Test discovery source saat ini mencakup 45 file test backend dan 69 file test frontend. Regression frontend tervalidasi 236/236 test, sedangkan full backend yang memakai SQLite native tetap wajib dijalankan pada runtime lokal dengan binding `sqlite3` aktif. Sandbox audit memvalidasi lint, syntax, source hygiene, error contract, OpenAPI, realtime runtime, dan unit/mock non-native.
 
 ## Tech debt aktif yang masih perlu dijaga
 
@@ -172,12 +172,12 @@ Jangan membuat perhitungan stok baru di UI.
 - Test runner menemukan seluruh file `*.test.js` secara otomatis. `npm run check`, `git check`, dan pre-push wajib gagal jika automated test gagal.
 - Source readiness menolak file runtime di `data/` atau `backups/` yang ter-track; script clean ZIP menjalankan guard sebelum `git archive` lalu memverifikasi artifact ZIP aktual. ZIP dengan path backslash, folder runtime/generated, database, backup, atau struktur source tidak lengkap akan ditolak dan dihapus. Hapus artifact dari Git index dengan `git rm --cached` tanpa menghapus backup lokal yang masih diperlukan.
 - Backend quality gate menjalankan syntax check untuk `src/`, `test/`, dan `scripts/`, lalu ESLint correctness baseline (`js.configs.recommended`, `no-unused-vars`, dan `no-duplicate-imports`). Rule style/formatter belum dipaksakan agar tidak mencampur cleanup massal dengan perubahan business logic.
-- `.gitattributes` dan `.editorconfig` mengunci file `*.js`, `*.jsx`, `*.cjs`, dan `*.mjs` ke LF. Normalisasi EOL massal wajib tetap menjadi cleanup tersendiri dan tidak boleh digabung dengan perubahan stock, production, finance, auth, route, atau flow guarded lain.
+- `.gitattributes` dan `.editorconfig` mengunci file `*.js`, `*.jsx`, `*.cjs`, `*.mjs`, dan `*.css` ke LF. Source-hygiene test memindai seluruh extension tersebut agar CRLF/mixed EOL tidak kembali. Normalisasi CSS dilakukan sebagai perubahan mechanical tanpa mengubah business logic.
 
 ## Status temuan P0–P3 setelah hardening 2026-06-21
 
 - **Selesai di source:** application-level serialization untuk singleton SQLite, central transaction helper, concurrency regression, runtime business counter, Date.now reference fallback pada flow resmi, backup/restore exclusivity, password maksimum 128 karakter, graceful shutdown WAL/SHM, atomic cleanup import backup, direct dependency declaration, serta standardisasi formatter `formatNumberId`.
-- **Source review terbaru:** ZIP `Inventory-App-20260622-202512318-main-a99017ed-dirty.zip` menjadi source of truth audit ini. Label `dirty` berarti status staging/commit belum boleh diasumsikan dari arsip; working tree clean, commit lengkap, dan kesamaan upstream hanya dapat dibuktikan pada mesin project melalui `npm run git:check:full` dan `npm run verify:source`.
+- **Source review terbaru:** ZIP `Inventory-App-20260629-010427823-main-1d8626a9-dirty.zip` menjadi source of truth audit konsistensi ini. Label `dirty` berarti status staging/commit belum boleh diasumsikan dari arsip; working tree clean, commit lengkap, dan kesamaan upstream hanya dapat dibuktikan pada mesin project melalui `npm run git:check:full` dan `npm run verify:source`.
 - **Masih residual:** chunk terbesar setelah vendor split stabil sekitar 706.6 KiB dari budget 1074.2 KiB. React/React Router dan Day.js dipisahkan tanpa circular chunk; business/page modules tetap mengikuti route lazy.
 - **Masih residual dependency:** `xlsx@0.18.5` dan `esbuild@0.27.7` tetap terdokumentasi; tidak ada force upgrade/override major.
 - **Arsitektur service setelah cleanup:** public facade Produksi tetap di `production.service.js`; lifecycle Planning/Order dipisah ke `production.order.service.js`, guard/router ke `production.guards.js`, primitive bersama ke `production.shared.js`, dan kalkulasi murni ke `production.calculations.js`. Maintenance memisahkan audit/repair data quality ke `maintenance.dataQuality.service.js` tanpa memindahkan backup/restore/rollback dari facade. Pemisahan transaction domain yang lebih jauh tetap ditunda sampai full SQLite regression lokal lulus. Repository-mode compatibility masih memiliki importer aktif dan belum dihapus.

@@ -534,13 +534,12 @@ const purgeInactiveRecord = async ({
     const referenceIndex = await buildJsonReferenceIndex(db);
     const candidate = await buildInactivePurgeCandidate(db, entityType, row, actorUser, referenceIndex);
     if (!candidate.safeToDelete) {
-      const error = createHttpError(
+      throw createHttpError(
         "Data masih memiliki referensi atau histori yang dilindungi dan tidak boleh dihapus permanen.",
         409,
         "INACTIVE_PURGE_REFERENCE_BLOCKED",
+        { details: candidate, exposeDetails: true },
       );
-      error.details = candidate;
-      throw error;
     }
 
     const expectedTarget = String(candidate.code || candidate.name || candidate.id).trim();

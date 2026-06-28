@@ -1,11 +1,17 @@
 // src/Pages/MasterData/PricingRules.jsx
 
 // SECTION: import hooks React
-import { useEffect, useMemo, useState } from "react";
-import DataRefreshIndicator, { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import DataRefreshIndicator,
+  { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 // SECTION: import komponen Ant Design
 import {
+  App as AntdApp,
   Button,
   Modal,
   Form,
@@ -14,7 +20,6 @@ import {
   InputNumber,
   Switch,
   Tag,
-  message,
   Card,
   Row,
   Col,
@@ -34,8 +39,10 @@ import {
 import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numberId";
 import { formatCurrencyIDR } from "../../utils/formatters/currencyId";
 import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
+import StatusTag from "../../components/Layout/Feedback/StatusTag";
 import TableActionMenu from "../../components/Layout/Table/TableActionMenu";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 
@@ -117,6 +124,7 @@ const getPreviewStatusMeta = (status) => {
 };
 
 const PricingRules = () => {
+  const { message } = AntdApp.useApp();
   // SECTION: state data utama
   const [rules, setRules] = useState([]);
   const [rawMaterials, setRawMaterials] = useState([]);
@@ -174,7 +182,7 @@ const PricingRules = () => {
       unsubscribeRawMaterials?.();
       unsubscribeProducts?.();
     };
-  }, []);
+  }, [message]);
 
   // SECTION: watch field target type agar pilihan base cost otomatis berubah
   const targetTypeValue = Form.useWatch("targetType", form);
@@ -501,7 +509,7 @@ const PricingRules = () => {
       width: "10%",
       align: "center",
       render: (value) =>
-        value ? <Tag color="green">Aktif</Tag> : <Tag>Nonaktif</Tag>,
+        value ? <StatusTag tone="success">Aktif</StatusTag> : <StatusTag tone="neutral">Nonaktif</StatusTag>,
     },
     {
       title: "Aksi",
@@ -629,7 +637,7 @@ const PricingRules = () => {
       <Tag key="target" color={record?.targetType === 'products' ? 'blue' : 'gold'}>
         {getTargetTypeLabel(record?.targetType)}
       </Tag>,
-      record?.isActive ? <Tag key="status" color="green">Aktif</Tag> : <Tag key="status">Nonaktif</Tag>,
+      record?.isActive ? <StatusTag key="status" tone="success">Aktif</StatusTag> : <StatusTag key="status" tone="neutral">Nonaktif</StatusTag>,
     ],
     meta: [
       { label: 'Base', value: (record) => getBaseCostSourceLabel(record?.baseCostSource) },
@@ -712,6 +720,8 @@ const PricingRules = () => {
         ]}
       />
 
+      <PageContentCanvas>
+
       <SummaryStatGrid items={summaryItems} columns={{ xs: 24, md: 8 }} />
 
       {/* SECTION: tabel pricing rules */}
@@ -735,6 +745,8 @@ const PricingRules = () => {
       </PageSection>
 
       {/* SECTION: modal tambah / edit rule */}
+      </PageContentCanvas>
+
       <Modal
         title={isEditing ? "Edit Pricing Rule" : "Tambah Pricing Rule"}
         open={isModalVisible}

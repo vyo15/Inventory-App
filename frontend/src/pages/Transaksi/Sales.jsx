@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
 import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  App as AntdApp,
   Tag,
   Button,
   Modal,
@@ -8,7 +14,6 @@ import {
   Select,
   DatePicker,
   Tabs,
-  message,
   Space,
   InputNumber,
   Popconfirm,
@@ -19,7 +24,9 @@ import {
 } from "antd";
 import { PlusOutlined, DeleteOutlined, EyeOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
+import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import DataTableView from "../../components/Layout/Table/DataTableView";
@@ -107,6 +114,7 @@ const buildSellableKey = (collectionName, itemId) => `${collectionName}::${itemI
 // SECTION: Sales Page
 // =========================
 const Sales = () => {
+  const { message } = AntdApp.useApp();
   // =========================
   // SECTION: State utama
   // =========================
@@ -162,17 +170,10 @@ const Sales = () => {
   const getSellableItemsByType = (itemType) =>
     sellableItems.filter((item) => item.collectionName === itemType);
 
-  useEffect(() => {
-    fetchSales();
-    fetchProducts();
-    fetchRawMaterials();
-    fetchCustomers();
-  }, []);
-
   // =========================
   // SECTION: Ambil semua data penjualan
   // =========================
-  const fetchSales = async () => {
+  const fetchSales = useCallback(async () => {
     setIsLoading(true);
 
     setSalesRecords([]);
@@ -187,12 +188,12 @@ const Sales = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [message]);
 
   // =========================
   // SECTION: Ambil produk jadi
   // =========================
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     try {
       const productList = await fetchSalesProducts();
       setProducts(productList);
@@ -200,12 +201,12 @@ const Sales = () => {
       console.error("Gagal mengambil data produk:", error);
       message.error("Gagal memuat daftar produk.");
     }
-  };
+  }, [message]);
 
   // =========================
   // SECTION: Ambil bahan baku
   // =========================
-  const fetchRawMaterials = async () => {
+  const fetchRawMaterials = useCallback(async () => {
     try {
       const rawMaterialList = await fetchSalesRawMaterials();
       setRawMaterials(rawMaterialList);
@@ -213,7 +214,7 @@ const Sales = () => {
       console.error("Gagal mengambil data bahan baku:", error);
       message.error("Gagal memuat daftar bahan baku.");
     }
-  };
+  }, [message]);
 
   // =========================
   // SECTION: Ambil customer
@@ -225,7 +226,7 @@ const Sales = () => {
   // - aktif/final
   // - tetap menyimpan snapshot customerName saat sale dibuat agar transaksi lama aman
   // =========================
-  const fetchCustomers = async () => {
+  const fetchCustomers = useCallback(async () => {
     try {
       const customerList = await getSalesCustomerReferences();
       setCustomers(customerList);
@@ -233,7 +234,14 @@ const Sales = () => {
       console.error("Gagal mengambil data pelanggan:", error);
       message.error("Gagal memuat daftar pelanggan.");
     }
-  };
+  }, [message]);
+
+  useEffect(() => {
+    fetchSales();
+    fetchProducts();
+    fetchRawMaterials();
+    fetchCustomers();
+  }, [fetchCustomers, fetchProducts, fetchRawMaterials, fetchSales]);
 
   // =========================
   // SECTION: Saat jenis item berubah, reset line agar tidak memakai item/varian/harga stale
@@ -1090,6 +1098,8 @@ const Sales = () => {
         ]}
       />
 
+      <PageContentCanvas>
+
       <PageSection
         title="Filter Penjualan"
         subtitle="Ringkasan dan channel mengikuti filter aktif."
@@ -1154,7 +1164,7 @@ const Sales = () => {
           locale={{
             emptyText: getDataTableEmptyText(
               isLoading,
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Belum ada transaksi sesuai filter aktif." />,
+              <EmptyStateBlock compact image={Empty.PRESENTED_IMAGE_SIMPLE} description="Belum ada transaksi sesuai filter aktif." />,
             ),
           }}
           onRow={(record) => ({
@@ -1185,6 +1195,8 @@ const Sales = () => {
           mobileCardConfig={salesMobileCardConfig}
         />
       </PageSection>
+
+      </PageContentCanvas>
 
       <SalesDetailDrawer sale={selectedSaleDetail} onClose={closeSaleDetail} />
 

@@ -1,4 +1,5 @@
 import { Empty, Input, Select, Space } from "antd";
+import EmptyStateBlock from "../../../components/Layout/Feedback/EmptyStateBlock";
 import MobileDetailDrawer from "../../../components/Layout/Mobile/MobileDetailDrawer";
 import DataTableView from "../../../components/Layout/Table/DataTableView";
 import { formatCurrencyId } from "../../../utils/formatters/currencyId";
@@ -75,7 +76,7 @@ const SalesChannelDetailDrawer = ({
           mobileCardConfig={mobileCardConfig}
           locale={{
             emptyText: (
-              <Empty
+              <EmptyStateBlock compact
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description="Tidak ada transaksi yang cocok dengan filter ini."
               />

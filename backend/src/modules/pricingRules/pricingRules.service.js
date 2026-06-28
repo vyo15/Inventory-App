@@ -1,3 +1,4 @@
+const { createServiceError } = require("../../utils/httpError");
 const crypto = require("crypto");
 const { getDb, runInTransaction } = require("../../db/connection");
 const {
@@ -24,13 +25,6 @@ const toNumber = (value = 0) => {
   return Number.isFinite(parsed) ? Math.round(parsed) : 0;
 };
 
-const createServiceError = (message, code = "ERROR", statusCode = 400) => {
-  const error = new Error(message);
-  error.code = code;
-  error.statusCode = statusCode;
-  error.isServiceError = true;
-  return error;
-};
 
 const normalizeTargetType = (value = "") => {
   const targetType = normalizeText(value || "raw_materials");

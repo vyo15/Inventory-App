@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Empty, Tooltip } from "antd";
 import { useLocation, useNavigate } from "react-router-dom";
+import EmptyStateBlock from "../Feedback/EmptyStateBlock";
 import sidebarRailMask from "../../../assets/layout/sidebar-rail-mask.svg";
 import sidebarRailMaskDark from "../../../assets/layout/sidebar-rail-mask-dark.svg";
 import { sidebarMenuItems } from "../../../config/sidebarMenu";
@@ -33,7 +34,7 @@ const DesktopModuleDock = ({ darkTheme }) => {
   if (roleAwareMenuItems.length === 0) {
     return (
       <aside className="desktop-module-dock" aria-label="Navigasi utama IMS">
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={false} />
+        <EmptyStateBlock compact image={Empty.PRESENTED_IMAGE_SIMPLE} description={false} />
       </aside>
     );
   }

@@ -10,8 +10,14 @@
 // - reserve/release lama dipensiunkan dari UI utama
 // =====================================================
 
-import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  App as AntdApp,
   Badge,
   Button,
   Card,
@@ -19,11 +25,9 @@ import {
   Descriptions,
   Divider,
   Drawer,
-  Empty,
   Form,
   Input,
   InputNumber,
-  message,
   Row,
   Select,
   Space,
@@ -32,6 +36,8 @@ import {
   Typography,
 } from "antd";
 import { EyeOutlined } from "@ant-design/icons";
+import StatusTag from "../../components/Layout/Feedback/StatusTag";
+import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import { toReferenceOptions } from "../../utils/produksi/productionReferenceHelpers";
 import {
   buildCountSummary,
@@ -40,6 +46,7 @@ import {
 } from "../../utils/produksi/productionPageHelpers";
 import ProductionFilterCard from "../../components/Produksi/shared/ProductionFilterCard";
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
+import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
@@ -82,6 +89,7 @@ import {
 // Behavior: input baru no-decimal; business rules dan schema/alur data utama tetap sama.
 
 const ProductionOrders = () => {
+  const { message } = AntdApp.useApp();
   const { profile, authUser } = useAuth();
 
   // =====================================================
@@ -128,7 +136,7 @@ const ProductionOrders = () => {
   const targetVariantKeyValue = Form.useWatch("targetVariantKey", form);
   const targetVariantLabelValue = Form.useWatch("targetVariantLabel", form);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const result = await getAllProductionOrders();
@@ -139,7 +147,7 @@ const ProductionOrders = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [message]);
 
   // =====================================================
   // Muat opsi BOM aktif untuk dropdown PO
@@ -159,7 +167,7 @@ const ProductionOrders = () => {
     } finally {
       setBomLoading(false);
     }
-  }, []);
+  }, [message]);
 
   /* =====================================================
   SECTION: Semi Finished reference loader — GUARDED
@@ -205,7 +213,7 @@ const ProductionOrders = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   useEffect(() => {
     if (targetTypeValue) {
@@ -1010,7 +1018,7 @@ const ProductionOrders = () => {
                   Kurang {formatQtyWithUnit(shortageQty, record.unit)}
                 </Tag>
               ) : (
-                <Tag className="ims-status-tag" color="green">Shortage 0</Tag>
+                <StatusTag tone="success">Shortage 0</StatusTag>
               )}
             </div>
           );
@@ -1029,6 +1037,8 @@ const ProductionOrders = () => {
         onAdd={handleAdd}
         addLabel="Buat Order"
       />
+
+      <PageContentCanvas>
 
       {/* AKTIF / GUARDED: summary hanya migrasi wrapper presentational, tanpa ubah kalkulasi readiness/shortage. */}
       <ProductionSummaryCards items={summaryItems} />
@@ -1082,10 +1092,12 @@ const ProductionOrders = () => {
           rowKey="id"
           columns={columns}
           dataSource={filteredData}
-          emptyText={<Empty description="Belum ada production order" />}
+          emptyState={{ description: "Belum ada production order" }}
           mobileCardConfig={productionOrderMobileCardConfig}
         />
       </PageSection>
+
+      </PageContentCanvas>
 
       <Drawer
         title="Buat Production Order"
@@ -1447,7 +1459,7 @@ const ProductionOrders = () => {
         width={920}
       >
         {!selectedOrder ? (
-          <Empty description="Tidak ada data" />
+          <EmptyStateBlock compact description="Tidak ada data" />
         ) : (
           <Space direction="vertical" size={16} style={{ width: "100%" }}>
             <Row gutter={[12, 12]}>

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { App as AntdApp } from "antd";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ROLES, USER_STATUS } from "../../utils/auth/roleAccess";
 import UserManagement from "./UserManagement";
@@ -35,6 +36,12 @@ vi.mock("../../services/System/localAuthService", () => ({
   validateLocalPasswordPolicy: () => "",
 }));
 
+const renderUserManagement = () => render(
+  <AntdApp>
+    <UserManagement />
+  </AntdApp>,
+);
+
 beforeEach(() => {
   vi.spyOn(console, "error").mockImplementation(() => {});
   mockListSystemUsers.mockReset();
@@ -65,7 +72,7 @@ describe("UserManagement", () => {
       },
     ]);
 
-    render(<UserManagement />);
+    renderUserManagement();
 
     expect(await screen.findByText("Administrator Utama")).toBeTruthy();
     expect(screen.getByText("Akun Anda")).toBeTruthy();
@@ -98,7 +105,7 @@ describe("UserManagement", () => {
     mockUpdateSystemUserProfile.mockResolvedValue(updatedRecord);
     mockReloadProfile.mockResolvedValue(updatedRecord);
 
-    render(<UserManagement />);
+    renderUserManagement();
 
     expect(await screen.findByText("Administrator Utama")).toBeTruthy();
     const editButton = screen.getByRole("button", { name: /edit/i });
@@ -154,7 +161,7 @@ describe("UserManagement", () => {
       },
     ]);
 
-    render(<UserManagement />);
+    renderUserManagement();
 
     await waitFor(() => expect(mockListSystemUsers).toHaveBeenCalled());
     expect(await screen.findByText("Operator Gudang")).toBeTruthy();

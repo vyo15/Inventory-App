@@ -1,12 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
 import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  App as AntdApp,
   Modal,
   Form,
   Select,
   InputNumber,
   DatePicker,
   Input,
-  message,
   Tag,
   Tooltip,
   Collapse,
@@ -14,11 +18,12 @@ import {
 import { PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import CompactCell, { CompactCellText } from "../../components/Layout/Table/CompactCell";
 import ResponsiveFormSection from "../../components/Layout/Mobile/ResponsiveFormSection";
-import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { DataRefreshIndicator } from "../../components/Layout/Feedback/DataLoadingState";
 import {
   findVariantByKey,
   getItemStockSnapshot,
@@ -50,6 +55,7 @@ const { Option } = Select;
 // SECTION: Returns Page
 // =========================
 const Returns = () => {
+  const { message } = AntdApp.useApp();
   const [form] = Form.useForm();
 
   // =========================
@@ -61,6 +67,7 @@ const Returns = () => {
   const [materials, setMaterials] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [subscriptionRevision, setSubscriptionRevision] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // =========================
@@ -156,7 +163,7 @@ const Returns = () => {
       unsubscribeProducts();
       unsubscribeMaterials();
     };
-  }, []);
+  }, [message, subscriptionRevision]);
 
   useEffect(() => {
     form.setFieldsValue({ saleItemKey: undefined, quantity: 1 });
@@ -366,6 +373,8 @@ const Returns = () => {
         ]}
       />
 
+      <PageContentCanvas>
+
       <PageSection
         title="Data Retur"
         subtitle="Stok kembali sesuai item/varian."
@@ -385,10 +394,14 @@ const Returns = () => {
           columns={returnTableColumns}
           rowKey="id"
           tableLayout="fixed"
-          locale={{ emptyText: getDataTableEmptyText(isLoading, loadError || "Belum ada data retur.") }}
+          emptyState={{ description: "Belum ada data retur." }}
+          error={loadError ? new Error(loadError) : null}
+          onRetry={() => setSubscriptionRevision((value) => value + 1)}
           mobileCardConfig={returnMobileCardConfig}
         />
       </PageSection>
+
+      </PageContentCanvas>
 
       <Modal
         title="Tambah Retur"

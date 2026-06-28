@@ -1,4 +1,4 @@
-import { Button, Card, Space, Tag, Typography } from "antd";
+import { Button, Card, Space, Typography } from "antd";
 import {
   ApiOutlined,
   DatabaseOutlined,
@@ -7,11 +7,13 @@ import {
   SafetyOutlined,
 } from "@ant-design/icons";
 
+import StatusTag from "../../../components/Layout/Feedback/StatusTag";
 import { getSqliteBackendBaseUrl } from "../../../services/System/sqliteBackendStatusService";
+import { formatNumberId } from "../../../utils/formatters/numberId";
 
 const { Text } = Typography;
 
-const formatNumber = (value) => Number(value || 0).toLocaleString("id-ID");
+const formatNumber = formatNumberId;
 
 const SqliteBackendStatusPanel = ({
   statusData = {},
@@ -37,7 +39,7 @@ const SqliteBackendStatusPanel = ({
           <Space size={8} wrap>
             <ApiOutlined />
             <Text strong>Layanan lokal IMS</Text>
-            <Tag color={statusReady ? "green" : "orange"}>{statusReady ? "Aktif" : "Perlu diperiksa"}</Tag>
+            <StatusTag tone={statusReady ? "success" : "warning"}>{statusReady ? "Aktif" : "Perlu diperiksa"}</StatusTag>
           </Space>
           <Text type="secondary">
             {statusReady

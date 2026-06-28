@@ -1,3 +1,4 @@
+const { createServiceError } = require("../../utils/httpError");
 const { getDb, runInTransaction } = require("../../db/connection");
 const businessCodeContract = require("../../../../shared/businessCodeContract.json");
 const { createAuditLog } = require("../../utils/auditLog");
@@ -12,13 +13,6 @@ const CUSTOMER_CODE_PATTERN = new RegExp(businessCodeContract.customer.pattern);
 const normalizeText = (value) => (value || "").toString().trim();
 const normalizeCode = (value) => normalizeText(value).toUpperCase();
 
-const createServiceError = (message, code = "ERROR", statusCode = 400) => {
-  const error = new Error(message);
-  error.code = code;
-  error.statusCode = statusCode;
-  error.isServiceError = true;
-  return error;
-};
 
 const getDateStamp = (date = new Date()) => {
   const day = String(date.getDate()).padStart(2, "0");

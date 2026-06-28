@@ -1,10 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
 import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  App as AntdApp,
   Avatar,
   Badge,
   Button,
   Dropdown,
-  Empty,
   Form,
   Input,
   Modal,
@@ -15,7 +19,6 @@ import {
   Tooltip,
   Typography,
   Upload,
-  message,
 } from "antd";
 import {
   CameraOutlined,
@@ -29,6 +32,7 @@ import {
   StopOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
+import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import useAuth from "../../hooks/useAuth";
 import {
   ROLE_LABELS,
@@ -51,6 +55,7 @@ import {
 } from "../../services/System/userService";
 import PageFormModal from "../../components/Layout/Forms/PageFormModal";
 import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import { DataRefreshIndicator } from "../../components/Layout/Feedback/DataLoadingState";
 import { getLocalPasswordPolicyHint, validateLocalPasswordPolicy } from "../../services/System/localAuthService";
@@ -222,6 +227,7 @@ const createProfileAvatarDataUrl = async (file) => {
 };
 
 const UserManagement = () => {
+  const { message } = AntdApp.useApp();
   const { profile, reloadProfile } = useAuth();
   const [form] = Form.useForm();
   const [users, setUsers] = useState([]);
@@ -633,6 +639,8 @@ const UserManagement = () => {
         ]}
       />
 
+      <PageContentCanvas>
+
       <section className="ims-user-overview" aria-label="Ringkasan akun">
         <div className="ims-user-count-card">
           <div className="ims-user-count-icon"><TeamOutlined /></div>
@@ -723,11 +731,13 @@ const UserManagement = () => {
             </>
           ) : (
             <div className="ims-user-empty">
-              <Empty description={isLoading ? "Memuat akun..." : "Tidak ada akun yang cocok."} />
+              <EmptyStateBlock compact description={isLoading ? "Memuat akun..." : "Tidak ada akun yang cocok."} />
             </div>
           )}
         </Space>
       </PageSection>
+
+      </PageContentCanvas>
 
       <PageFormModal
         title={formMode === FORM_MODE.CREATE

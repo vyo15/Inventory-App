@@ -1,0 +1,293 @@
+/* =====================================================
+SECTION: Unified Page Content Canvas — AKTIF / UI-ONLY
+Fungsi:
+- menyatukan isi halaman operasional menjadi satu canvas seperti data workspace modern.
+- summary, filter, table, chart, dan pagination tetap terpisah secara semantik melalui divider tipis.
+- PageHeader, AppHeader, sidebar, route, role guard, query, mutation, dan business rule tidak disentuh.
+===================================================== */
+.page-content-canvas {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--ims-border-color-soft);
+  border-radius: 18px;
+  background: var(--ims-bg-card);
+  box-shadow: var(--ims-shadow-soft);
+}
+
+.page-content-canvas > * {
+  min-width: 0;
+}
+
+/* Ringkasan tetap memakai kartu kecil, tetapi seluruh grup berada di dalam canvas yang sama. */
+.page-content-canvas > .summary-stat-grid,
+.page-content-canvas > .ims-summary-row,
+.page-content-canvas > .ims-user-overview,
+.page-content-canvas > .category-summary-strip {
+  margin: 0 !important;
+  padding: 16px;
+}
+
+.page-content-canvas > .summary-stat-grid + *,
+.page-content-canvas > .ims-summary-row + *,
+.page-content-canvas > .ims-user-overview + *,
+.page-content-canvas > .category-summary-strip + * {
+  border-top: 1px solid var(--ims-border-color-soft);
+}
+
+.page-content-canvas .summary-stat-grid--executive {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.page-content-canvas .summary-stat-grid--executive > .summary-stat-card--featured,
+.page-content-canvas .summary-stat-grid--executive > .summary-stat-grid-metrics {
+  min-width: 0;
+}
+
+.page-content-canvas .summary-stat-grid--executive > .summary-stat-card--featured {
+  min-height: 88px;
+}
+
+.page-content-canvas .summary-stat-grid-metrics {
+  display: contents;
+}
+
+.page-content-canvas .summary-stat-card.ant-card,
+.page-content-canvas .summary-finance-main {
+  min-height: 88px;
+  border-radius: 13px !important;
+  box-shadow: none !important;
+}
+
+.page-content-canvas .summary-stat-card.ant-card:hover,
+.page-content-canvas .summary-finance-main:hover {
+  transform: none;
+  box-shadow: none !important;
+}
+
+/* Utility row kecil tetap menyatu dengan summary, lalu memberi divider sebelum filter/list. */
+.page-content-canvas__utility-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 16px 12px;
+}
+
+.page-content-canvas > .summary-stat-grid + .page-content-canvas__utility-row,
+.page-content-canvas > .ims-summary-row + .page-content-canvas__utility-row {
+  border-top: 0;
+}
+
+.page-content-canvas > .page-content-canvas__utility-row + * {
+  border-top: 1px solid var(--ims-border-color-soft) !important;
+}
+
+/* Summary custom lama tetap menjadi strip internal, bukan card kedua. */
+.page-content-canvas > .category-summary-strip {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.page-content-canvas .ims-user-count-card,
+.page-content-canvas .ims-user-stat-strip {
+  border-radius: 13px;
+  box-shadow: none;
+}
+
+/* Filter standalone menjadi toolbar internal, bukan card terpisah. */
+.page-content-canvas > .filter-bar,
+.page-content-canvas > .filter-bar-surface,
+.page-content-canvas > .ims-production-filter-card.ant-card {
+  margin: 0 !important;
+  padding: 13px 16px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--ims-bg-card) !important;
+  box-shadow: none !important;
+}
+
+.page-content-canvas > .filter-bar::before,
+.page-content-canvas > .filter-bar-surface::before {
+  display: none;
+}
+
+.page-content-canvas > .ims-production-filter-card.ant-card > .ant-card-body {
+  padding: 0 !important;
+}
+
+.page-content-canvas > .filter-bar + *,
+.page-content-canvas > .filter-bar-surface + *,
+.page-content-canvas > .ims-production-filter-card + * {
+  border-top: 1px solid var(--ims-border-color-soft) !important;
+}
+
+/* PageSection menjadi section internal tanpa card bertumpuk. */
+.page-content-canvas > .page-section,
+.page-content-canvas > .ims-section-card.ant-card,
+.page-content-canvas > .ims-production-list-surface.ant-card {
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--ims-bg-card) !important;
+  box-shadow: none !important;
+}
+
+.page-content-canvas > .page-section + .page-section,
+.page-content-canvas > .ims-section-card + .page-section,
+.page-content-canvas > .page-section + .ims-section-card,
+.page-content-canvas > .ims-section-card + .ims-section-card,
+.page-content-canvas > .ims-production-list-surface + *,
+.page-content-canvas > * + .ims-production-list-surface {
+  border-top: 1px solid var(--ims-border-color-soft) !important;
+}
+
+.page-content-canvas > .page-section > .ant-card-body,
+.page-content-canvas > .ims-section-card.ant-card > .ant-card-body,
+.page-content-canvas > .ims-production-list-surface.ant-card > .ant-card-body {
+  padding: 15px 16px !important;
+}
+
+.page-content-canvas .page-section .filter-bar-surface {
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.page-content-canvas .page-section .filter-bar-surface::before {
+  display: none;
+}
+
+/* Komponen non-PageSection yang langsung menjadi isi halaman tetap diberi band internal. */
+.page-content-canvas > .ims-readonly-panel,
+.page-content-canvas > .ims-page-alert,
+.page-content-canvas > .ant-alert,
+.page-content-canvas > .ant-tabs,
+.page-content-canvas > .ims-user-overview,
+.page-content-canvas > .ims-testing-lab-grid,
+.page-content-canvas > .ims-maintenance-layout {
+  margin: 0 !important;
+  padding: 15px 16px;
+}
+
+.page-content-canvas > * + .ims-readonly-panel,
+.page-content-canvas > * + .ims-page-alert,
+.page-content-canvas > * + .ant-alert,
+.page-content-canvas > * + .ant-tabs,
+.page-content-canvas > * + .ims-testing-lab-grid,
+.page-content-canvas > * + .ims-maintenance-layout {
+  border-top: 1px solid var(--ims-border-color-soft);
+}
+
+
+/* Testing Lab tetap mempertahankan guard dan confirm flow, hanya surface-nya disatukan. */
+.page-content-canvas > .testing-lab-summary {
+  margin: 0 !important;
+  padding: 15px 16px;
+}
+
+.page-content-canvas > .testing-lab-summary + *,
+.page-content-canvas > * + .testing-lab-summary {
+  border-top: 1px solid var(--ims-border-color-soft);
+}
+
+.page-content-canvas > .testing-lab-section.ant-card,
+.page-content-canvas > .ant-result {
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--ims-bg-card) !important;
+  box-shadow: none !important;
+}
+
+.page-content-canvas > .testing-lab-section.ant-card + .testing-lab-section.ant-card,
+.page-content-canvas > * + .testing-lab-section.ant-card,
+.page-content-canvas > * + .ant-result {
+  border-top: 1px solid var(--ims-border-color-soft) !important;
+}
+
+.page-content-canvas > .testing-lab-section.ant-card > .ant-card-body,
+.page-content-canvas > .ant-result {
+  padding: 15px 16px !important;
+}
+
+/* Tabel menyatu dengan section dan tidak membuat card kedua di dalam canvas. */
+.page-content-canvas .app-data-table.ant-table-wrapper,
+.page-content-canvas .ims-table.ant-table-wrapper,
+.page-content-canvas .ant-table-wrapper {
+  border-radius: 13px;
+}
+
+.page-content-canvas .app-data-table .ant-table-container,
+.page-content-canvas .ims-table .ant-table-container,
+.page-content-canvas .ant-table-container {
+  border-radius: 13px;
+}
+
+/* Kompatibilitas patch lama yang pernah menyambungkan filter produksi dengan negative margin. */
+.page-content-canvas > .ims-production-filter-card + .page-section,
+.page-content-canvas > .ims-production-filter-card + .ims-production-list-surface,
+.page-content-canvas > .ims-production-filter-card + .ims-section-card {
+  margin-top: 0 !important;
+  border-radius: 0 !important;
+}
+
+.app-shell.dark .page-content-canvas {
+  background: var(--ims-bg-card);
+  border-color: var(--ims-border-color-soft);
+  box-shadow: var(--ims-shadow-soft);
+}
+
+@media (max-width: 1180px) {
+  .page-content-canvas .summary-stat-grid--executive,
+  .page-content-canvas .summary-stat-grid--finance {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .page-content-canvas .summary-finance-main,
+  .page-content-canvas .summary-finance-side {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-content-canvas {
+    border-radius: 15px;
+  }
+
+  .page-content-canvas > .summary-stat-grid,
+  .page-content-canvas > .ims-summary-row,
+  .page-content-canvas > .ims-user-overview,
+  .page-content-canvas > .category-summary-strip,
+  .page-content-canvas > .filter-bar,
+  .page-content-canvas > .filter-bar-surface,
+  .page-content-canvas > .ims-production-filter-card.ant-card,
+  .page-content-canvas > .page-section > .ant-card-body,
+  .page-content-canvas > .ims-section-card.ant-card > .ant-card-body,
+  .page-content-canvas > .ims-production-list-surface.ant-card > .ant-card-body {
+    padding: 12px !important;
+  }
+
+  .page-content-canvas .summary-stat-grid--executive,
+  .page-content-canvas .summary-stat-grid--finance {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+  }
+
+  .page-content-canvas .summary-stat-card.ant-card,
+  .page-content-canvas .summary-finance-main {
+    min-height: 78px;
+  }
+}
+
+@media (max-width: 420px) {
+  .page-content-canvas .summary-stat-grid--executive,
+  .page-content-canvas .summary-stat-grid--finance {
+    grid-template-columns: 1fr 1fr;
+  }
+}

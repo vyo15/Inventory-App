@@ -1,16 +1,20 @@
-import { useEffect, useMemo, useState } from 'react';
 import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+import {
+  App as AntdApp,
   Badge,
   Button,
   Card,
   Col,
   Descriptions,
   Drawer,
-  Empty,
   Form,
   Input,
   InputNumber,
-  message,
   Row,
   Select,
   Space,
@@ -19,7 +23,7 @@ import {
   Tag,
   Tooltip,
   Typography,
-} from 'antd';
+} from "antd";
 import { EditOutlined, EyeOutlined } from '@ant-design/icons';
 import {
   DEFAULT_PRODUCTION_PROFILE_FORM,
@@ -33,10 +37,12 @@ import {
   toggleProductionProfileActive,
   updateProductionProfile,
 } from '../../services/Produksi/productionProfilesService';
+import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import { listenProducts } from '../../services/MasterData/productsService';
 import formatNumber from '../../utils/formatters/numberId';
 import ProductionFilterCard from '../../components/Produksi/shared/ProductionFilterCard';
 import ProductionPageHeader from '../../components/Produksi/shared/ProductionPageHeader';
+import PageContentCanvas from '../../components/Layout/Page/PageContentCanvas';
 import PageSection from '../../components/Layout/Page/PageSection';
 import DataTableView from '../../components/Layout/Table/DataTableView';
 import TableActionMenu from '../../components/Layout/Table/TableActionMenu';
@@ -45,6 +51,7 @@ import ProductionSummaryCards from '../../components/Produksi/shared/ProductionS
 import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 const ProductionProfiles = () => {
+  const { message } = AntdApp.useApp();
   const [loading, setLoading] = useState(false);
   const [profiles, setProfiles] = useState([]);
   const [products, setProducts] = useState([]);
@@ -63,7 +70,7 @@ const ProductionProfiles = () => {
     [products],
   );
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const profileResult = await getAllProductionProfiles();
@@ -83,11 +90,11 @@ const ProductionProfiles = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [message]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const summary = useMemo(() => {
     const total = profiles.length;
@@ -412,6 +419,8 @@ const ProductionProfiles = () => {
         addLabel="Tambah Profil"
       />
 
+      <PageContentCanvas>
+
       {/* AKTIF / GUARDED: summary cards shared dipakai untuk merapikan UI, sumber data tetap sama. */}
       <ProductionSummaryCards items={summaryItems} />
 
@@ -470,10 +479,12 @@ const ProductionProfiles = () => {
           pagination={{ pageSize: 10, showSizeChanger: true }}
           mobileCardConfig={profilesMobileCardConfig}
           locale={{
-            emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada profil produksi" />),
+            emptyText: getDataTableEmptyText(loading, "Belum ada profil produksi"),
           }}
         />
       </PageSection>
+
+      </PageContentCanvas>
 
       <MobileDetailDrawer
         title="Detail Profil Produksi"

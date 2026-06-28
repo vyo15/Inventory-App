@@ -1,3 +1,4 @@
+const { createHttpError } = require("../../../utils/httpError");
 // Canonical inventory source registry and shared primitives.
 const SOURCE_TABLES = Object.freeze({
   product: "products",
@@ -48,7 +49,11 @@ const resolveInventoryVariantCollection = (payload = {}) => {
 const getTableForSourceType = (sourceType = "") => {
   const tableName = SOURCE_TABLES[String(sourceType || "").trim().toLowerCase()];
   if (!tableName) {
-    throw new Error("Stock engine database lokal hanya mendukung Product, Raw Material, dan Semi Finished.");
+    throw createHttpError(
+      "Stock engine database lokal hanya mendukung Product, Raw Material, dan Semi Finished.",
+      "STOCK_SOURCE_TYPE_UNSUPPORTED",
+      400,
+    );
   }
   return tableName;
 };

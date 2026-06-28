@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
 import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  App as AntdApp,
   Button,
   Col,
   Form,
@@ -7,7 +13,6 @@ import {
   Select,
   Space,
   Tag,
-  message,
 } from "antd";
 import { StopOutlined, PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -17,6 +22,7 @@ import InfoPopoverButton from "../../components/Layout/Feedback/InfoPopoverButto
 import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageFormModal from "../../components/Layout/Forms/PageFormModal";
 import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
@@ -123,6 +129,7 @@ const renderCashOutActions = (record = {}, onDelete) => {
 };
 
 const CashOut = () => {
+  const { message } = AntdApp.useApp();
   // =========================
   // SECTION: State utama halaman
   // =========================
@@ -154,7 +161,7 @@ const CashOut = () => {
     );
 
     return () => unsubscribe?.();
-  }, []);
+  }, [message]);
 
   // =========================
   // SECTION: Derived data filter & summary
@@ -277,7 +284,7 @@ const CashOut = () => {
     }
   };
 
-  const handleDeleteTransaction = async (id) => {
+  const handleDeleteTransaction = useCallback(async (id) => {
     try {
       await deleteCashOutTransaction(id);
       setCashOuts((current) => removeRecordById(current, id));
@@ -286,7 +293,7 @@ const CashOut = () => {
       console.error("Gagal menonaktifkan transaksi:", error);
       message.error(error?.message || "Gagal menonaktifkan transaksi.");
     }
-  };
+  }, [message]);
 
   // =========================
   // SECTION: Cash Out Table Meta UI - AKTIF / GUARDED
@@ -382,7 +389,7 @@ const CashOut = () => {
         render: (_, record) => renderCashOutActions(record, handleDeleteTransaction),
       },
     ],
-    [],
+    [handleDeleteTransaction],
   );
 
   const cashOutMobileCardConfig = {
@@ -443,6 +450,8 @@ const CashOut = () => {
         ]}
       />
 
+      <PageContentCanvas>
+
 
       <PageSection
         title="Ringkasan Periode"
@@ -495,11 +504,13 @@ const CashOut = () => {
           dataSource={filteredCashOuts}
           columns={columns}
           locale={{
-            emptyText: getDataTableEmptyText(loading, <EmptyStateBlock description="Belum ada pengeluaran pada periode ini." />),
+            emptyText: getDataTableEmptyText(loading, "Belum ada pengeluaran pada periode ini."),
           }}
           mobileCardConfig={cashOutMobileCardConfig}
         />
       </PageSection>
+
+      </PageContentCanvas>
 
       <PageFormModal
         title="Tambah Pengeluaran"

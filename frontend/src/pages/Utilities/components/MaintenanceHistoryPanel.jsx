@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState } from "react";
 import {
   App as AntdApp,
   Button,
   Card,
   Col,
   Descriptions,
-  Empty,
   Pagination,
   Row,
   Select,
@@ -21,8 +24,13 @@ import {
   SafetyOutlined,
   SwapOutlined,
 } from "@ant-design/icons";
+import EmptyStateBlock from "../../../components/Layout/Feedback/EmptyStateBlock";
 import DataTableView from "../../../components/Layout/Table/DataTableView";
 import ImsNotice from "../../../components/Layout/Feedback/ImsNotice";
+import StatusTag from "../../../components/Layout/Feedback/StatusTag";
+import { formatDateTimeId, parseDateTimeId } from "../../../utils/formatters/dateId";
+import { formatFileSizeId } from "../../../utils/formatters/fileSizeId";
+import { getBackupTypeLabel } from "../utils/backupUiFormatters";
 import {
   getSqliteAuditLogs,
   getSqliteBackendBackups,
@@ -31,45 +39,9 @@ import {
 
 const { Text } = Typography;
 
-const formatBytes = (value) => {
-  const bytes = Number(value || 0);
-  if (!bytes) return "0 B";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-};
-
-const parseDate = (value) => {
-  if (!value) return null;
-  const normalized = String(value).includes("T") ? String(value) : `${String(value).replace(" ", "T")}Z`;
-  const date = new Date(normalized);
-  return Number.isNaN(date.getTime()) ? null : date;
-};
-
-const formatDateTime = (value) => {
-  const date = parseDate(value);
-  if (!date) return value || "-";
-  return new Intl.DateTimeFormat("id-ID", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
-};
-
-const getBackupTypeLabel = (backupType) => {
-  const labels = {
-    manual: "Manual",
-    daily: "Harian",
-    monthly: "Bulanan",
-    "manual-import": "Import Manual",
-    "pre-update": "Sebelum Update",
-    "pre-restore": "Sebelum Restore",
-    "pre-reset": "Sebelum Reset",
-    "pre-import": "Sebelum Import",
-    "pre-repair": "Sebelum Repair",
-    compatibility: "Arsip",
-  };
-  return labels[backupType] || backupType || "Backup";
-};
+const formatBytes = formatFileSizeId;
+const parseDate = parseDateTimeId;
+const formatDateTime = (value) => formatDateTimeId(value, { fallback: value || "-" });
 
 const getStatusColor = (value) => {
   const status = String(value || "").toLowerCase();
@@ -205,7 +177,7 @@ const MaintenanceHistoryPanel = () => {
         <Text strong>{formatDateTime(log.created_at)}</Text>
         <Text type="secondary" ellipsis={{ tooltip: log.filename }}>{log.filename || "Restore preview"}</Text>
         <Space size={6} wrap>
-          <Tag color={getStatusColor(log.plan_status)}>{log.plan_status || "planned"}</Tag>
+          <StatusTag color={getStatusColor(log.plan_status)}>{log.plan_status || "planned"}</StatusTag>
           <Tag color={log.destructive_allowed ? "red" : "blue"}>{log.destructive_allowed ? "Eksekusi" : "Preview"}</Tag>
           {log.actor ? <Tag>{log.actor}</Tag> : null}
         </Space>
@@ -291,7 +263,7 @@ const MaintenanceHistoryPanel = () => {
           loading={loading}
           dataSource={filteredAuditLogs.map((log) => ({ ...log, key: log.id }))}
           pagination={{ pageSize: 15, showSizeChanger: true, hideOnSinglePage: true }}
-          locale={{ emptyText: <Empty description="Tidak ada aktivitas sesuai filter" /> }}
+          locale={{ emptyText: <EmptyStateBlock compact description="Tidak ada aktivitas sesuai filter" /> }}
           columns={[
             {
               title: "Waktu",
@@ -339,18 +311,18 @@ const MaintenanceHistoryPanel = () => {
               loading={loading}
               dataSource={backups.map((backup) => ({ ...backup, key: backup.id || backup.filename }))}
               pagination={{ pageSize: 10, showSizeChanger: true, hideOnSinglePage: true }}
-              locale={{ emptyText: <Empty description="Belum ada riwayat backup" /> }}
+              locale={{ emptyText: <EmptyStateBlock compact description="Belum ada riwayat backup" /> }}
               columns={[
                 { title: "Tanggal", dataIndex: "created_at", key: "created_at", width: 150, render: formatDateTime },
                 { title: "Jenis", dataIndex: "backupType", key: "backupType", width: 130, render: (value) => <Tag>{getBackupTypeLabel(value)}</Tag> },
-                { title: "Status", dataIndex: "status", key: "status", width: 120, render: (value) => <Tag color={getStatusColor(value)}>{value || "unknown"}</Tag> },
+                { title: "Status", dataIndex: "status", key: "status", width: 120, render: (value) => <StatusTag color={getStatusColor(value)}>{value || "unknown"}</StatusTag> },
                 { title: "Ukuran", dataIndex: "size_bytes", key: "size_bytes", width: 110, render: formatBytes },
                 { title: "File", dataIndex: "filename", key: "filename", render: (value) => <Text copyable ellipsis style={{ maxWidth: 360 }}>{value}</Text> },
               ]}
               mobileCardConfig={{
                 title: (record) => record.filename || "Backup Database",
                 subtitle: (record) => [formatDateTime(record.created_at), getBackupTypeLabel(record.backupType)],
-                tags: (record) => <Tag color={getStatusColor(record.status)}>{record.status || "unknown"}</Tag>,
+                tags: (record) => <StatusTag color={getStatusColor(record.status)}>{record.status || "unknown"}</StatusTag>,
                 meta: [
                   { label: "Ukuran", value: (record) => formatBytes(record.size_bytes) },
                   { label: "Jenis", value: (record) => getBackupTypeLabel(record.backupType) },
@@ -375,7 +347,7 @@ const MaintenanceHistoryPanel = () => {
                   onChange={setRestorePage}
                 />
               </Space>
-            ) : <Empty description="Belum ada riwayat restore" />}
+            ) : <EmptyStateBlock compact description="Belum ada riwayat restore" />}
           </Card>
         </Col>
       </Row>

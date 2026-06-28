@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState } from "react";
 import {
   Alert,
   App as AntdApp,
   Button,
   Card,
   Collapse,
-  Empty,
   Input,
   Modal,
   Select,
@@ -19,8 +22,11 @@ import {
   ReloadOutlined,
   SafetyOutlined,
 } from "@ant-design/icons";
+import EmptyStateBlock from "../../../components/Layout/Feedback/EmptyStateBlock";
+import StatusTag from "../../../components/Layout/Feedback/StatusTag";
 import DataTableView from "../../../components/Layout/Table/DataTableView";
 import ImsNotice from "../../../components/Layout/Feedback/ImsNotice";
+import { formatDateTimeId } from "../../../utils/formatters/dateId";
 import {
   getSqliteInactiveData,
   purgeSqliteInactiveData,
@@ -28,13 +34,7 @@ import {
 
 const { Text, Title } = Typography;
 
-const formatDateTime = (value) => {
-  if (!value) return "-";
-  const normalized = String(value).includes("T") ? String(value) : `${String(value).replace(" ", "T")}Z`;
-  const date = new Date(normalized);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short" }).format(date);
-};
+const formatDateTime = (value) => formatDateTimeId(value, { fallback: value || "-" });
 
 const getCandidateTarget = (candidate) => String(
   candidate?.code || candidate?.name || candidate?.id || "",
@@ -132,7 +132,7 @@ const MaintenanceInactiveDataPanel = () => {
       <Space size={8} wrap>
         <Text strong>{group.entityLabel}</Text>
         <Tag>{group.count || 0} nonaktif</Tag>
-        <Tag color="green">{group.safeCount || 0} aman</Tag>
+        <StatusTag tone="success">{group.safeCount || 0} aman</StatusTag>
         {group.blockedCount ? <Tag color="orange">{group.blockedCount} dilindungi</Tag> : null}
       </Space>
     ),
@@ -143,7 +143,7 @@ const MaintenanceInactiveDataPanel = () => {
         pagination={{ pageSize: 20, showSizeChanger: true, hideOnSinglePage: true }}
         rowKey={(record) => `${record.entityType}:${record.id}`}
         dataSource={group.candidates}
-        locale={{ emptyText: <Empty description="Tidak ada data nonaktif" /> }}
+        locale={{ emptyText: <EmptyStateBlock compact description="Tidak ada data nonaktif" /> }}
         columns={[
           {
             title: "Data",
@@ -174,7 +174,7 @@ const MaintenanceInactiveDataPanel = () => {
             key: "dependency",
             width: 280,
             render: (_, record) => record.safeToDelete ? (
-              <Tag color="green" icon={<SafetyOutlined />}>Tidak ada referensi terdeteksi</Tag>
+              <StatusTag tone="success" icon={<SafetyOutlined />}>Tidak ada referensi terdeteksi</StatusTag>
             ) : (
               <Space direction="vertical" size={2}>
                 <Tag color="orange">Diblokir</Tag>
@@ -240,7 +240,7 @@ const MaintenanceInactiveDataPanel = () => {
         }}
         scroll={{ x: 980 }}
       />
-    ) : <Empty description={`Tidak ada ${group.entityLabel.toLowerCase()} nonaktif`} />,
+    ) : <EmptyStateBlock compact description={`Tidak ada ${group.entityLabel.toLowerCase()} nonaktif`} />,
   })), [groups]);
 
   return (

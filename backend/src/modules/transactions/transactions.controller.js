@@ -1,4 +1,5 @@
-const { failure, success } = require("../../utils/response");
+const { respondIfServiceError } = require("../../utils/httpError");
+const { success } = require("../../utils/response");
 const { createSqliteJsonRecordRouter } = require("../../infrastructure/http/sqliteJsonRecordRouter");
 const {
   commitPurchase,
@@ -17,12 +18,7 @@ const attachTransactionRecordRouters = (router) => {
   });
 };
 
-const handleTransactionError = (res, error) => {
-  if (error?.statusCode) {
-    return failure(res, error.message, error.code || "VALIDATION_ERROR", error.statusCode);
-  }
-  return null;
-};
+const handleTransactionError = (res, error) => respondIfServiceError(res, error);
 
 const commitPurchaseController = async (req, res, next) => {
   try {

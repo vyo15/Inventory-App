@@ -1,4 +1,6 @@
-import { Card, Collapse, Empty, Space, Tag, Typography } from "antd";
+import { Card, Collapse, Space, Tag, Typography } from "antd";
+import EmptyStateBlock from "../../../components/Layout/Feedback/EmptyStateBlock";
+import StatusTag from "../../../components/Layout/Feedback/StatusTag";
 import DataTableView from "../../../components/Layout/Table/DataTableView";
 import { DataRefreshIndicator } from "../../../components/Layout/Feedback/DataLoadingState";
 import formatNumber from "../../../utils/formatters/numberId";
@@ -28,7 +30,7 @@ const SemiFinishedMaterialsListView = ({
         columns={columns}
         dataSource={filteredData}
         // AKTIF / GUARDED: primary table memakai layout fixed tanpa horizontal scroll default; stok varian tetap tampil sebagai pill langsung di kolom Stok.
-        emptyText={<Empty description="Belum ada data semi finished materials" />}
+        emptyState={{ description: "Belum ada data semi finished materials" }}
         mobileCardConfig={mobileCardConfig}
         pagination={{
           pageSize: 10,
@@ -37,7 +39,7 @@ const SemiFinishedMaterialsListView = ({
         }}
       />
     ) : filteredData.length === 0 ? (
-      <Empty description={loading ? "Memuat data..." : "Belum ada data semi finished materials"} />
+      <EmptyStateBlock compact description={loading ? "Memuat data..." : "Belum ada data semi finished materials"} />
     ) : (
       <Collapse
         className="ims-production-group-collapse"
@@ -53,7 +55,7 @@ const SemiFinishedMaterialsListView = ({
               </Typography.Text>
               <Space size={6} wrap>
                 <Tag>{formatNumber(familyGroup.items.length)} item</Tag>
-                <Tag color="green">Aman {formatNumber(familyGroup.statusCounts.safe)}</Tag>
+                <StatusTag tone="success">Aman {formatNumber(familyGroup.statusCounts.safe)}</StatusTag>
                 <Tag color="red">Kosong {formatNumber(familyGroup.statusCounts.empty)}</Tag>
                 <Tag color="orange">Rendah {formatNumber(familyGroup.statusCounts.low)}</Tag>
                 {familyGroup.statusCounts.inactive > 0 ? (
@@ -79,7 +81,7 @@ const SemiFinishedMaterialsListView = ({
                     columns={columns}
                     dataSource={categoryGroup.items}
                     pagination={false}
-                    emptyText={<Empty description="Tidak ada item pada kategori ini" />}
+                    emptyState={{ description: "Tidak ada item pada kategori ini" }}
                     mobileCardConfig={mobileCardConfig}
                   />
                 </Card>

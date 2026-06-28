@@ -5,10 +5,22 @@
 // - BOM target semi_finished_material = material boleh raw / semi_finished_material
 // =====================================================
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { buildCountSummary, createKeywordMatcher, matchActiveStatus, matchFieldValue } from '../../utils/produksi/productionPageHelpers';
-import { getBomMaterialItemOptions, getBomTargetOptions, toReferenceOptions } from '../../utils/produksi/productionReferenceHelpers';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { buildCountSummary,
+  createKeywordMatcher,
+  matchActiveStatus,
+  matchFieldValue } from '../../utils/produksi/productionPageHelpers';
+import { getBomMaterialItemOptions,
+  getBomTargetOptions,
+  toReferenceOptions } from '../../utils/produksi/productionReferenceHelpers';
+import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import ProductionPageHeader from '../../components/Produksi/shared/ProductionPageHeader';
+import PageContentCanvas from '../../components/Layout/Page/PageContentCanvas';
 import ProductionSummaryCards from '../../components/Produksi/shared/ProductionSummaryCards';
 import ProductionFilterCard from '../../components/Produksi/shared/ProductionFilterCard';
 import EditableLineSection from '../../components/Produksi/shared/EditableLineSection';
@@ -18,17 +30,16 @@ import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawe
 import ImsNotice from "../../components/Layout/Feedback/ImsNotice";
 import InfoPopoverButton from "../../components/Layout/Feedback/InfoPopoverButton";
 import {
+  App as AntdApp,
   Badge,
   Button,
   Col,
   Descriptions,
   Divider,
   Drawer,
-  Empty,
   Form,
   Input,
   InputNumber,
-  message,
   Modal,
   Popconfirm,
   Row,
@@ -116,6 +127,7 @@ const buildBomLineActionColumn = ({ deleteTitle, onDelete, onEdit }) => ({
 });
 
 const ProductionBoms = () => {
+  const { message } = AntdApp.useApp();
   // SECTION: state loading dan data utama
   const [loading, setLoading] = useState(false);
   const [boms, setBoms] = useState([]);
@@ -206,7 +218,7 @@ const ProductionBoms = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [message]);
 
   useEffect(() => {
     loadData();
@@ -882,9 +894,9 @@ const ProductionBoms = () => {
         {BOM_TARGET_TYPE_MAP[record.targetType] || "-"}
       </Tag>,
       record.isActive ? (
-        <Tag key="status" color="green" style={compactTagStyle}>Aktif</Tag>
+        <StatusTag key="status" tone="success" style={compactTagStyle}>Aktif</StatusTag>
       ) : (
-        <Tag key="status" color="default" style={compactTagStyle}>Nonaktif</Tag>
+        <StatusTag key="status" tone="neutral" style={compactTagStyle}>Nonaktif</StatusTag>
       ),
       record.isDefault ? <Tag key="default" color="purple" style={compactTagStyle}>Default</Tag> : null,
     ].filter(Boolean),
@@ -942,6 +954,8 @@ const ProductionBoms = () => {
         addLabel="Tambah BOM"
       />
 
+      <PageContentCanvas>
+
       <ProductionSummaryCards
         items={[
           { key: "total", title: "Total BOM", value: summary.total },
@@ -952,7 +966,7 @@ const ProductionBoms = () => {
       />
 
       {/* SECTION: info referensi */}
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+      <div className="page-content-canvas__utility-row">
         <InfoPopoverButton
           label="Referensi Aktif"
           title="Referensi aktif untuk BOM"
@@ -1027,6 +1041,8 @@ const ProductionBoms = () => {
       />
 
       {/* SECTION: drawer form tambah/edit BOM */}
+      </PageContentCanvas>
+
       <Drawer
         title={editingBom?.id ? "Edit BOM Produksi" : "Tambah BOM Produksi"}
         open={formVisible}
@@ -1402,7 +1418,7 @@ const ProductionBoms = () => {
         width={760}
       >
         {!selectedBom ? (
-          <Empty description="Tidak ada data" />
+          <EmptyStateBlock compact description="Tidak ada data" />
         ) : (
           <>
             <Descriptions

@@ -1,5 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+import {
+  App as AntdApp,
   Button,
   Card,
   Col,
@@ -15,13 +21,14 @@ import {
   Switch,
   Tag,
   Typography,
-  message,
-} from 'antd';
+} from "antd";
 import { PlusOutlined, StopOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import StatusTag from '../../components/Layout/Feedback/StatusTag';
 import { formatNumberId } from '../../utils/formatters/numberId';
 import FilterBar from '../../components/Layout/Filters/FilterBar';
 import PageHeader from '../../components/Layout/Page/PageHeader';
+import PageContentCanvas from '../../components/Layout/Page/PageContentCanvas';
 import PageSection from '../../components/Layout/Page/PageSection';
 import SummaryStatGrid from '../../components/Layout/Display/SummaryStatGrid';
 import StockDisplayBlock from '../../components/Layout/Table/StockDisplayBlock';
@@ -80,6 +87,7 @@ const { Option } = Select;
 const { Text } = Typography;
 
 const RawMaterials = () => {
+  const { message } = AntdApp.useApp();
   // ---------------------------------------------------------------------------
   // State utama data dan tampilan halaman.
   // ---------------------------------------------------------------------------
@@ -205,7 +213,7 @@ const RawMaterials = () => {
       unsubMaterials();
       unsubPurchases();
     };
-  }, []);
+  }, [message]);
 
 
   const categorySelectOptions = useMemo(
@@ -634,6 +642,8 @@ const RawMaterials = () => {
         ]}
       />
 
+      <PageContentCanvas>
+
 
       {/* ---------------------------------------------------------------------
           Summary cards atas halaman.
@@ -721,7 +731,7 @@ const RawMaterials = () => {
           size="small"
           tableLayout="fixed"
           pagination={{ pageSize: 10 }}
-          emptyText={<Empty description="Belum ada data bahan baku" />}
+          emptyState={{ description: "Belum ada data bahan baku" }}
           mobileCardConfig={rawMaterialMobileCardConfig}
         />
       </PageSection>
@@ -730,6 +740,8 @@ const RawMaterials = () => {
           Drawer form create/edit.
           Ukuran drawer disamakan arah visualnya dengan halaman produk.
       --------------------------------------------------------------------- */}
+      </PageContentCanvas>
+
       <Drawer
         title={editingRecord ? 'Edit Bahan Baku' : 'Tambah Bahan Baku'}
         open={formVisible}
@@ -1122,7 +1134,7 @@ const RawMaterials = () => {
                       Summary ini hanya membaca isi form. Perubahan stok fisik setelah create tetap lewat Purchases, Stock Adjustment, atau transaksi resmi.
                     </div>
                   </div>
-                  <Tag color="green">Varian</Tag>
+                  <StatusTag tone="success">Varian</StatusTag>
                 </div>
 
                 <div className="ims-readonly-stat-grid">

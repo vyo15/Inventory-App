@@ -75,6 +75,45 @@ export const getSqliteClientHeaders = () => ({
   "X-IMS-Client-ID": getSqliteClientId(),
 });
 
+
+const createSqliteBackendUnavailableError = (baseUrl, cause) => {
+  const error = new Error(
+    `Layanan lokal tidak bisa dihubungi di ${baseUrl}. Pastikan layanan aplikasi berjalan dan HP/PC berada di jaringan yang sama.`,
+  );
+  error.status = 0;
+  error.code = "SQLITE_BACKEND_UNAVAILABLE";
+  error.errorCode = "SQLITE_BACKEND_UNAVAILABLE";
+  error.cause = cause;
+  return error;
+};
+
+const createSqliteResponseError = (response, payload, fallbackMessage) => {
+  const errorCode = payload?.code || payload?.errorCode || "";
+  const error = new Error(payload?.message || fallbackMessage || `Request layanan lokal gagal (${response.status})`);
+  error.status = response.status;
+  error.code = errorCode;
+  error.errorCode = errorCode;
+  error.payload = payload;
+  if (payload?.details !== undefined) error.details = payload.details;
+  return error;
+};
+
+const fetchSqliteResponse = async (path, options = {}) => {
+  const baseUrl = getSqliteBackendBaseUrl();
+  try {
+    return await fetch(`${baseUrl}${path}`, {
+      credentials: "include",
+      ...options,
+      headers: {
+        ...getSqliteClientHeaders(),
+        ...(options.headers || {}),
+      },
+    });
+  } catch (requestError) {
+    throw createSqliteBackendUnavailableError(baseUrl, requestError);
+  }
+};
+
 export const getStoredSqliteAuthToken = () => {
   if (typeof window === "undefined") return "";
   return window.localStorage.getItem(LEGACY_AUTH_TOKEN_KEY) || "";
@@ -92,38 +131,21 @@ export const getStoredSqliteAuthHeaders = () => {
 };
 
 export const fetchSqliteJson = async (path, options = {}) => {
-  const baseUrl = getSqliteBackendBaseUrl();
-  let response;
-
-  try {
-    response = await fetch(`${baseUrl}${path}`, {
-      credentials: "include",
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...getSqliteClientHeaders(),
-        ...(options.headers || {}),
-      },
-    });
-  } catch (requestError) {
-    const error = new Error(
-      `Layanan lokal tidak bisa dihubungi di ${baseUrl}. Pastikan layanan aplikasi berjalan dan HP/PC berada di jaringan yang sama.`
-    );
-    error.code = "SQLITE_BACKEND_UNAVAILABLE";
-    error.errorCode = "SQLITE_BACKEND_UNAVAILABLE";
-    error.cause = requestError;
-    throw error;
-  }
-
+  const response = await fetchSqliteResponse(path, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
   const payload = await response.json().catch(() => null);
 
   if (!response.ok || payload?.ok === false) {
-    const error = new Error(payload?.message || `Request layanan lokal gagal (${response.status})`);
-    error.status = response.status;
-    error.code = payload?.code || payload?.errorCode || "";
-    error.errorCode = payload?.code || payload?.errorCode || "";
-    error.payload = payload;
-    throw error;
+    throw createSqliteResponseError(
+      response,
+      payload,
+      `Request layanan lokal gagal (${response.status})`,
+    );
   }
 
   return payload;
@@ -191,15 +213,14 @@ export const getSqliteMasterDataExport = async ({ includeOpeningStock = true } =
 );
 
 export const downloadSqliteBackendBackup = async (filename) => {
-  const baseUrl = getSqliteBackendBaseUrl();
-  const response = await fetch(`${baseUrl}/api/maintenance/backups/${encodeURIComponent(filename)}/download`, {
-    credentials: "include",
-    headers: { ...getSqliteClientHeaders(), ...getStoredSqliteAuthHeaders() },
-  });
+  const response = await fetchSqliteResponse(
+    `/api/maintenance/backups/${encodeURIComponent(filename)}/download`,
+    { headers: getStoredSqliteAuthHeaders() },
+  );
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
-    throw new Error(payload?.message || `Download backup gagal (${response.status})`);
+    throw createSqliteResponseError(response, payload, `Download backup gagal (${response.status})`);
   }
 
   return {
@@ -209,12 +230,9 @@ export const downloadSqliteBackendBackup = async (filename) => {
 };
 
 export const importSqliteBackendBackup = async (file) => {
-  const baseUrl = getSqliteBackendBaseUrl();
-  const response = await fetch(`${baseUrl}/api/maintenance/backups/import`, {
+  const response = await fetchSqliteResponse("/api/maintenance/backups/import", {
     method: "POST",
-    credentials: "include",
     headers: {
-      ...getSqliteClientHeaders(),
       ...getStoredSqliteAuthHeaders(),
       "Content-Type": "application/octet-stream",
       "X-IMS-Backup-Filename": encodeURIComponent(file?.name || "backup.imsbackup"),
@@ -224,7 +242,7 @@ export const importSqliteBackendBackup = async (file) => {
 
   const payload = await response.json().catch(() => null);
   if (!response.ok || payload?.ok === false) {
-    throw new Error(payload?.message || `Import backup gagal (${response.status})`);
+    throw createSqliteResponseError(response, payload, `Import backup gagal (${response.status})`);
   }
 
   return payload;

@@ -1,9 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Button,
   Drawer,
-  Empty,
   Progress,
   Space,
   Tag,
@@ -26,6 +30,7 @@ import {
   WalletOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
+import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import useAuth from "../../hooks/useAuth";
 import PageSection from "../../components/Layout/Page/PageSection";
@@ -457,7 +462,7 @@ const DashboardSalesChart = ({ series = [] }) => {
         </>
       ) : (
         <div className="dashboard-empty-wrap dashboard-empty-chart">
-          <Empty description="Belum ada penjualan dalam 30 hari terakhir." />
+          <EmptyStateBlock compact description="Belum ada penjualan dalam 30 hari terakhir." />
         </div>
       )}
     </div>
@@ -494,7 +499,7 @@ const DashboardTopProducts = ({ products = [] }) => (
       </div>
     ) : (
       <div className="dashboard-empty-wrap dashboard-empty-chart">
-        <Empty description="Belum ada item penjualan bulan ini." />
+        <EmptyStateBlock compact description="Belum ada item penjualan bulan ini." />
       </div>
     )}
   </div>
@@ -1233,7 +1238,7 @@ const Dashboard = () => {
                 ))}
                 {priorityItems.length === 0 ? (
                   <div className="dashboard-empty-wrap dashboard-empty-compact">
-                    <Empty description="Tidak ada temuan yang perlu diprioritaskan hari ini." />
+                    <EmptyStateBlock compact description="Tidak ada temuan yang perlu diprioritaskan hari ini." />
                   </div>
                 ) : null}
               </div>
@@ -1310,7 +1315,7 @@ const Dashboard = () => {
                 </div>
               ) : (
                 <div className="dashboard-empty-wrap">
-                  <Empty description="Belum ada aktivitas yang bisa ditampilkan." />
+                  <EmptyStateBlock compact description="Belum ada aktivitas yang bisa ditampilkan." />
                 </div>
               )}
             </div>
@@ -1345,7 +1350,7 @@ const Dashboard = () => {
                   })}
                   {denseQuickActions.length === 0 ? (
                     <div className="dashboard-empty-wrap dashboard-empty-compact">
-                      <Empty description="Tidak ada aksi cepat yang tersedia." />
+                      <EmptyStateBlock compact description="Tidak ada aksi cepat yang tersedia." />
                     </div>
                   ) : null}
                 </div>

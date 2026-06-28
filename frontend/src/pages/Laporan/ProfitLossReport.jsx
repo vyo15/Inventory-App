@@ -1,9 +1,20 @@
-import { useEffect, useMemo, useState } from "react";
-import { Button, Col, DatePicker, Tag, message } from "antd";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  App as AntdApp,
+  Button,
+  Col,
+  DatePicker,
+  Tag,
+} from "antd";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import { exportJsonToExcel } from "../../utils/export/exportExcel";
@@ -35,6 +46,7 @@ const resolveFinancialSourceLabel = (item = {}) => {
 const { RangePicker } = DatePicker;
 
 const ProfitLossReport = () => {
+  const { message } = AntdApp.useApp();
   const [reportData, setReportData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState(getDefaultReportDateRange);
@@ -56,7 +68,7 @@ const ProfitLossReport = () => {
     };
 
     fetchReportData();
-  }, [dateRangeBounds]);
+  }, [dateRangeBounds, message]);
 
   const summary = useMemo(() => {
     return reportData.reduce(
@@ -238,6 +250,8 @@ const ProfitLossReport = () => {
         subtitle="Laporan membaca pemasukan dan pengeluaran final."
       />
 
+      <PageContentCanvas>
+
       <PageSection
         title="Filter Periode"
         subtitle="Report membaca revenues, incomes, dan expenses sesuai tanggal transaksi, bukan seluruh collection."
@@ -286,10 +300,11 @@ const ProfitLossReport = () => {
           rowKey="id"
           mobileCardConfig={profitLossMobileCardConfig}
           locale={{
-            emptyText: getDataTableEmptyText(loading, <EmptyStateBlock description="Belum ada data laba rugi untuk ditampilkan." />),
+            emptyText: getDataTableEmptyText(loading, "Belum ada data laba rugi untuk ditampilkan."),
           }}
         />
       </PageSection>
+      </PageContentCanvas>
     </>
   );
 };

@@ -839,3 +839,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Shared keyboard affordance for clickable mobile data cards. */
+.ims-mobile-card--clickable:focus-visible {
+  outline: none;
+  box-shadow: var(--ims-focus-ring), var(--ims-shadow-soft);
+}

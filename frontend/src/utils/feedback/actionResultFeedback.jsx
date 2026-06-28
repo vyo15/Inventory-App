@@ -9,6 +9,7 @@ const ACTION_RESULT_EVENT = "ims:action-result-feedback";
 const POPUP_STATUSES = new Set(["success", "error", "info"]);
 
 let isActionResultHostMounted = false;
+let pendingActionResults = [];
 
 const normalizeText = (value, fallback = "") => {
   if (value === null || value === undefined || value === "") return fallback;
@@ -28,7 +29,6 @@ const normalizeDetails = (details = []) => {
 const getStatusConfig = (status) => {
   if (status === "error") {
     return {
-      modal: Modal.error,
       alertType: "error",
       defaultTitle: "Proses gagal",
       defaultContent: "Terjadi kendala saat menjalankan proses.",
@@ -38,7 +38,6 @@ const getStatusConfig = (status) => {
 
   if (status === "info") {
     return {
-      modal: Modal.info,
       alertType: "info",
       defaultTitle: "Informasi proses",
       defaultContent: "Informasi proses tersedia.",
@@ -47,7 +46,6 @@ const getStatusConfig = (status) => {
   }
 
   return {
-    modal: Modal.success,
     alertType: "success",
     defaultTitle: "Proses berhasil",
     defaultContent: "Proses berhasil dijalankan.",
@@ -117,28 +115,6 @@ const copyActionDetails = async (payload) => {
   await navigator.clipboard.writeText(detailText);
 };
 
-const showStaticFallbackModal = (payload) => {
-  const config = getStatusConfig(payload.status);
-
-  return config.modal({
-    title: payload.title,
-    content: (
-      <ActionResultContent
-        status={payload.status}
-        content={payload.content}
-        details={payload.details}
-        note={payload.note}
-      />
-    ),
-    okText: payload.okText,
-    centered: true,
-    width: payload.width,
-    zIndex: 1600,
-    getContainer: getModalContainer,
-    maskClosable: config.maskClosable,
-  });
-};
-
 const showActionResult = (status, options = {}) => {
   const payload = normalizeOptions(status, options);
 
@@ -155,7 +131,13 @@ const showActionResult = (status, options = {}) => {
     };
   }
 
-  return showStaticFallbackModal(payload);
+  pendingActionResults = [...pendingActionResults, payload];
+  return {
+    destroy: () => {
+      pendingActionResults = pendingActionResults.filter((item) => item.id !== payload.id);
+    },
+    update: () => {},
+  };
 };
 
 export const ActionResultModalHost = () => {
@@ -164,6 +146,11 @@ export const ActionResultModalHost = () => {
 
   useEffect(() => {
     isActionResultHostMounted = true;
+    if (pendingActionResults.length) {
+      const queuedBeforeMount = pendingActionResults;
+      pendingActionResults = [];
+      setQueue((previousQueue) => [...previousQueue, ...queuedBeforeMount]);
+    }
 
     const handleActionResult = (event) => {
       const nextPayload = event?.detail;

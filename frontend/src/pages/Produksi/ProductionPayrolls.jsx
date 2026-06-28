@@ -3,18 +3,22 @@
 // Draft payroll diambil dari work log completed
 // =====================================================
 
-import { useEffect, useMemo, useState } from "react";
 import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  App as AntdApp,
   Button,
   Col,
   DatePicker,
   Descriptions,
   Drawer,
-  Empty,
   Form,
   Input,
   InputNumber,
-  message,
   Popconfirm,
   Row,
   Select,
@@ -27,8 +31,10 @@ import {
   EyeOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
+import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import ProductionFilterCard from "../../components/Produksi/shared/ProductionFilterCard";
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
+import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import { CompactCellText } from "../../components/Layout/Table/CompactCell";
@@ -152,6 +158,7 @@ const renderCompactText = (value, options = {}) => (
 );
 
 const ProductionPayrolls = () => {
+  const { message } = AntdApp.useApp();
   const [loading, setLoading] = useState(false);
   const [payrolls, setPayrolls] = useState([]);
   const [referenceData, setReferenceData] = useState({
@@ -172,7 +179,7 @@ const ProductionPayrolls = () => {
 
   const [form] = Form.useForm();
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const [payrollResult, refResult] = await Promise.all([
@@ -188,11 +195,11 @@ const ProductionPayrolls = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [message]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const summary = useMemo(() => {
     const total = payrolls.length;
@@ -578,6 +585,8 @@ const ProductionPayrolls = () => {
         addLabel="Tambah Payroll"
       />
 
+      <PageContentCanvas>
+
 
       {/* AKTIF / GUARDED: summary cards shared hanya ubah presentasi, nominal payroll tetap dari data existing. */}
       <ProductionSummaryCards items={summaryItems} variant="finance" highlightKey="payroll-total-amount" />
@@ -636,7 +645,7 @@ const ProductionPayrolls = () => {
           dataSource={filteredData}
           mobileCardConfig={payrollMobileCardConfig}
           locale={{
-            emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada payroll produksi" />),
+            emptyText: getDataTableEmptyText(loading, "Belum ada payroll produksi"),
           }}
           pagination={{
             pageSize: 10,
@@ -644,6 +653,8 @@ const ProductionPayrolls = () => {
           }}
         />
       </PageSection>
+
+      </PageContentCanvas>
 
       <Drawer
         title={
@@ -861,7 +872,7 @@ const ProductionPayrolls = () => {
         width={640}
       >
         {!selectedRecord ? (
-          <Empty description="Tidak ada data" />
+          <EmptyStateBlock compact description="Tidak ada data" />
         ) : (
           <>
             {/* =====================================================

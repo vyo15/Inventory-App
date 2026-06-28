@@ -1,7 +1,28 @@
 .empty-state-block {
+  display: grid;
+  min-height: 180px;
   padding: 24px 8px;
+  place-items: center;
+}
+
+.empty-state-block--compact {
+  min-height: 120px;
+  padding: 16px 8px;
+}
+
+.empty-state-copy {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+}
+
+.empty-state-title.ant-typography {
+  margin: 0;
+  color: var(--ims-text-primary);
+  font-size: var(--ims-font-size-body);
 }
 
 .empty-state-text.ant-typography {
-  opacity: 0.75;
+  color: var(--ims-text-secondary);
+  opacity: 0.9;
 }

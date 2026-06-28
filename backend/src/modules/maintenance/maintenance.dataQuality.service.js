@@ -10,6 +10,7 @@ const { TABLES } = require("../../db/schema");
 const env = require("../../config/env");
 const { createAuditLog } = require("../../utils/auditLog");
 const { safeJsonParse } = require("../../utils/jsonUtils");
+const { createHttpError } = require("./maintenance.shared");
 const { upsertStockReadModel } = require("../stock/engine");
 const { getRealtimeRuntimeStatus } = require("../realtime/realtime.service");
 const {
@@ -55,14 +56,6 @@ const MASTER_DATA_EXPORT_TABLES = [
   { key: "categories", label: "Categories", table: "categories" },
   { key: "production_profiles", label: "Production Profiles", table: "production_profiles" },
 ];
-
-const createHttpError = (message, statusCode = 400, errorCode = "MAINTENANCE_ERROR") => {
-  const error = new Error(message);
-  error.publicMessage = message;
-  error.statusCode = statusCode;
-  error.errorCode = errorCode;
-  return error;
-};
 
 const pickRowCode = (row = {}) => row.code || row.customer_code || row.supplier_code || row.id || "";
 

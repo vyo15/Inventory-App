@@ -1,5 +1,6 @@
 const { failure } = require("../utils/response");
 const logger = require("../utils/logger");
+const { resolvePublicHttpError } = require("../utils/httpError");
 
 function notFoundHandler(req, res) {
   logger.warn("http_not_found", { method: req.method, path: req.path });
@@ -7,22 +8,34 @@ function notFoundHandler(req, res) {
 }
 
 function errorHandler(error, req, res, next) {
-  logger.error("http_request_error", {
-    method: req.method,
-    path: req.path,
-    actor: req.localAuth?.user?.username || null,
-    error,
-  });
-
   if (res.headersSent) {
     return next(error);
   }
 
+  const resolved = resolvePublicHttpError(error);
+  const logPayload = {
+    method: req.method,
+    path: req.path,
+    actor: req.localAuth?.user?.username || null,
+    statusCode: resolved.statusCode,
+    errorCode: resolved.errorCode,
+  };
+
+  if (resolved.statusCode >= 500) {
+    logger.error("http_request_error", { ...logPayload, error });
+  } else {
+    logger.warn("http_request_rejected", {
+      ...logPayload,
+      message: resolved.publicMessage,
+    });
+  }
+
   return failure(
     res,
-    error?.publicMessage || "Terjadi error pada server layanan database lokal",
-    error?.errorCode || "INTERNAL_SERVER_ERROR",
-    error?.statusCode || 500
+    resolved.publicMessage,
+    resolved.errorCode,
+    resolved.statusCode,
+    resolved.details,
   );
 }
 

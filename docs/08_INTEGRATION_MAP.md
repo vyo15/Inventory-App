@@ -452,3 +452,20 @@ Guard backend wajib memverifikasi purpose sandbox, database terpisah, dan backup
 - `GET /api/testing-lab/operational-source/preview` membaca database operasional melalui koneksi SQLite read-only dan hanya mengembalikan ringkasan aman.
 - `POST /api/testing-lab/operational-source/clone` memakai global testing write lock, snapshot `VACUUM INTO`, sanitasi session/log, backup `pre-import`, staged restore existing, baseline `test`, audit, dan broadcast `database_replaced`.
 - Sumber clone diberikan runner melalui `IMS_OPERATIONAL_SOURCE_DB_PATH`; database operasional tidak pernah menjadi database aktif pada mode Lab.
+
+## Error dan UI state integration — 2026-06-29
+
+```text
+Backend domain/service
+  -> AppError / canonical compatibility
+  -> controller next(error)
+  -> global errorHandler
+  -> status-aware log + ApiResponse
+  -> frontend API error (status/errorCode/details)
+  -> DataTableView inline error / App-context toast / action result modal
+```
+
+- Stock dan Finance validation harus mempertahankan rollback dan tidak menerbitkan realtime event pada failure.
+- Raw backup download/import memakai frontend API error contract yang sama dengan request JSON tanpa mengubah format file backup.
+- Empty state tidak digunakan untuk menyembunyikan request failure.
+- OpenAPI mendokumentasikan `meta`, safe `details`, dan status 201 mutation create.

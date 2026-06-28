@@ -1,3 +1,4 @@
+const { createHttpError } = require("../../utils/httpError");
 const { runInTransaction } = require("../../db/connection");
 const {
   formatBusinessDateStamp,
@@ -27,10 +28,11 @@ const commitStockAdjustment = async ({ payload = {}, actor = "system" } = {}) =>
     getStockAdjustmentCounterOptions(payload),
   );
   if (!referenceNumber) {
-    const error = new Error("Nomor referensi penyesuaian stok sudah pernah digunakan.");
-    error.code = "DUPLICATE_REFERENCE";
-    error.statusCode = 409;
-    throw error;
+    throw createHttpError(
+      "Nomor referensi penyesuaian stok sudah pernah digunakan.",
+      "DUPLICATE_REFERENCE",
+      409,
+    );
   }
 
   const transactionPayload = {

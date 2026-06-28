@@ -1,9 +1,20 @@
-import { useEffect, useMemo, useState } from "react";
-import { Button, Col, DatePicker, Tag, message } from "antd";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  App as AntdApp,
+  Button,
+  Col,
+  DatePicker,
+  Tag,
+} from "antd";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import { exportJsonToExcel } from "../../utils/export/exportExcel";
@@ -62,6 +73,7 @@ const getPurchaseVariantLabel = (record = {}) => {
 const { RangePicker } = DatePicker;
 
 const PurchasesReport = () => {
+  const { message } = AntdApp.useApp();
   const [purchasesData, setPurchasesData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState(getDefaultReportDateRange);
@@ -83,7 +95,7 @@ const PurchasesReport = () => {
     };
 
     fetchPurchases();
-  }, [dateRangeBounds]);
+  }, [dateRangeBounds, message]);
 
   const summary = useMemo(() => {
     return purchasesData.reduce(
@@ -285,6 +297,8 @@ const PurchasesReport = () => {
         subtitle="Laporan membaca data pembelian aktif."
       />
 
+      <PageContentCanvas>
+
       <PageSection
         title="Filter Periode"
         subtitle="Report membaca expenses pembelian sesuai tanggal transaksi, bukan seluruh collection."
@@ -333,10 +347,11 @@ const PurchasesReport = () => {
           rowKey="id"
           mobileCardConfig={purchasesReportMobileCardConfig}
           locale={{
-            emptyText: getDataTableEmptyText(loading, <EmptyStateBlock description="Belum ada data pembelian untuk ditampilkan." />),
+            emptyText: getDataTableEmptyText(loading, "Belum ada data pembelian untuk ditampilkan."),
           }}
         />
       </PageSection>
+      </PageContentCanvas>
     </>
   );
 };

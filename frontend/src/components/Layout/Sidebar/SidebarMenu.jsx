@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Empty, Menu } from "antd";
 import { Link, useLocation } from "react-router-dom";
+import EmptyStateBlock from "../Feedback/EmptyStateBlock";
 import { sidebarMenuItems } from "../../../config/sidebarMenu";
 import useAuth from "../../../hooks/useAuth";
 import { filterSidebarMenuItemsByRole } from "../../../utils/auth/roleAccess";
@@ -244,7 +245,7 @@ const SidebarMenu = ({ darkTheme }) => {
   if (roleAwareMenuItems.length === 0) {
     return (
       <div className="sidebar-menu-scroll">
-        <Empty
+        <EmptyStateBlock compact
           image={Empty.PRESENTED_IMAGE_SIMPLE}
           description="Tidak ada menu untuk role ini"
         />

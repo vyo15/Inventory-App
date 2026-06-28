@@ -2,21 +2,22 @@ import {
   Button,
   Card,
   Descriptions,
-  Empty,
   Space,
   Tabs,
   Tag,
   Typography,
-} from 'antd';
+} from "antd";
 import {
   EditOutlined,
   HistoryOutlined,
   LinkOutlined,
   PlusOutlined,
 } from '@ant-design/icons';
+import EmptyStateBlock from '../../../components/Layout/Feedback/EmptyStateBlock';
 import MobileDetailDrawer from '../../../components/Layout/Mobile/MobileDetailDrawer';
 import DataTableView from '../../../components/Layout/Table/DataTableView';
 import ImsNotice from '../../../components/Layout/Feedback/ImsNotice';
+import StatusTag from '../../../components/Layout/Feedback/StatusTag';
 import {
   DataRefreshIndicator,
   getDataTableEmptyText,
@@ -66,9 +67,9 @@ const SupplierDetailDrawer = ({
             <Space direction="vertical" size={10} style={{ width: '100%' }}>
               <Space wrap>
                 <Text strong>{storeName}</Text>
-                <Tag color={selectedSupplier.isActive === false ? 'default' : 'green'}>
+                <StatusTag tone={selectedSupplier.isActive === false ? 'neutral' : 'success'}>
                   {selectedSupplier.isActive === false ? 'Nonaktif' : 'Aktif'}
-                </Tag>
+                </StatusTag>
                 <Tag>{activeOffers.length} penawaran</Tag>
               </Space>
               <Space wrap>
@@ -125,7 +126,7 @@ const SupplierDetailDrawer = ({
             size="small"
             tableLayout="fixed"
             showRefreshIndicator={false}
-            locale={{ emptyText: <Empty description="Belum ada katalog barang di toko ini" /> }}
+            locale={{ emptyText: <EmptyStateBlock compact description="Belum ada katalog barang di toko ini" /> }}
           />
         </Space>
       ),

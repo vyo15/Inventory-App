@@ -1,10 +1,26 @@
-import { useEffect, useMemo, useState } from "react";
-import { Button, Col, Input, Select, Space, Tag, Tooltip, Typography, message } from "antd";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  App as AntdApp,
+  Button,
+  Col,
+  Input,
+  Select,
+  Space,
+  Tag,
+  Tooltip,
+  Typography,
+} from "antd";
 import dayjs from "dayjs";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
@@ -489,6 +505,7 @@ const matchesKeyword = (record, keyword) => {
 };
 
 const StockManagement = () => {
+  const { message } = AntdApp.useApp();
   // =========================
   // SECTION: State utama log stok
   // Fungsi:
@@ -514,7 +531,7 @@ const StockManagement = () => {
   // Status:
   // - aktif dipakai; limit ini bukan mutation dan bukan perubahan business rule
   // =========================
-  const fetchHistory = async () => {
+  const fetchHistory = useCallback(async () => {
     setLoading(true);
     try {
       const data = await getInventoryLogs({ limit: INVENTORY_LOG_TABLE_LIMIT });
@@ -525,11 +542,11 @@ const StockManagement = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [message]);
 
   useEffect(() => {
     fetchHistory();
-  }, []);
+  }, [fetchHistory]);
 
   // =========================
   // SECTION: Normalisasi & filter data
@@ -847,6 +864,8 @@ const StockManagement = () => {
         subtitle="Audit stok dan penyesuaian manual."
       />
 
+      <PageContentCanvas>
+
       <PageSection
         title="Ringkasan Log"
         subtitle="Ringkasan jumlah log."
@@ -911,7 +930,7 @@ const StockManagement = () => {
           dataSource={filteredHistory}
           pagination={{ pageSize: 10 }}
           locale={{
-            emptyText: getDataTableEmptyText(loading, <EmptyStateBlock description="Belum ada riwayat mutasi stok." />),
+            emptyText: getDataTableEmptyText(loading, "Belum ada riwayat mutasi stok."),
           }}
           loading={loading}
           mobileCardConfig={stockHistoryMobileCardConfig}
@@ -933,6 +952,8 @@ const StockManagement = () => {
         ========================= */}
         <StockAdjustmentPanel onAdjustmentSaved={fetchHistory} />
       </PageSection>
+
+      </PageContentCanvas>
 
       <MobileDetailDrawer
         title="Detail Riwayat Stok"

@@ -1,7 +1,10 @@
-import { useMemo } from "react";
-import { Empty } from "antd";
+import {
+  useMemo } from "react";
+import { Empty,
+} from "antd";
 import { FileTextOutlined, RightOutlined } from "@ant-design/icons";
 import { Navigate, useNavigate } from "react-router-dom";
+import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import { sidebarMenuItems } from "../../config/sidebarMenu";
 import useAuth from "../../hooks/useAuth";
 import { filterSidebarMenuItemsByRole } from "../../utils/auth/roleAccess";
@@ -189,7 +192,7 @@ const ModuleHub = ({ moduleKey, menuKey }) => {
           })}
         </div>
       ) : (
-        <Empty description="Belum ada halaman pada modul ini" />
+        <EmptyStateBlock compact description="Belum ada halaman pada modul ini" />
       )}
     </div>
   );

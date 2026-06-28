@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  App as AntdApp,
   Button,
   DatePicker,
   Form,
@@ -11,9 +17,9 @@ import {
   Tag,
   Tooltip,
   Typography,
-  message,
 } from "antd";
 import { EyeOutlined, PlusOutlined } from "@ant-design/icons";
+import StatusTag from "../../../components/Layout/Feedback/StatusTag";
 import DataTableView from "../../../components/Layout/Table/DataTableView";
 import MobileDetailDrawer from "../../../components/Layout/Mobile/MobileDetailDrawer";
 import ResponsiveFormSection from "../../../components/Layout/Mobile/ResponsiveFormSection";
@@ -240,6 +246,7 @@ const renderAdjustmentReasonNote = (_, record = {}) => {
 // - bukan halaman route mandiri; /stock-adjustment hanya compatibility redirect ke /inventory/stock-management
 // =========================
 const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
+  const { message } = AntdApp.useApp();
   // =========================
   // SECTION: State panel adjustment
   // Fungsi:
@@ -329,7 +336,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
       unsubscribeSemiFinishedMaterials?.();
       unsubscribeFinishedProducts?.();
     };
-  }, []);
+  }, [message]);
 
   // =========================
   // SECTION: Modal helpers
@@ -629,7 +636,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
         render: (_, record) => (
           <div className="ims-cell-stack ims-cell-stack-tight">
             {record.adjustmentType === "in" ? (
-              <Tag color="green">Tambah</Tag>
+              <StatusTag tone="success">Tambah</StatusTag>
             ) : (
               <Tag color="red">Kurang</Tag>
             )}
@@ -694,7 +701,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
       return [
         <Tag key="item-type" color={itemTypeConfig.tagColor}>{itemTypeConfig.label}</Tag>,
         record.adjustmentType === 'in' ? (
-          <Tag key="adjustment-type" color="green">Tambah</Tag>
+          <StatusTag key="adjustment-type" tone="success">Tambah</StatusTag>
         ) : (
           <Tag key="adjustment-type" color="red">Kurang</Tag>
         ),
@@ -783,7 +790,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
                 <Text type="secondary">Adjustment</Text>
                 <Space wrap>
                   {selectedAdjustmentDetail.adjustmentType === "in" ? (
-                    <Tag color="green">Tambah</Tag>
+                    <StatusTag tone="success">Tambah</StatusTag>
                   ) : (
                     <Tag color="red">Kurang</Tag>
                   )}

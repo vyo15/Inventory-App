@@ -1,3 +1,4 @@
+const { respondIfServiceError } = require("../../utils/httpError");
 const { failure, success } = require("../../utils/response");
 const {
   applyPricingRuleBatch,
@@ -11,17 +12,10 @@ const {
 
 const getActor = (req) => req.localAuth?.user?.username || "system";
 
-const handlePricingRuleError = (res, error) => {
-  if (String(error?.message || "").includes("UNIQUE")) {
-    return failure(res, "Kode/ID pricing rule sudah ada di database lokal.", "DUPLICATE_CODE", 409);
-  }
-
-  if (error?.isServiceError) {
-    return failure(res, error.message, error.code, error.statusCode || 400);
-  }
-
-  return null;
-};
+const handlePricingRuleError = (res, error) => respondIfServiceError(res, error, {
+  duplicateMessage: "Kode/ID pricing rule sudah ada di database lokal.",
+  duplicateCode: "DUPLICATE_CODE",
+});
 
 const generatePricingRuleCodeController = async (_req, res, next) => {
   try {

@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
-import { Button, Drawer, Empty, Tag } from "antd";
+import {
+  useEffect,
+  useMemo,
+  useState } from "react";
+import { Button,
+  Drawer,
+  Tag,
+} from "antd";
 import {
   AppstoreOutlined,
   CloseOutlined,
@@ -7,6 +13,7 @@ import {
 } from "@ant-design/icons";
 import { HiOutlineMoon, HiOutlineSun } from "react-icons/hi2";
 import { useLocation, useNavigate } from "react-router-dom";
+import EmptyStateBlock from "../Feedback/EmptyStateBlock";
 import { sidebarMenuItems } from "../../../config/sidebarMenu";
 import useAuth from "../../../hooks/useAuth";
 import {
@@ -191,7 +198,7 @@ const MobileBottomNavigation = ({ darkTheme, toggleTheme }) => {
             })}
           </div>
         ) : (
-          <Empty description="Tidak ada menu untuk role ini" />
+          <EmptyStateBlock compact description="Tidak ada menu untuk role ini" />
         )}
       </Drawer>
     </>

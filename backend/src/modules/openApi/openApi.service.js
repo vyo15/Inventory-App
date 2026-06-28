@@ -33,7 +33,9 @@ const buildOpenApiDocument = ({ baseUrl = "http://localhost:3001" } = {}) => ({
           ok: { type: "boolean" },
           message: { type: "string" },
           data: {},
+          meta: { type: ["object", "null"], additionalProperties: true },
           errorCode: { type: ["string", "null"] },
+          details: { type: ["object", "array", "string", "number", "boolean", "null"] },
         },
         required: ["ok", "message"],
       },
@@ -50,25 +52,25 @@ const buildOpenApiDocument = ({ baseUrl = "http://localhost:3001" } = {}) => ({
       post: { tags: ["Auth"], summary: "Login dan buat cookie session HttpOnly", responses: { 200: { description: "Login berhasil" }, 401: { description: "Credential invalid" }, 429: { description: "Rate limited" } } },
     },
     "/api/stock/adjustments/commit": {
-      post: { tags: ["Inventory"], summary: "Commit penyesuaian stok atomic", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Stock, read model, inventory log, dan audit tersimpan" } } },
+      post: { tags: ["Inventory"], summary: "Commit penyesuaian stok atomic", security: [{ localSessionCookie: [] }], responses: { 201: { description: "Stock, read model, inventory log, dan audit tersimpan" }, 400: { description: "Payload/source/qty tidak valid" }, 404: { description: "Item stok tidak ditemukan" }, 409: { description: "Referensi duplikat atau konflik stok" } } },
     },
     "/api/transactions/purchases/commit": {
-      post: { tags: ["Transactions"], summary: "Commit purchase atomic", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Purchase, stock, expense, ledger, dan audit tersimpan" } } },
+      post: { tags: ["Transactions"], summary: "Commit purchase atomic", security: [{ localSessionCookie: [] }], responses: { 201: { description: "Purchase, stock, expense, ledger, dan audit tersimpan" }, 400: { description: "Payload atau verifikasi purchase tidak valid" }, 409: { description: "Referensi atau versi data konflik" } } },
     },
     "/api/transactions/sales/commit": {
-      post: { tags: ["Transactions"], summary: "Commit sale atomic", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Sale, stock, dan audit tersimpan" } } },
+      post: { tags: ["Transactions"], summary: "Commit sale atomic", security: [{ localSessionCookie: [] }], responses: { 201: { description: "Sale, stock, dan audit tersimpan" }, 400: { description: "Payload sale tidak valid" }, 409: { description: "Stok atau versi data konflik" } } },
     },
     "/api/transactions/returns/commit": {
-      post: { tags: ["Transactions"], summary: "Commit return terkait sale", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Return dan pemulihan stok tersimpan" } } },
+      post: { tags: ["Transactions"], summary: "Commit return terkait sale", security: [{ localSessionCookie: [] }], responses: { 201: { description: "Return dan pemulihan stok tersimpan" }, 400: { description: "Relasi sale, item, atau qty return tidak valid" }, 409: { description: "Qty kumulatif atau stok konflik" } } },
     },
     "/api/finance/cash-in/commit": {
-      post: { tags: ["Finance"], summary: "Commit kas masuk dan ledger", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Income dan ledger tersimpan" }, 409: { description: "Referensi manual duplikat" } } },
+      post: { tags: ["Finance"], summary: "Commit kas masuk dan ledger", security: [{ localSessionCookie: [] }], responses: { 201: { description: "Income dan ledger tersimpan" }, 400: { description: "Nominal atau payload kas masuk tidak valid" }, 409: { description: "Referensi manual duplikat" } } },
     },
     "/api/finance/cash-out/commit": {
-      post: { tags: ["Finance"], summary: "Commit kas keluar dan ledger", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Expense dan ledger tersimpan" }, 409: { description: "Referensi manual duplikat" } } },
+      post: { tags: ["Finance"], summary: "Commit kas keluar dan ledger", security: [{ localSessionCookie: [] }], responses: { 201: { description: "Expense dan ledger tersimpan" }, 400: { description: "Nominal atau payload kas keluar tidak valid" }, 409: { description: "Referensi manual duplikat" } } },
     },
     "/api/production/orders/commit": {
-      post: { tags: ["Production"], summary: "Buat Production Order dari Planning", security: [{ localSessionCookie: [] }], responses: { 200: { description: "PO dan Planning diperbarui atomic" } } },
+      post: { tags: ["Production"], summary: "Buat Production Order dari Planning", security: [{ localSessionCookie: [] }], responses: { 201: { description: "PO dan Planning diperbarui atomic" }, 400: { description: "Planning/BOM tidak valid" }, 409: { description: "Planning sudah terikat atau lifecycle konflik" } } },
     },
     "/api/realtime/status": {
       get: { tags: ["Realtime"], summary: "Revision realtime untuk fallback saat SSE terputus", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Status transport dan revision saat ini" } } },

@@ -19,7 +19,7 @@ import { theme } from "antd";
 // Risiko:
 // - perubahan token ini berdampak global ke seluruh komponen Ant Design; salah kontras dapat membuat status bisnis, form, table, atau modal sulit dibaca.
 // =====================================================
-const IMS_BRAND_THEME = {
+export const IMS_BRAND_THEME = {
   light: {
     primary: "#245F9D",
     primaryHover: "#1F548C",
@@ -33,6 +33,12 @@ const IMS_BRAND_THEME = {
     warning: "#D97706",
     warningSoft: "#FFF7ED",
     warningText: "#92400E",
+    success: "#16A34A",
+    successSoft: "#ECFDF5",
+    successText: "#047857",
+    danger: "#DC2626",
+    dangerSoft: "#FEF2F2",
+    dangerText: "#991B1B",
     bgBase: "#F6F9FC",
     bgLayout: "#EEF5FB",
     bgContainer: "#FFFFFF",
@@ -68,6 +74,12 @@ const IMS_BRAND_THEME = {
     warning: "#F59E0B",
     warningSoft: "rgba(245, 158, 11, 0.15)",
     warningText: "#FCD34D",
+    success: "#4ADE80",
+    successSoft: "rgba(74, 222, 128, 0.14)",
+    successText: "#86EFAC",
+    danger: "#F87171",
+    dangerSoft: "rgba(248, 113, 113, 0.14)",
+    dangerText: "#FCA5A5",
     bgBase: "#07111F",
     bgLayout: "#0A1627",
     bgContainer: "#101E33",
@@ -136,6 +148,16 @@ export const getAntdTheme = (darkTheme = false) => {
       colorWarningBgHover: palette.warningSoft,
       colorWarningBorder: palette.warning,
       colorWarningText: palette.warningText,
+      colorSuccess: palette.success,
+      colorSuccessBg: palette.successSoft,
+      colorSuccessBgHover: palette.successSoft,
+      colorSuccessBorder: palette.success,
+      colorSuccessText: palette.successText,
+      colorError: palette.danger,
+      colorErrorBg: palette.dangerSoft,
+      colorErrorBgHover: palette.dangerSoft,
+      colorErrorBorder: palette.danger,
+      colorErrorText: palette.dangerText,
       fontFamily: IMS_FONT_FAMILY_BASE,
       fontSize: IMS_FONT_SIZE.body,
       fontSizeSM: IMS_FONT_SIZE.meta,

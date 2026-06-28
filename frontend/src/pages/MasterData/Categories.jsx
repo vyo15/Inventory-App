@@ -1,5 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  App as AntdApp,
   Button,
   Card,
   Col,
@@ -14,7 +20,6 @@ import {
   Space,
   Tag,
   Typography,
-  message,
 } from "antd";
 import {
   AppstoreOutlined,
@@ -24,8 +29,10 @@ import {
   PlusOutlined,
   RightOutlined,
 } from "@ant-design/icons";
+import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import PageFormModal from "../../components/Layout/Forms/PageFormModal";
 import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import { DataRefreshIndicator } from "../../components/Layout/Feedback/DataLoadingState";
 import {
@@ -58,6 +65,7 @@ const recordMatchesSearch = (record = {}, search = "") => {
 };
 
 const Categories = () => {
+  const { message } = AntdApp.useApp();
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeType, setActiveType] = useState(CATEGORY_TYPES.PRODUCT_FORM);
@@ -85,7 +93,7 @@ const Categories = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [message]);
 
   useEffect(() => {
     fetchCategories();
@@ -286,6 +294,8 @@ const Categories = () => {
         ]}
       />
 
+      <PageContentCanvas>
+
       <div className="category-summary-strip" aria-label="Ringkasan kategori">
         {summaryByType.map((item) => (
           <div key={item.value} className="category-summary-strip__item">
@@ -360,7 +370,7 @@ const Categories = () => {
                 })}
               </div>
             ) : (
-              <Empty
+              <EmptyStateBlock compact
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={search || statusFilter !== "all"
                   ? "Tidak ada kategori yang sesuai filter."
@@ -371,7 +381,7 @@ const Categories = () => {
                     {activeTypeMeta.createLabel}
                   </Button>
                 ) : null}
-              </Empty>
+              </EmptyStateBlock>
             )}
           </Card>
 
@@ -433,11 +443,13 @@ const Categories = () => {
                 </Space>
               </Space>
             ) : (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Pilih kategori untuk melihat detail." />
+              <EmptyStateBlock compact image={Empty.PRESENTED_IMAGE_SIMPLE} description="Pilih kategori untuk melihat detail." />
             )}
           </Card>
         </div>
       </PageSection>
+
+      </PageContentCanvas>
 
       <PageFormModal
         title={editingRecord

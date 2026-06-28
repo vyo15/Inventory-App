@@ -194,6 +194,14 @@ Risiko:
   --ims-sidebar-hover: rgba(36, 95, 157, 0.08);
   --ims-sidebar-active: #E9F2FB;
   --ims-sidebar-active-marker: var(--ims-color-brand-gold);
+
+  /* Component contrast tokens: avoid duplicating brand hex values in page CSS. */
+  --ims-nav-rail-text: #FFFFFF;
+  --ims-nav-active-contrast-text: var(--ims-color-primary-active);
+  --ims-nav-active-contrast-bg: var(--ims-bg-card);
+  --ims-nav-active-marker: var(--ims-color-brand-gold);
+  --ims-dashboard-hero-text: #FFFFFF;
+  --ims-login-submit-text: #FFFFFF;
 }
 
 /* =====================================================
@@ -289,6 +297,13 @@ body[data-app-theme="dark"] {
   --ims-sidebar-hover: rgba(94, 163, 230, 0.10);
   --ims-sidebar-active: rgba(94, 163, 230, 0.18);
   --ims-sidebar-active-marker: var(--ims-color-brand-gold);
+
+  --ims-nav-rail-text: #FFFFFF;
+  --ims-nav-active-contrast-text: #173F6B;
+  --ims-nav-active-contrast-bg: #EAF2FB;
+  --ims-nav-active-marker: var(--ims-color-brand-gold);
+  --ims-dashboard-hero-text: #FFFFFF;
+  --ims-login-submit-text: #FFFFFF;
 }
 
 /* =========================

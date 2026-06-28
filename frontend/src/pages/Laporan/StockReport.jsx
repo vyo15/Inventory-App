@@ -1,11 +1,23 @@
-import { useEffect, useMemo, useState } from "react";
-import { Button, Col, Input, Select, Tag, message } from "antd";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  App as AntdApp,
+  Button,
+  Col,
+  Input,
+  Select,
+  Tag,
+} from "antd";
 import { CheckCircleOutlined, FileExcelOutlined, WarningOutlined } from "@ant-design/icons";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import ImsNotice from "../../components/Layout/Feedback/ImsNotice";
 import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import StockDisplayBlock from "../../components/Layout/Table/StockDisplayBlock";
 import DataTableView from "../../components/Layout/Table/DataTableView";
@@ -50,6 +62,7 @@ const filterStockReportRows = (rows = [], { searchTerm = "", selectedCategory = 
 };
 
 const StockReport = () => {
+  const { message } = AntdApp.useApp();
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -90,7 +103,7 @@ const StockReport = () => {
     };
 
     loadStockReportData();
-  }, []);
+  }, [message]);
 
   const filteredData = useMemo(() => filterStockReportRows(inventory, {
     searchTerm,
@@ -459,6 +472,8 @@ const StockReport = () => {
         subtitle="Snapshot stok sesuai filter."
       />
 
+      <PageContentCanvas>
+
       <PageSection
         title="Ringkasan Stok"
         subtitle="KPI stok."
@@ -545,7 +560,7 @@ const StockReport = () => {
           tableLayout="fixed"
           mobileCardConfig={stockReportMobileCardConfig}
           locale={{
-            emptyText: getDataTableEmptyText(loading, <EmptyStateBlock description="Belum ada data stok sesuai filter." />),
+            emptyText: getDataTableEmptyText(loading, "Belum ada data stok sesuai filter."),
           }}
         />
         {hasMoreStockReportRows && (
@@ -556,6 +571,7 @@ const StockReport = () => {
           </div>
         )}
       </PageSection>
+      </PageContentCanvas>
     </>
   );
 };

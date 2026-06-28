@@ -1,3 +1,4 @@
+const { AppError } = require("../../utils/httpError");
 const { runInTransaction } = require("../../db/connection");
 const { safeJsonParse } = require("../../utils/jsonUtils");
 const { resolveBusinessCode } = require("../../utils/businessCodeCounter");
@@ -15,12 +16,10 @@ const normalizeLower = (value = "") => normalizeText(value).toLowerCase();
 const normalizeUpper = (value = "") => normalizeText(value).toUpperCase();
 const nowIso = () => new Date().toISOString();
 
-class ProductionError extends Error {
+class ProductionError extends AppError {
   constructor(publicMessage, errorCode = "PRODUCTION_VALIDATION_ERROR", statusCode = 400) {
-    super(publicMessage);
-    this.publicMessage = publicMessage;
-    this.errorCode = errorCode;
-    this.statusCode = statusCode;
+    super(publicMessage, { code: errorCode, statusCode, publicMessage });
+    this.name = "ProductionError";
   }
 }
 
