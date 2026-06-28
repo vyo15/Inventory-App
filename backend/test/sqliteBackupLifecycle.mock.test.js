@@ -10,6 +10,8 @@ const backupDir = path.join(tempDir, "backups");
 const dbPath = path.join(tempDir, "active.sqlite");
 process.env.IMS_SQLITE_BACKUP_DIR = backupDir;
 process.env.IMS_SQLITE_DB_PATH = dbPath;
+process.env.IMS_LOG_DIR = path.join(tempDir, "logs");
+process.env.IMS_LOG_TO_FILE = "false";
 
 const backupLogs = [];
 let lastId = 0;
@@ -220,4 +222,70 @@ test("daily terakhir dipromosikan menjadi satu monthly dan retention aman", asyn
   assert.equal(fs.existsSync(early.path), false);
   assert.equal(fs.existsSync(latest.path), false);
   assert.equal(fs.existsSync(promoted.created[0].path), true);
+});
+
+test("path backup managed menolak registry external dan menerima file fisik di storage resmi", () => {
+  const managedDir = path.join(backupDir, "manual");
+  fs.mkdirSync(managedDir, { recursive: true });
+  const managedPath = path.join(managedDir, "managed.imsbackup");
+  fs.writeFileSync(managedPath, "managed-backup");
+  assert.equal(
+    backupModule.assertManagedBackupFile(managedPath, {
+      mustExist: true,
+      requireSupportedPackage: true,
+    }),
+    fs.realpathSync(managedPath),
+  );
+
+  const managedLegacyPath = path.join(managedDir, "managed-legacy.sqlite");
+  fs.writeFileSync(
+    managedLegacyPath,
+    Buffer.concat([Buffer.from("SQLite format 3\0", "utf8"), Buffer.alloc(64)]),
+  );
+  assert.equal(
+    backupModule.assertManagedBackupRecord({
+      filename: path.basename(managedLegacyPath),
+      path: managedLegacyPath,
+    }, { mustExist: true }),
+    fs.realpathSync(managedLegacyPath),
+  );
+  assert.throws(
+    () => backupModule.assertManagedBackupFile(managedLegacyPath, {
+      mustExist: true,
+      requireSupportedPackage: true,
+    }),
+    (error) => error?.code === "BACKUP_PATH_FORMAT_UNSUPPORTED",
+  );
+
+  assert.throws(
+    () => backupModule.assertManagedBackupRecord({
+      filename: "registry-name-does-not-match.imsbackup",
+      path: managedPath,
+    }, { mustExist: true }),
+    (error) => error?.code === "BACKUP_REGISTRY_FILENAME_MISMATCH",
+  );
+
+  const arbitraryManagedPath = path.join(managedDir, "not-a-backup.txt");
+  fs.writeFileSync(arbitraryManagedPath, "not a backup artifact");
+  assert.throws(
+    () => backupModule.assertManagedBackupRecord({
+      filename: path.basename(arbitraryManagedPath),
+      path: arbitraryManagedPath,
+    }, { mustExist: true }),
+    (error) => error?.code === "BACKUP_PATH_FORMAT_UNSUPPORTED",
+  );
+
+  const externalPath = path.join(tempDir, "external.imsbackup");
+  fs.writeFileSync(externalPath, "external-backup");
+  assert.throws(
+    () => backupModule.assertManagedBackupFile(externalPath, {
+      mustExist: true,
+      requireSupportedPackage: true,
+    }),
+    (error) => error?.code === "BACKUP_PATH_OUTSIDE_MANAGED_ROOT",
+  );
+
+  const status = backupModule.getManagedBackupPathStatus(externalPath, { mustExist: true });
+  assert.equal(status.managed, false);
+  assert.equal(status.errorCode, "BACKUP_PATH_OUTSIDE_MANAGED_ROOT");
 });

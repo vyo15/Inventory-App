@@ -101,7 +101,7 @@ describe("responsive sidebar navigation", () => {
       ],
       transactions: [["purchases", "sales", "returns"]],
       finance: [["cash-in", "cash-out", "money-movement-ledger"]],
-      utilities: [["user-management", "reset-maintenance-data"]],
+      utilities: [["user-management", "reset-maintenance-data", "testing-lab"]],
       reports: [
         ["report-stock", "purchases-report", "sales-report"],
         ["payroll-report", "profit-loss"],
@@ -160,6 +160,7 @@ describe("responsive sidebar navigation", () => {
       utilities: "/system",
       "user-management": "/system/user-management",
       "reset-maintenance-data": "/utilities/reset-maintenance-data",
+      "testing-lab": "/utilities/testing-lab",
       reports: "/reports",
       "report-stock": "/report-stock",
       "purchases-report": "/purchases-report",

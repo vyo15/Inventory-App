@@ -1,8 +1,33 @@
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const env = require("../config/env");
 
 let lastCleanupDate = "";
+
+const isPathAtOrInside = (candidatePath, parentPath) => {
+  const relative = path.relative(path.resolve(parentPath), path.resolve(candidatePath));
+  return relative === "" || (!relative.startsWith(`..${path.sep}`)
+    && relative !== ".."
+    && !path.isAbsolute(relative));
+};
+
+const assertSafeFileLogRuntime = () => {
+  const isTestRuntime = env.isTestRuntime ?? (process.env.NODE_ENV === "test" || Boolean(process.env.NODE_TEST_CONTEXT));
+  if (!isTestRuntime) return;
+
+  if (typeof env.assertSafeTestRuntimePath === "function") {
+    env.assertSafeTestRuntimePath(env.logDir, "folder log");
+    return;
+  }
+
+  if (!isPathAtOrInside(env.logDir, os.tmpdir())) {
+    const error = new Error("Mode test menolak file logging di luar folder temporary sistem.");
+    error.code = "TEST_LOG_RUNTIME_PATH_UNSAFE";
+    throw error;
+  }
+};
+
 
 const toSerializableError = (error) => {
   if (!error) return null;
@@ -26,6 +51,7 @@ const getDateStamp = (date = new Date()) => date.toISOString().slice(0, 10);
 
 const cleanupOldLogs = (referenceDate = new Date()) => {
   if (!env.logToFile) return;
+  assertSafeFileLogRuntime();
   const dateStamp = getDateStamp(referenceDate);
   if (lastCleanupDate === dateStamp) return;
   lastCleanupDate = dateStamp;
@@ -44,6 +70,7 @@ const cleanupOldLogs = (referenceDate = new Date()) => {
 };
 
 const resolveLogFile = (date = new Date()) => {
+  assertSafeFileLogRuntime();
   fs.mkdirSync(env.logDir, { recursive: true });
   const baseName = `ims-${getDateStamp(date)}`;
   let index = 0;

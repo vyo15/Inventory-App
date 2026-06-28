@@ -34,6 +34,7 @@ import {
   MinusCircleOutlined,
   BookOutlined,
   HddOutlined,
+  ExperimentOutlined,
   BarChartOutlined,
 } from "@ant-design/icons";
 import { APP_ROUTES } from "./appRoutes";
@@ -482,7 +483,7 @@ export const sidebarMenuItems = [
         description:
           "Kelola akses pengguna dan maintenance sistem melalui area Administrator.",
         icon: SettingOutlined,
-        itemKeys: ["user-management", "reset-maintenance-data"],
+        itemKeys: ["user-management", "reset-maintenance-data", "testing-lab"],
       },
     ],
     children: [
@@ -503,6 +504,15 @@ export const sidebarMenuItems = [
         hubDescription:
           "Kelola backup dan restore, audit data, repair aman, serta reset testing terbatas.",
         path: "/utilities/reset-maintenance-data",
+        allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
+      },
+      {
+        key: "testing-lab",
+        label: "Lab Pengujian",
+        hubIcon: ExperimentOutlined,
+        hubDescription:
+          "Jalankan baseline, skenario QA, validasi, dan reset hanya pada database sandbox terpisah.",
+        path: "/utilities/testing-lab",
         allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
     ],

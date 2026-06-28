@@ -20,6 +20,14 @@ npm run install:all
 npm run dev
 ```
 
+Command runtime utama:
+
+```text
+npm run dev   -> mode operasional
+npm run lab   -> mode sandbox / Lab Pengujian
+npm test      -> automated test suite
+```
+
 `npm run dev` menjalankan backend dan frontend dari satu terminal. Saat dihentikan dengan `Ctrl+C`, runner meminta backend menutup HTTP dan SQLite melalui channel internal, menunggu checkpoint WAL selesai, lalu menghentikan frontend. Jangan menutup terminal sebelum log `[dev] seluruh layanan berhenti.` muncul.
 
 Alamat default:
@@ -29,7 +37,7 @@ Alamat default:
 
 ## Quality gate
 
-Backend test berjalan dengan database, backup, dan log temporary yang terisolasi. Mode test tidak boleh membuka atau mereset database runtime di `data/`; guard `TEST_DATABASE_*` harus dianggap blocking bila muncul.
+Backend test berjalan dengan database, backup, dan log temporary yang terisolasi. Mode test tidak boleh membuka, mereset, menulis, atau membersihkan runtime project. Guard `TEST_DATABASE_*`, `TEST_BACKUP_*`, `TEST_LOG_*`, `TEST_RUNTIME_*`, dan perubahan fingerprint runtime harus dianggap blocking bila muncul. Jalankan backend regression melalui `npm test`; direct `node --test` hanya boleh dipakai oleh test yang tetap mengonfigurasi seluruh path temporary resmi.
 
 Sebelum merge atau push:
 
@@ -50,7 +58,7 @@ GitHub Actions menjalankan gate yang sama pada push ke `main` dan pull request.
 
 ## Backup dan restore
 
-Gunakan menu **Maintenance & Backup Center**. Restore penuh hanya menerima File Backup IMS `.imsbackup` yang lolos checksum dan integrity check. Restore membuat pre-restore backup dan mengembalikan database aktif secara otomatis jika migrasi, validasi, atau pencatatan restore gagal.
+Gunakan menu **Maintenance & Backup Center**. Restore penuh menerima File Backup IMS `.imsbackup`, paket legacy `.imsbak.zip`, dan backup SQLite legacy yang sudah terdaftar di storage resmi, setelah lolos preview integrity/account guard. File dari media/folder luar wajib diimport melalui Maintenance Center terlebih dahulu; path lama dari registry tidak dibaca, didownload, direstore, dipromosikan, atau dihapus langsung. Nama file registry juga harus cocok dengan file fisik dan file tersebut harus benar-benar berupa paket backup IMS atau database SQLite legacy. Restore membuat pre-restore backup dan mengembalikan database aktif secara otomatis jika migrasi, validasi, atau pencatatan restore gagal.
 
 Jangan menyalin file SQLite aktif secara manual saat backend berjalan.
 

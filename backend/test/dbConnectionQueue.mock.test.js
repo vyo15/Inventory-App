@@ -7,6 +7,9 @@ const { after, test } = require("node:test");
 
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "ims-db-queue-mock-"));
 process.env.IMS_SQLITE_DB_PATH = path.join(tempDir, "queue.sqlite");
+process.env.IMS_SQLITE_BACKUP_DIR = path.join(tempDir, "backups");
+process.env.IMS_LOG_DIR = path.join(tempDir, "logs");
+process.env.IMS_LOG_TO_FILE = "false";
 
 const calls = [];
 let openCount = 0;

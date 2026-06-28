@@ -126,13 +126,13 @@ Kebijakan retensi:
 - Backup `pre-repair` wajib dibuat sebelum rebuild/cleanup data turunan stok dan disimpan pada storage class `manual`.
 - Import backup wajib exclusive dan atomic antara file package, `backup_logs`, serta audit log. Jika DB/audit gagal, registry di-rollback dan file import dibersihkan.
 
-Backup legacy `.imsbak.zip`, folder lama, dan sidecar manifest lama tetap boleh dibaca untuk restore agar file lama tidak terputus kompatibilitasnya, tetapi source baru tidak membuat struktur lama lagi.
+Backup legacy `.imsbak.zip` dan sidecar manifest lama tetap didukung setelah file fisiknya diimport ke storage class `manual`; backup SQLite legacy yang sudah tercatat dan berada di storage resmi tetap dapat dipreview sebagai compatibility. Folder/path lama dari registry database tidak boleh dibaca, didownload, direstore, dipromosikan, atau dihapus langsung. Managed backup wajib berada di bawah realpath `backups/sqlite/{daily,monthly,manual}`; symlink/junction yang keluar dari root ditolak. Basename path wajib sama dengan filename registry, dan artifact managed harus berupa paket `.imsbackup`/`.imsbak.zip` atau file SQLite legacy dengan header valid. Source baru tidak membuat struktur legacy lagi.
 
 ## Restore contract
 
 Restore resmi harus:
 
-- Memakai backup yang terdaftar atau file `.imsbackup` yang diimport dan valid.
+- Memakai backup terdaftar yang path fisiknya berada di storage managed `daily`, `monthly`, atau `manual`; file external wajib diimport dan diverifikasi terlebih dahulu.
 - Menampilkan preview.
 - Memvalidasi integrity/checksum.
 - Membuat pre-restore backup.
@@ -174,7 +174,9 @@ Restore resmi harus:
 
 ## Automated regression contract
 
-- Automated backend test wajib memakai database SQLite temporary, bukan database operasional.
+- Automated backend test wajib memakai database, backup, dan log temporary, bukan runtime operasional. Guard berlaku untuk `NODE_ENV=test` dan `NODE_TEST_CONTEXT`; direct test yang hanya mengganti database tetapi membiarkan backup/log runtime harus gagal.
+- Runner backend wajib memverifikasi ownership marker sebelum recursive cleanup dan membandingkan fingerprint database/WAL/SHM, backup, serta log runtime sebelum–sesudah suite.
+- Test direct SQLite/filesystem hanya boleh pada fixture allowlist yang membuktikan seluruh path berada di temporary; setiap override database wajib disertai override backup dan log.
 - Automated frontend test wajib memakai environment DOM terisolasi dan tidak boleh memanggil database/backend operasional.
 - Test runner aktif melalui `npm test` di root; backend menemukan file `*.test.js` secara otomatis dan frontend menjalankan Vitest.
 - `npm run check`, `git check`, dan pre-push wajib menjalankan automated test backend + frontend; test yang gagal harus menghentikan quality gate.

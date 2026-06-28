@@ -20,6 +20,7 @@ const {
   assertSufficientDiskSpace,
   ensureDir,
   getBackupStorageClass,
+  inspectManagedBackupPath,
   getBackupTypeDir,
   getUniquePackagePath,
   normalizeBackupType,
@@ -45,6 +46,11 @@ const createOfficialSqliteBackupUnsafe = async (db, options = {}) => {
   const targetDir = getBackupTypeDir(backupType);
   const tmpDir = path.join(env.backupDir, ".tmp", `${timestamp}-${backupType}-${crypto.randomBytes(4).toString("hex")}`);
   ensureDir(tmpDir);
+  inspectManagedBackupPath(tmpDir, {
+    allowDirectory: true,
+    allowInternalTmp: true,
+    mustExist: true,
+  });
 
   const requestedFilename = `IMS-BF-BACKUP-${timestamp}-SV${schemaVersion}-${backupType}${BACKUP_FILE_SUFFIX}`;
   const uniquePackage = getUniquePackagePath(targetDir, requestedFilename);
@@ -119,7 +125,7 @@ const createOfficialSqliteBackupUnsafe = async (db, options = {}) => {
       filename: packageFilename,
       path: tmpPackagePath,
       status: "verified",
-    });
+    }, { allowInternalTmp: true });
     if (!packagePreview.validForRestore) {
       throw new Error("Paket backup selesai dibuat tetapi gagal diverifikasi ulang.");
     }
@@ -168,6 +174,11 @@ const createOfficialSqliteBackupUnsafe = async (db, options = {}) => {
       manifest,
     };
   } finally {
+    inspectManagedBackupPath(tmpDir, {
+      allowDirectory: true,
+      allowInternalTmp: true,
+      mustExist: true,
+    });
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 };

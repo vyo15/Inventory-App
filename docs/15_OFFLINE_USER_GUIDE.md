@@ -111,7 +111,7 @@ README_RESTORE.txt
 
 `manifest.json` berisi schema version, ukuran database, checksum, hasil integrity check, jenis backup, dan ringkasan jumlah data per tabel. Restore hanya boleh menerima backup yang lolos validasi.
 
-Backup lama `.imsbak.zip` tetap didukung sebagai legacy restore agar backup yang sudah pernah dibuat tetap bisa dipakai.
+Backup lama `.imsbak.zip` tetap didukung sebagai legacy restore agar backup yang sudah pernah dibuat tetap bisa dipakai. Jika file masih berada di folder luar, drive lain, atau lokasi komputer lama, gunakan **Import Backup** agar file disalin dan diverifikasi ke storage resmi `manual/`. IMS tidak memakai, mendownload, merestore, mempromosikan, atau menghapus file langsung dari path luar yang hanya tercatat pada registry lama.
 
 
 ## SOP Return dari Sales
@@ -561,3 +561,54 @@ Flow aman:
 7. Jalankan purge.
 
 Sebelum menghapus, IMS membuat backup otomatis. Record dihapus dalam transaction dan snapshot tersanitasi tetap disimpan pada Riwayat/Audit Maintenance. Pemeriksaan dependency mencakup kolom langsung, nested payload yang dikenal, hierarchy/katalog/history, dan mapping legacy. Data User, stok, transaksi, keuangan, produksi, payroll, backup, restore, dan audit tidak dapat dihapus dari tab ini.
+
+## Lab Pengujian (Database Sandbox)
+
+Lab Pengujian adalah menu Administrator yang terpisah dari Maintenance Center. Fitur ini tidak menghapus transaksi pada database toko asli. Reset dilakukan dengan mengembalikan **database sandbox** ke backup baseline verified.
+
+### Menjalankan aplikasi dalam mode sandbox
+
+Dari root project, jalankan satu command:
+
+```bash
+npm run lab
+```
+
+Runner otomatis menggunakan lokasi terpisah:
+
+- database: `data/ims-testing-sandbox.sqlite`;
+- backup: `backups/testing-sandbox`;
+- log: `logs/testing-sandbox`.
+
+Environment sandbox hanya diberikan kepada proses backend/frontend yang dijalankan command tersebut. Nilainya tidak disimpan permanen ke PowerShell, Windows Environment Variables, atau file `.env`. Header aplikasi menampilkan badge **MODE TESTING** ketika guard sandbox valid.
+
+Untuk menghentikan Lab dan kembali ke data operasional:
+
+```bash
+Ctrl+C
+npm run dev
+```
+
+Tunggu log `[dev] seluruh layanan berhenti.` sebelum menjalankan mode berikutnya. `npm run dev` membersihkan environment sandbox lama dari child process dan kembali ke database operasional default. `npm test` tetap khusus untuk automated test suite dan tidak dipakai sebagai launcher Lab.
+
+### Alur penggunaan
+
+1. Siapkan master, stok awal, modal/HPP, katalog Supplier, BOM, pekerja, dan akun testing melalui menu normal.
+2. Buka `Utilities -> Lab Pengujian` dan klik **Buat Baseline Baru**.
+3. Ketik `BUAT BASELINE TESTING`. Sistem membuat backup tipe `test`, memvalidasi checksum/integrity, dan menyimpannya sebagai baseline aktif.
+4. Pilih skenario, lalu lakukan langkah melalui menu operasional resmi. Lab hanya mencatat snapshot; Lab tidak menyisipkan transaksi langsung ke tabel.
+5. Klik **Selesaikan & Validasi** untuk melihat diff serta hasil integrity, foreign key, projection stok, saldo stok, dan ledger.
+6. Gunakan **Export Hasil** untuk menyimpan laporan JSON sesi.
+7. Untuk mengulang testing, klik **Reset ke Baseline** dan ketik `RESET SANDBOX`.
+
+Saat reset, backend menolak mutation baru, memastikan tidak ada request write yang masih berjalan, membuat backup `pre-reset`, menjalankan restore guarded, mencatat audit, lalu meminta seluruh perangkat memuat ulang database. Jika ada transaksi yang masih diproses, reset ditolak dan harus dicoba kembali setelah operasi selesai.
+
+### Skenario tersedia
+
+- Pembelian → Stok
+- Penjualan → Pemasukan → Retur
+- Produksi → Work Log → Payroll → HPP
+- Realtime Laptop ↔ HP
+- Concurrency & Double Submit
+
+Skenario bersifat guided. Record tetap dibuat menggunakan form, route, validation, stock engine, finance posting, production flow, dan audit log yang sama dengan operasional. Simulasi kegagalan OS, test clock, dan pembuatan akun/password otomatis tidak diaktifkan agar tidak menambah jalur bypass baru.

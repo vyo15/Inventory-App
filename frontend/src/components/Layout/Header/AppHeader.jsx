@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Button, Space, Tag } from "antd";
 import { LogoutOutlined, UserOutlined } from "@ant-design/icons";
 import useAuth from "../../../hooks/useAuth";
+import TestingModeTag from "./TestingModeTag";
 import { ROLE_LABELS } from "../../../utils/auth/roleAccess";
 import "./AppHeader.css";
 
@@ -103,6 +104,7 @@ const AppHeader = () => {
 
       <div className="app-header-user-area">
         <Space size={10} className="app-header-user-actions">
+          <TestingModeTag />
           <Tag icon={<UserOutlined />} className="app-header-role-tag">
             <span className="app-header-chip-text">{displayRole}</span>
           </Tag>

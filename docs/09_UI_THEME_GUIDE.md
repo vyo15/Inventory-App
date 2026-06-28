@@ -87,13 +87,14 @@ Aturan ini mengikat untuk patch UI berikutnya:
 1. `src/index.css` — CSS variable global, light/dark token, body/root baseline.
 2. `src/theme/antdTheme.js` — token Ant Design dan component token.
 3. `src/App.css` — guard global app shell, table, modal, drawer, dropdown, popover, form, dan shared surface.
+4. `src/main.jsx` — memuat `@fontsource-variable/inter` sebelum stylesheet aplikasi agar font Inter tersedia secara lokal/offline.
 
 ## Standar typography token
 
 Typography IMS memakai font stack utama:
 
 ```css
-Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif
+"Inter Variable", Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif
 ```
 
 Token angka typography wajib berada di `src/index.css`. Jika CSS shared memakai token seperti `--ims-font-size-*`, `--ims-font-weight-*`, `--ims-line-height-*`, `--ims-letter-spacing-*`, atau `--ims-typo-*`, token tersebut harus didefinisikan di `:root` agar browser tidak jatuh ke default Ant Design/browser.
@@ -120,7 +121,9 @@ Aturan penting:
 - Jangan memakai ukuran unik berulang tanpa token. Jika angka dipakai lintas shared component, jadikan token.
 - Header dan sidebar tidak boleh memakai display weight berlebihan; keduanya harus terasa calm, readable, dan corporate.
 - Jangan mengubah route bisnis atau role guard hanya untuk memperbaiki visual sidebar. Module Hub boleh menjadi landing navigasi role-aware untuk modul multi-halaman, sedangkan modul satu halaman boleh langsung menuju child route existing; compatibility path wajib dipertahankan.
-- Jika font `Inter` belum dimuat sebagai asset/dependency, runtime `system-ui/Segoe UI` tetap harus terlihat rapi.
+- Font utama wajib dimuat dari dependency lokal `@fontsource-variable/inter`; jangan memakai Google Fonts/CDN karena runtime IMS harus tetap dapat digunakan tanpa internet.
+- Nama family runtime adalah `Inter Variable`. `Inter`, `system-ui`, dan `Segoe UI` hanya fallback jika asset font gagal dimuat.
+- Import font ditempatkan satu kali di `src/main.jsx` sebelum `src/index.css`; page/component tidak boleh mengimpor font sendiri atau membuat stack typography kedua.
 
 ## Area guarded
 

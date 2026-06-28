@@ -14,6 +14,7 @@ const RESET_TABLES = [
   "audit_logs",
   "backup_logs",
   "restore_logs",
+  "migration_identity_map",
   "business_code_counters",
   "customers",
   "categories",
@@ -162,7 +163,11 @@ const configureTestDatabase = (name = "backend") => {
     assertSafeTestRuntimePath(backupDir, { label: "backup test" });
     assertSafeTestRuntimePath(logDir, { label: "log test" });
 
-    if (!fs.existsSync(markerPath) || fs.readFileSync(markerPath, "utf8") !== markerValue) {
+    const markerValid = fs.existsSync(markerPath)
+      && fs.lstatSync(markerPath).isFile()
+      && !fs.lstatSync(markerPath).isSymbolicLink()
+      && fs.readFileSync(markerPath, "utf8") === markerValue;
+    if (!markerValid) {
       throw createIsolationError(
         "TEST_DATABASE_MARKER_MISSING",
         "Marker kepemilikan database test tidak valid. Reset dan cleanup dibatalkan.",
@@ -206,6 +211,15 @@ const configureTestDatabase = (name = "backend") => {
     assertOwnedTestRuntime();
     await closeDb();
     assertOwnedTestRuntime();
+    const tempDirStat = fs.lstatSync(tempDir);
+    if (!tempDirStat.isDirectory() || tempDirStat.isSymbolicLink()) {
+      throw createIsolationError(
+        "TEST_DATABASE_CLEANUP_PATH_UNSAFE",
+        "Folder database test berubah menjadi symlink atau bukan directory. Cleanup dibatalkan.",
+        { tempDir },
+      );
+    }
+    assertSafeTestRuntimePath(tempDir, { label: "folder cleanup database test" });
     fs.rmSync(tempDir, { recursive: true, force: true });
   };
 

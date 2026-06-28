@@ -86,6 +86,7 @@ const UserManagement = lazy(() => import("../pages/System/UserManagement"));
 const ResetMaintenanceData = lazy(
   () => import("../pages/Utilities/ResetMaintenanceData"),
 );
+const TestingLab = lazy(() => import("../pages/Utilities/TestingLab"));
 
 // =====================================================
 // SECTION: Lazy Route Fallback — AKTIF / GUARDED
@@ -405,6 +406,14 @@ const AppRoutes = ({ darkTheme }) => {
           element={guardRoute(
             ROUTE_ACCESS_KEYS.RESET_MAINTENANCE,
             <ResetMaintenanceData darkTheme={darkTheme} />,
+          )}
+        />
+
+        <Route
+          path="/utilities/testing-lab"
+          element={guardRoute(
+            ROUTE_ACCESS_KEYS.TESTING_LAB,
+            <TestingLab />,
           )}
         />
 

@@ -20,12 +20,14 @@ const {
   ZIP_COMPRESSION_DEFLATE,
 } = require("./backupConstants");
 const {
+  assertManagedBackupRecord,
   assertSufficientDiskSpace,
   ensureDir,
   getBackupCreatedAt,
   getBackupTypeDir,
   getMonthKey,
   getUniquePackagePath,
+  inspectManagedBackupPath,
   isVerifiedBackup,
   safeCompactTimestamp,
 } = require("./backupPath");
@@ -89,6 +91,11 @@ const createMonthlyBackupFromDaily = async (db, sourceBackup, { actor = "system"
 
   const tmpDir = path.join(env.backupDir, ".tmp", `monthly-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`);
   ensureDir(tmpDir);
+  inspectManagedBackupPath(tmpDir, {
+    allowDirectory: true,
+    allowInternalTmp: true,
+    mustExist: true,
+  });
 
   try {
     const sourceSizeBytes = Number(
@@ -159,7 +166,7 @@ const createMonthlyBackupFromDaily = async (db, sourceBackup, { actor = "system"
       filename: uniquePackage.filename,
       path: tmpPackagePath,
       status: "verified",
-    });
+    }, { allowInternalTmp: true });
     if (!packagePreview.validForRestore) throw new Error("Paket monthly gagal diverifikasi ulang.");
 
     fs.renameSync(tmpPackagePath, uniquePackage.path);
@@ -197,6 +204,11 @@ const createMonthlyBackupFromDaily = async (db, sourceBackup, { actor = "system"
 
     return summary;
   } finally {
+    inspectManagedBackupPath(tmpDir, {
+      allowDirectory: true,
+      allowInternalTmp: true,
+      mustExist: true,
+    });
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 };
@@ -251,23 +263,35 @@ const ensureMonthlyBackups = (options = {}) => runSerializedDbOperation(
 );
 
 const removeBackupByRetention = async (db, backup, { actor = "system", reason } = {}) => {
+  const managedBackupPath = assertManagedBackupRecord(backup, {
+    mustExist: true,
+  });
   const trashDir = path.join(env.backupDir, ".tmp", "retention-trash");
   ensureDir(trashDir);
+  inspectManagedBackupPath(trashDir, {
+    allowDirectory: true,
+    allowInternalTmp: true,
+    mustExist: true,
+  });
   const movedFiles = [];
 
   const moveToTrash = (sourcePath) => {
     if (!sourcePath || !fs.existsSync(sourcePath)) return;
+    const managedSource = inspectManagedBackupPath(sourcePath, {
+      mustExist: true,
+    }).path;
     const trashPath = path.join(
       trashDir,
-      `${Date.now()}-${crypto.randomBytes(4).toString("hex")}-${path.basename(sourcePath)}`,
+      `${Date.now()}-${crypto.randomBytes(4).toString("hex")}-${path.basename(managedSource)}`,
     );
-    fs.renameSync(sourcePath, trashPath);
-    movedFiles.push({ sourcePath, trashPath });
+    inspectManagedBackupPath(trashPath, { allowInternalTmp: true });
+    fs.renameSync(managedSource, trashPath);
+    movedFiles.push({ sourcePath: managedSource, trashPath });
   };
 
   try {
-    moveToTrash(backup?.path);
-    moveToTrash(backup?.path ? `${backup.path}.manifest.json` : "");
+    moveToTrash(managedBackupPath);
+    moveToTrash(`${managedBackupPath}.manifest.json`);
 
     await runInTransaction(async (transactionDb) => {
       if (backup?.id) {

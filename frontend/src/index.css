@@ -44,7 +44,7 @@ Risiko:
 - perubahan token ini berdampak lintas aplikasi; salah kontras dapat membuat table, form, modal, drawer, atau status bisnis sulit dibaca.
 ===================================================== */
 :root {
-  font-family: var(--ims-font-family-base, Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  font-family: var(--ims-font-family-base, "Inter Variable", Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
   color-scheme: light;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -108,7 +108,7 @@ Risiko:
 
   /* IMS typography tokens.
      Keep only reusable values here; page-specific decorative sizes stay local. */
-  --ims-font-family-base: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --ims-font-family-base: "Inter Variable", Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --ims-font-size-xs: 10px;
   --ims-font-size-caption: 11px;
   --ims-font-size-caption-plus: 11.5px;
@@ -304,7 +304,7 @@ body[data-app-theme="dark"] {
    - AKTIF sebagai permukaan aplikasi global.
 ========================= */
 body {
-  font-family: var(--ims-font-family-base, Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  font-family: var(--ims-font-family-base, "Inter Variable", Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
   background-color: var(--ims-bg-page);
   color: var(--ims-text-primary);
   overflow: hidden;

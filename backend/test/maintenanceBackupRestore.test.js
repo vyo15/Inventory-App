@@ -11,6 +11,7 @@ const {
   createBackup,
   createRestorePlan,
   executeRestore,
+  getBackupDownload,
   getMaintenanceStatus,
   importBackupFile,
   listBackups,
@@ -395,15 +396,15 @@ test("backup rusak diblokir pada preview tanpa mengubah database aktif", async (
   const backup = await createBackup({ type: "test", actor: "restore-tester" });
   await upsertCategory({ code: "CAT-CORRUPT", name: "Data Aktif Aman" });
 
-  const corruptPath = path.join(testDatabase.backupDir, "corrupt-test.imsbackup");
+  const corruptPath = path.join(path.dirname(backup.path), "corrupt-test.imsbackup");
   const corrupted = fs.readFileSync(backup.path);
-  corrupted[Math.max(0, Math.floor(corrupted.length / 2))] ^= 0xff;
-  fs.writeFileSync(corruptPath, corrupted);
+  const truncatedLength = Math.max(1, Math.floor(corrupted.length / 2));
+  fs.writeFileSync(corruptPath, corrupted.subarray(0, truncatedLength));
 
   const db = await testDatabase.getDb();
   await db.run(
     "INSERT INTO backup_logs (filename, path, size_bytes, status) VALUES (?, ?, ?, 'verified')",
-    [path.basename(corruptPath), corruptPath, corrupted.length],
+    [path.basename(corruptPath), corruptPath, truncatedLength],
   );
 
   const plan = await createRestorePlan({
@@ -676,4 +677,79 @@ test("purge user selalu diblokir untuk menjaga identitas histori audit", async (
 
   assert.equal(candidate.safeToDelete, false);
   assert.ok(candidate.blockers.some((item) => item.type === "protected_user_history"));
+});
+
+
+test("download dan restore menolak registry backup di luar folder managed", async () => {
+  const backup = await createBackup({
+    type: "manual",
+    actor: "admin",
+    notes: "managed path ownership regression",
+  });
+  const externalPath = path.join(testDatabase.tempDir, "external-registry.imsbackup");
+  fs.copyFileSync(backup.path, externalPath);
+
+  const db = await testDatabase.getDb();
+  await db.run(
+    `INSERT INTO backup_logs (filename, path, size_bytes, status)
+     VALUES ('external-registry.imsbackup', ?, ?, 'verified')`,
+    [externalPath, fs.statSync(externalPath).size],
+  );
+
+  await assert.rejects(
+    () => getBackupDownload("external-registry.imsbackup"),
+    (error) => error?.errorCode === "BACKUP_PATH_OUTSIDE_MANAGED_ROOT",
+  );
+
+  const plan = await createRestorePlan({
+    filename: "external-registry.imsbackup",
+    actor: "admin",
+  });
+  assert.equal(plan.validForRestore, false);
+  assert.equal(plan.safeForRestore, false);
+  assert.equal(plan.selectedBackup?.managedPath, false);
+  assert.equal(plan.selectedBackup?.pathErrorCode, "BACKUP_PATH_OUTSIDE_MANAGED_ROOT");
+  assert.equal(fs.existsSync(externalPath), true);
+});
+
+test("download dan restore menolak filename registry yang menunjuk file managed lain", async () => {
+  const backup = await createBackup({
+    type: "manual",
+    actor: "admin",
+    notes: "registry filename ownership regression",
+  });
+  const aliasFilename = `alias-${backup.filename}`;
+  const db = await testDatabase.getDb();
+  await db.run(
+    `INSERT INTO backup_logs (filename, path, size_bytes, status)
+     VALUES (?, ?, ?, 'verified')`,
+    [aliasFilename, backup.path, fs.statSync(backup.path).size],
+  );
+
+  await assert.rejects(
+    () => getBackupDownload(aliasFilename),
+    (error) => error?.errorCode === "BACKUP_REGISTRY_FILENAME_MISMATCH",
+  );
+
+  const plan = await createRestorePlan({
+    filename: aliasFilename,
+    actor: "admin",
+  });
+  assert.equal(plan.validForRestore, false);
+  assert.equal(plan.safeForRestore, false);
+  assert.equal(plan.selectedBackup?.managedPath, false);
+  assert.equal(plan.selectedBackup?.pathErrorCode, "BACKUP_REGISTRY_FILENAME_MISMATCH");
+  assert.equal(fs.existsSync(backup.path), true);
+});
+
+test("reset database test membersihkan migration identity map antar skenario", async () => {
+  const db = await testDatabase.getDb();
+  await db.run(
+    `INSERT INTO migration_identity_map (module_key, legacy_source, legacy_id, sqlite_id, reference_code)
+     VALUES ('customers', 'test-reset', 'legacy-reset', 'sqlite-reset', 'CUS-RESET')`,
+  );
+
+  await testDatabase.reset();
+  const row = await db.get("SELECT COUNT(*) AS count FROM migration_identity_map");
+  assert.equal(Number(row?.count || 0), 0);
 });

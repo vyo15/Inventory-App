@@ -840,7 +840,7 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Import backup wajib atomic antara file package, `backup_logs`, dan audit log; kegagalan setelah file ditulis harus membersihkan file dan rollback registry.
 - Repair otomatis hanya boleh diaktifkan setelah backend SQLite menyediakan audit/preview nyata, guard, transaction, dan audit log resmi. Service no-op tidak boleh ditampilkan sebagai sukses.
 - Export Data Master bersifat arsip/review manual, bukan import atau restore otomatis.
-- UI tidak menampilkan tab reset, reset/baseline HPP, atau service repair stub. Fitur sandbox testing harus memakai database terpisah dan approval khusus.
+- Maintenance Center tidak menampilkan reset transaksi atau reset HPP. Pengujian destructive dipisahkan ke **Lab Pengujian** dan hanya tersedia pada database sandbox terpisah dengan guard backend.
 - Reset destructive baru hanya boleh dibuat setelah desain guard baru disetujui: backup otomatis, preview dampak, protected master, keyword, audit log awal/akhir, dan batas operasi aman.
 
 ## 19. Rule Purchases Supplier Catalog dan Verifikasi Harga
@@ -1156,7 +1156,12 @@ Guard wajib:
 ## Reset & Maintenance Development Rules
 - **Audit otomatis:** subset read-only nyata sudah aktif di backend untuk integrity SQLite, invariant stok, projection stok, registry backup, dan kas-ledger. Stub/no-op area lain tidak boleh menghasilkan status sukses atau evidence resmi.
 - **Repair otomatis:** hanya stock read model missing/stale dan orphan projection yang aktif. Aksi wajib berdasarkan audit terbaru, membuat backup `pre-repair`, memakai transaction, audit log, dan keyword untuk cleanup. Repair area bisnis lain tidak boleh dibuat hanya di frontend.
-- **Reset/destructive testing:** tidak tersedia di Maintenance Center. Jika dibutuhkan, wajib database sandbox terpisah, guard baru, dan approval khusus.
+- **Reset/destructive testing:** tidak tersedia di Maintenance Center dan tidak boleh memakai blanket `DELETE`. Lab Pengujian hanya boleh mengembalikan database sandbox ke backup baseline verified.
+- **Sandbox guard:** wajib `IMS_ENABLE_TESTING_LAB=true`, `IMS_DATABASE_PURPOSE=sandbox`, path database berbeda dari database operasional default, dan folder backup berbeda dari storage backup operasional.
+- **Baseline:** dibuat sebagai backup resmi tipe `test`, mempunyai checksum/integrity/account guard, dan dipilih eksplisit sebagai baseline aktif.
+- **Reset sandbox:** admin-only, keyword `RESET SANDBOX`, menolak ketika masih ada operasi tulis aktif, membuat backup `pre-reset`, memakai restore guarded existing, mencatat audit, lalu mengirim event `database_replaced` agar seluruh client reload.
+- **Skenario testing:** data dibuat melalui menu/route/service operasional existing. Lab tidak menyisipkan data langsung ke tabel dan tidak memindahkan business logic ke UI.
+- **Database operasional:** endpoint testing tetap menolak meskipun frontend dimanipulasi. Badge `MODE TESTING` hanya muncul ketika backend benar-benar memakai purpose sandbox.
 - **Export data master:** direkomendasikan sebelum maintenance besar. Export bersifat arsip/review, bukan import atau restore otomatis.
 - **Protected master:** tidak boleh dilepas dari guard tanpa approval khusus.
 - **Data real:** jangan lakukan maintenance besar pada data real/semi real tanpa backup/export dan audit dampak.

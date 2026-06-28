@@ -146,7 +146,7 @@ Jangan membuat perhitungan stok baru di UI.
 - Repair Aman aktif terbatas: rebuild missing/stale stock read model dan cleanup orphan projection dengan keyword, pre-repair backup, transaction, serta audit log.
 - Repair otomatis untuk stok utama, transaksi, finance, production, payroll, HPP, dan historical migration tetap tidak tersedia.
 
-- Backup resmi memakai satu file compact `.imsbackup` dari backend; backup legacy `.imsbak.zip` tetap didukung untuk restore.
+- Backup resmi memakai satu file compact `.imsbackup` dari backend. Backup legacy `.imsbak.zip` dan record legacy yang sudah berada di storage resmi tetap didukung untuk restore; file dari lokasi luar wajib diimport ke folder `manual/` dan tidak boleh dipakai atau dihapus langsung dari path registry.
 - File runtime `.sqlite`, `.sqlite-wal`, dan `.sqlite-shm` adalah satu database logis. Sidecar boleh muncul saat backend aktif dan wajib dilepas melalui graceful shutdown; user tidak boleh menghapusnya manual.
 - Restore wajib import/daftar backup resmi, preview, validasi, pre-restore backup, keyword `RESTORE DATABASE`, dan audit log. Backup `pre-restore` dan backup sumber restore harus dipastikan tercatat ulang ke database hasil restore agar rollback serta traceability tetap terlihat di daftar backup.
 - Export Master aktif membaca data master SQLite secara read-only dari backend untuk arsip/review; export ini bukan paket restore dan tidak boleh menggantikan `.imsbackup`.

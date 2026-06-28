@@ -137,6 +137,7 @@ const requiredRoutes = [
   "/api/audit-logs",
   "/api/module-runtime-status",
   "/api/realtime",
+  "/api/testing-lab",
 ];
 
 const result = {

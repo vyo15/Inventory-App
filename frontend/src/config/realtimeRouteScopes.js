@@ -62,4 +62,5 @@ export const REALTIME_ROUTE_SCOPES = Object.freeze({
 
   [ROUTE_ACCESS_KEYS.USER_MANAGEMENT]: ["user_management", "auth"],
   [ROUTE_ACCESS_KEYS.RESET_MAINTENANCE]: ["maintenance", "backup_restore", "audit", "database"],
+  [ROUTE_ACCESS_KEYS.TESTING_LAB]: ["maintenance", "backup_restore", "audit", "database", "realtime"],
 });

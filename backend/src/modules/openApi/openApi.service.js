@@ -15,6 +15,7 @@ const buildOpenApiDocument = ({ baseUrl = "http://localhost:3001" } = {}) => ({
     { name: "Production" },
     { name: "Maintenance" },
     { name: "Realtime" },
+    { name: "Testing Lab" },
   ],
   components: {
     securitySchemes: {
@@ -107,6 +108,27 @@ const buildOpenApiDocument = ({ baseUrl = "http://localhost:3001" } = {}) => ({
     },
     "/api/maintenance/restore-execute": {
       post: { tags: ["Maintenance"], summary: "Restore guarded dengan keyword dan pre-restore backup", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Restore selesai atau dibatalkan aman" } } },
+    },
+    "/api/testing-lab/runtime": {
+      get: { tags: ["Testing Lab"], summary: "Status ringan mode sandbox untuk badge aplikasi", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Guard sandbox dan status write lock" } } },
+    },
+    "/api/testing-lab/status": {
+      get: { tags: ["Testing Lab"], summary: "Status baseline, sesi, snapshot, skenario, dan riwayat testing", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Status Lab Pengujian" }, 403: { description: "Administrator required" } } },
+    },
+    "/api/testing-lab/baseline": {
+      post: { tags: ["Testing Lab"], summary: "Buat baseline verified pada sandbox terpisah", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Baseline test backup dibuat" }, 409: { description: "Sandbox guard tidak terpenuhi" } } },
+    },
+    "/api/testing-lab/reset": {
+      post: { tags: ["Testing Lab"], summary: "Kembalikan sandbox ke baseline dengan pre-reset backup dan write lock", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Sandbox kembali ke baseline" }, 423: { description: "Masih ada operasi tulis atau reset lain" } } },
+    },
+    "/api/testing-lab/sessions": {
+      post: { tags: ["Testing Lab"], summary: "Mulai sesi skenario pengujian dengan snapshot awal", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Sesi testing aktif" } } },
+    },
+    "/api/testing-lab/sessions/complete": {
+      post: { tags: ["Testing Lab"], summary: "Selesaikan sesi, hitung diff, dan jalankan validasi", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Hasil sesi dan validasi" } } },
+    },
+    "/api/testing-lab/validate": {
+      post: { tags: ["Testing Lab"], summary: "Validasi read-only integrity, stok, projection, admin, dan ledger sandbox", security: [{ localSessionCookie: [] }], responses: { 200: { description: "Hasil validasi sandbox" } } },
     },
   },
 });

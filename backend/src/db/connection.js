@@ -1,5 +1,4 @@
 const fs = require("fs");
-const os = require("os");
 const path = require("path");
 const { AsyncLocalStorage } = require("node:async_hooks");
 const sqlite3 = require("sqlite3");
@@ -43,46 +42,23 @@ const queueMetrics = {
   lastError: null,
 };
 
-const isPathAtOrInside = (candidatePath, parentPath) => {
-  const candidate = path.resolve(candidatePath);
-  const parent = path.resolve(parentPath);
-  const relative = path.relative(parent, candidate);
-  return relative === "" || (!relative.startsWith(`..${path.sep}`)
-    && relative !== ".."
-    && !path.isAbsolute(relative));
-};
+const assertSafeTestRuntimeStorage = () => {
+  if (!env.isTestRuntime) return;
 
-const resolveThroughExistingAncestor = (candidatePath) => {
-  const resolvedCandidate = path.resolve(candidatePath);
-  let existingAncestor = resolvedCandidate;
-  while (!fs.existsSync(existingAncestor)) {
-    const parent = path.dirname(existingAncestor);
-    if (parent === existingAncestor) break;
-    existingAncestor = parent;
+  const checks = [
+    { candidatePath: env.dbPath, label: "database SQLite", code: "TEST_DATABASE_RUNTIME_PATH_UNSAFE" },
+    { candidatePath: env.backupDir, label: "folder backup", code: "TEST_BACKUP_RUNTIME_PATH_UNSAFE" },
+    { candidatePath: env.logDir, label: "folder log", code: "TEST_LOG_RUNTIME_PATH_UNSAFE" },
+  ];
+
+  for (const check of checks) {
+    try {
+      env.assertSafeTestRuntimePath(check.candidatePath, check.label);
+    } catch (error) {
+      error.code = check.code;
+      throw error;
+    }
   }
-
-  const realAncestor = fs.realpathSync(existingAncestor);
-  return path.resolve(realAncestor, path.relative(existingAncestor, resolvedCandidate));
-};
-
-const assertSafeTestDatabaseRuntime = () => {
-  const isTestRuntime = process.env.NODE_ENV === "test" || Boolean(process.env.NODE_TEST_CONTEXT);
-  if (!isTestRuntime) return;
-
-  const resolvedDbPath = resolveThroughExistingAncestor(env.dbPath);
-  const resolvedTempRoot = resolveThroughExistingAncestor(os.tmpdir());
-  const resolvedRepositoryRoot = resolveThroughExistingAncestor(path.resolve(__dirname, "../../.."));
-  if (isPathAtOrInside(resolvedDbPath, resolvedTempRoot)
-    && !isPathAtOrInside(resolvedDbPath, resolvedRepositoryRoot)) return;
-
-  const error = new Error(
-    "Mode test menolak membuka database di luar folder temporary sistem atau di dalam source project. Database runtime tidak disentuh.",
-  );
-  error.code = "TEST_DATABASE_RUNTIME_PATH_UNSAFE";
-  error.dbPath = resolvedDbPath;
-  error.repositoryRoot = resolvedRepositoryRoot;
-  error.tempRoot = resolvedTempRoot;
-  throw error;
 };
 
 const ensureDirectory = (filePath) => {
@@ -111,7 +87,7 @@ const getDbQueueStatus = () => ({
 });
 
 const openRawDb = async () => {
-  assertSafeTestDatabaseRuntime();
+  assertSafeTestRuntimeStorage();
   ensureDirectory(env.dbPath);
   const db = await open({
     filename: env.dbPath,

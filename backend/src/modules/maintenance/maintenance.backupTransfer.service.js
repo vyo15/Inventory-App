@@ -4,10 +4,13 @@ const { getDb, runInTransaction, runSerializedDbOperation } = require("../../db/
 const env = require("../../config/env");
 const { createAuditLog } = require("../../utils/auditLog");
 const {
+  assertManagedBackupFile,
+  assertManagedBackupRecord,
   createOfficialSqliteBackup,
   getBackupPreview,
   getUniquePackagePath,
   assertSufficientDiskSpace,
+  inspectManagedBackupPath,
   isSupportedBackupPackageName,
   normalizeBackupFilename,
   sanitizeImportedBackupFilename,
@@ -37,13 +40,27 @@ const getBackupDownload = async (filename) => {
     "SELECT * FROM backup_logs WHERE filename = ? ORDER BY id DESC LIMIT 1",
     [requestedFilename]
   );
+  if (!backup) {
+    throw createHttpError("File backup tidak ditemukan atau belum terdaftar.", 404, "BACKUP_FILE_NOT_FOUND");
+  }
 
-  if (!backup?.path || !fs.existsSync(backup.path)) {
-    throw createHttpError("File backup tidak ditemukan atau belum terdaftar.", 404, "BACKUP_NOT_FOUND");
+  let managedPath;
+  try {
+    managedPath = assertManagedBackupRecord(backup, {
+      mustExist: true,
+    });
+  } catch (error) {
+    throw createHttpError(
+      error?.code === "BACKUP_FILE_NOT_FOUND"
+        ? "File backup tidak ditemukan atau belum terdaftar."
+        : "File backup berada di luar folder backup resmi. Import ulang file tersebut sebelum digunakan.",
+      error?.code === "BACKUP_FILE_NOT_FOUND" ? 404 : 409,
+      error?.code || "BACKUP_PATH_UNSAFE",
+    );
   }
 
   return {
-    path: backup.path,
+    path: managedPath,
     filename: backup.filename,
   };
 };
@@ -72,6 +89,7 @@ const importBackupFile = async ({ body, headers = {}, query = {}, actor = "syste
 
       const importedDir = path.join(env.backupDir, "manual");
       fs.mkdirSync(importedDir, { recursive: true });
+      inspectManagedBackupPath(importedDir, { allowDirectory: true, mustExist: true });
       assertSufficientDiskSpace({
         targetDir: importedDir,
         expectedWriteBytes: backupBuffer.length,
@@ -131,8 +149,15 @@ const importBackupFile = async ({ body, headers = {}, query = {}, actor = "syste
         return summary;
       }, { label: "maintenance_backup_import_commit" });
     } catch (error) {
-      if (importedPath) fs.rmSync(importedPath, { force: true });
-      if (importedPath) fs.rmSync(`${importedPath}.manifest.json`, { force: true });
+      if (importedPath) {
+        try {
+          const managedImportedPath = assertManagedBackupFile(importedPath, { mustExist: false });
+          fs.rmSync(managedImportedPath, { force: true });
+          fs.rmSync(`${managedImportedPath}.manifest.json`, { force: true });
+        } catch (_cleanupError) {
+          // Cleanup is intentionally skipped when ownership cannot be proven.
+        }
+      }
       throw error;
     }
   }, { label: "maintenance_backup_import" })

@@ -95,6 +95,7 @@ export const ROUTE_ACCESS_KEYS = {
 
   USER_MANAGEMENT: "user-management",
   RESET_MAINTENANCE: "reset-maintenance-data",
+  TESTING_LAB: "testing-lab",
 };
 
 // =========================
@@ -177,6 +178,7 @@ export const ROUTE_ROLE_ACCESS = {
 
   [ROUTE_ACCESS_KEYS.USER_MANAGEMENT]: ROLE_GROUPS.ADMIN_ONLY,
   [ROUTE_ACCESS_KEYS.RESET_MAINTENANCE]: ROLE_GROUPS.ADMIN_ONLY,
+  [ROUTE_ACCESS_KEYS.TESTING_LAB]: ROLE_GROUPS.ADMIN_ONLY,
 };
 
 // =========================

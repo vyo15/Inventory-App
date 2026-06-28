@@ -92,7 +92,7 @@ const IMS_BRAND_THEME = {
   },
 };
 
-const IMS_FONT_FAMILY_BASE = 'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+const IMS_FONT_FAMILY_BASE = '"Inter Variable", Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 const IMS_FONT_SIZE = { meta: 12, body: 14, large: 16 };
 const IMS_LINE_HEIGHT = { body: 1.45 };
 const IMS_FONT_WEIGHT = { strong: 700 };

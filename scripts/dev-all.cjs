@@ -9,6 +9,7 @@ const IPC_MESSAGES = Object.freeze({
   SHUTDOWN_COMPLETED: "IMS_SHUTDOWN_COMPLETED",
 });
 const SHUTDOWN_TIMEOUT_MS = 10_000;
+const TESTING_LAB_FLAG = "--testing-lab";
 
 try {
   assertSupportedNodeVersion();
@@ -22,6 +23,104 @@ const backendDir = path.join(rootDir, "backend");
 const frontendDir = path.join(rootDir, "frontend");
 const backendEntry = path.join(backendDir, "src", "server.js");
 const frontendEntry = path.join(frontendDir, "node_modules", "vite", "bin", "vite.js");
+
+const parseRunnerMode = (argv = []) => ({
+  testingLab: argv.includes(TESTING_LAB_FLAG),
+});
+
+const resolveBackendRuntimePath = (value, fallbackRelativePath, projectRoot = rootDir) => {
+  const projectBackendDir = path.join(projectRoot, "backend");
+  const rawValue = value || fallbackRelativePath;
+  return path.isAbsolute(rawValue)
+    ? path.resolve(rawValue)
+    : path.resolve(projectBackendDir, rawValue);
+};
+
+const normalizePathIdentity = (candidatePath) => {
+  const resolved = path.resolve(candidatePath);
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+};
+
+const assertSeparatedPath = (candidatePath, operationalPath, label) => {
+  if (normalizePathIdentity(candidatePath) !== normalizePathIdentity(operationalPath)) return;
+  throw new Error(`${label} sandbox tidak boleh sama dengan lokasi operasional.`);
+};
+
+const buildRuntimeConfiguration = ({
+  testingLab = false,
+  projectRoot = rootDir,
+  baseEnv = process.env,
+} = {}) => {
+  const operational = {
+    databasePath: resolveBackendRuntimePath(null, "../data/ims-sqlite-sidecar.sqlite", projectRoot),
+    backupDir: resolveBackendRuntimePath(null, "../backups/sqlite", projectRoot),
+    logDir: resolveBackendRuntimePath(null, "../logs", projectRoot),
+  };
+
+  if (testingLab) {
+    const sandbox = {
+      databasePath: path.join(projectRoot, "data", "ims-testing-sandbox.sqlite"),
+      backupDir: path.join(projectRoot, "backups", "testing-sandbox"),
+      logDir: path.join(projectRoot, "logs", "testing-sandbox"),
+    };
+
+    assertSeparatedPath(sandbox.databasePath, operational.databasePath, "Database");
+    assertSeparatedPath(sandbox.backupDir, operational.backupDir, "Folder backup");
+    assertSeparatedPath(sandbox.logDir, operational.logDir, "Folder log");
+
+    return {
+      mode: "testing-lab",
+      label: "MODE TESTING / SANDBOX",
+      databasePath: sandbox.databasePath,
+      backupDir: sandbox.backupDir,
+      logDir: sandbox.logDir,
+      envOverrides: {
+        IMS_ENABLE_TESTING_LAB: "true",
+        IMS_DATABASE_PURPOSE: "sandbox",
+        IMS_SQLITE_DB_PATH: sandbox.databasePath,
+        IMS_SQLITE_BACKUP_DIR: sandbox.backupDir,
+        IMS_LOG_DIR: sandbox.logDir,
+      },
+      envRemovals: [],
+    };
+  }
+
+  const inheritedSandboxMode = String(baseEnv.IMS_DATABASE_PURPOSE || "").trim().toLowerCase() === "sandbox"
+    || ["1", "true", "yes", "on"].includes(
+      String(baseEnv.IMS_ENABLE_TESTING_LAB || "").trim().toLowerCase(),
+    );
+  const envRemovals = ["IMS_ENABLE_TESTING_LAB", "IMS_DATABASE_PURPOSE"];
+  if (inheritedSandboxMode) {
+    envRemovals.push("IMS_SQLITE_DB_PATH", "IMS_SQLITE_BACKUP_DIR", "IMS_LOG_DIR");
+  }
+
+  return {
+    mode: "operational",
+    label: "MODE OPERASIONAL",
+    databasePath: inheritedSandboxMode
+      ? operational.databasePath
+      : resolveBackendRuntimePath(baseEnv.IMS_SQLITE_DB_PATH, "../data/ims-sqlite-sidecar.sqlite", projectRoot),
+    backupDir: inheritedSandboxMode
+      ? operational.backupDir
+      : resolveBackendRuntimePath(baseEnv.IMS_SQLITE_BACKUP_DIR, "../backups/sqlite", projectRoot),
+    logDir: inheritedSandboxMode
+      ? operational.logDir
+      : resolveBackendRuntimePath(baseEnv.IMS_LOG_DIR, "../logs", projectRoot),
+    envOverrides: {
+      IMS_ENABLE_TESTING_LAB: "false",
+      IMS_DATABASE_PURPOSE: "operational",
+    },
+    envRemovals,
+  };
+};
+
+const runnerMode = parseRunnerMode(process.argv.slice(2));
+const runtimeConfiguration = buildRuntimeConfiguration({
+  testingLab: runnerMode.testingLab,
+  projectRoot: rootDir,
+  baseEnv: process.env,
+});
+
 const children = new Map();
 let shuttingDown = false;
 let shutdownExitCode = 0;
@@ -29,14 +128,17 @@ let shutdownTimer = null;
 let backendShutdownRequested = false;
 let frontendStopRequested = false;
 
-const createSafeEnv = () => {
+const createSafeEnv = ({ baseEnv = process.env, runtime = runtimeConfiguration } = {}) => {
   const safeEnv = {};
 
-  for (const [key, value] of Object.entries(process.env)) {
+  for (const [key, value] of Object.entries(baseEnv)) {
     if (!key || key.startsWith("=") || key.includes("\0")) continue;
     if (value === undefined || String(value).includes("\0")) continue;
     safeEnv[key] = value;
   }
+
+  for (const key of runtime.envRemovals) delete safeEnv[key];
+  for (const [key, value] of Object.entries(runtime.envOverrides)) safeEnv[key] = String(value);
 
   return safeEnv;
 };
@@ -193,30 +295,43 @@ const spawnService = ({ name, entry, args = [], cwd, ipc = false }) => {
   child.on("exit", (code, signal) => handleChildExit(name, code, signal));
 };
 
-console.log("[dev] Menjalankan backend dan frontend IMS dari satu terminal...");
-console.log("[dev] Backend : http://localhost:3001");
-console.log("[dev] Frontend: http://localhost:5173/Inventory-App/");
-console.log("[dev] Tekan Ctrl+C satu kali. Backend akan menutup SQLite lebih dahulu.\n");
+if (require.main === module) {
+  console.log("[dev] Menjalankan backend dan frontend IMS dari satu terminal...");
+  console.log(`[dev] ${runtimeConfiguration.label}`);
+  console.log(`[dev] Database : ${runtimeConfiguration.databasePath}`);
+  console.log(`[dev] Backup   : ${runtimeConfiguration.backupDir}`);
+  console.log(`[dev] Log      : ${runtimeConfiguration.logDir}`);
+  if (runtimeConfiguration.mode === "testing-lab") {
+    console.log("[dev] Data operasional tidak digunakan.");
+  }
+  console.log("[dev] Backend : http://localhost:3001");
+  console.log("[dev] Frontend: http://localhost:5173/Inventory-App/");
+  console.log("[dev] Tekan Ctrl+C satu kali. Backend akan menutup SQLite lebih dahulu.\n");
 
-spawnService({
-  name: "backend",
-  entry: backendEntry,
-  cwd: backendDir,
-  ipc: true,
-});
-spawnService({
-  name: "frontend",
-  entry: frontendEntry,
-  args: ["--host", "0.0.0.0"],
-  cwd: frontendDir,
-});
+  spawnService({
+    name: "backend",
+    entry: backendEntry,
+    cwd: backendDir,
+    ipc: true,
+  });
+  spawnService({
+    name: "frontend",
+    entry: frontendEntry,
+    args: ["--host", "0.0.0.0"],
+    cwd: frontendDir,
+  });
 
-process.on("SIGINT", () => stopAll(0, "SIGINT"));
-process.on("SIGTERM", () => stopAll(0, "SIGTERM"));
-process.on("SIGHUP", () => stopAll(0, "SIGHUP"));
-if (process.platform === "win32") process.on("SIGBREAK", () => stopAll(0, "SIGBREAK"));
+  process.on("SIGINT", () => stopAll(0, "SIGINT"));
+  process.on("SIGTERM", () => stopAll(0, "SIGTERM"));
+  process.on("SIGHUP", () => stopAll(0, "SIGHUP"));
+  if (process.platform === "win32") process.on("SIGBREAK", () => stopAll(0, "SIGBREAK"));
+}
 
 module.exports = {
   IPC_MESSAGES,
   SHUTDOWN_TIMEOUT_MS,
+  TESTING_LAB_FLAG,
+  buildRuntimeConfiguration,
+  createSafeEnv,
+  parseRunnerMode,
 };

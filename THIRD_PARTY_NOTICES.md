@@ -3,6 +3,13 @@
 IMS Bunga Flanel menggunakan paket open-source pihak ketiga pada aplikasi backend dan frontend.
 Hak cipta dan lisensi setiap paket tetap dimiliki oleh pemegang hak masing-masing.
 
+## Font Inter
+
+- Package: `@fontsource-variable/inter`
+- Fungsi: menyediakan font Inter Variable sebagai asset lokal/self-hosted untuk frontend IMS.
+- Lisensi: SIL Open Font License 1.1 (`OFL-1.1`).
+- Runtime: dibundel oleh Vite dan tidak mengambil font dari Google Fonts/CDN.
+
 Inventaris dependency yang dapat diaudit dihasilkan dari lockfile dengan:
 
 ```bash

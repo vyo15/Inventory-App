@@ -417,3 +417,28 @@ Maintenance Center → Data Nonaktif
 ```
 
 Allowlist purge eksekusi hanya Customer, Kategori, Supplier, dan Aturan Harga yang sudah nonaktif serta lolos dependency check. User tetap dapat muncul pada preview, tetapi hard purge User selalu diblokir agar username/identitas histori audit tidak ambigu. Dependency check mencakup direct reference, nested JSON alias yang dikenal, hierarchy/katalog/history, dan `migration_identity_map`. Semua transaksi/stok/finance/production/payroll/backup/restore/audit tetap protected. Runtime hard-delete di luar Maintenance dianggap blocker oleh `backend/scripts/audit-sqlite-cutover-readiness.cjs --strict`.
+
+## Lab Pengujian Sandbox
+
+```text
+Frontend /utilities/testing-lab
+  -> GET /api/testing-lab/runtime (authenticated, badge mode testing)
+  -> GET /api/testing-lab/status (administrator)
+  -> POST /api/testing-lab/baseline
+  -> POST /api/testing-lab/baseline/select
+  -> POST /api/testing-lab/sessions
+  -> POST /api/testing-lab/sessions/complete|cancel
+  -> POST /api/testing-lab/validate
+  -> POST /api/testing-lab/reset
+  -> GET /api/testing-lab/result-export
+
+Backend testingLab.service
+  -> app_settings (active baseline/session/last result; tanpa schema baru)
+  -> backup service existing (type=test dan pre-reset)
+  -> restore service existing (checksum, integrity, account guard, rollback)
+  -> maintenance validation existing (integrity dan stock projection)
+  -> audit_logs (session/baseline/reset history)
+  -> realtime database_replaced
+```
+
+Guard backend wajib memverifikasi purpose sandbox, database terpisah, dan backup storage terpisah. Middleware write guard melacak request mutation aktif; reset tidak dimulai bila masih ada write berjalan dan mutation baru ditolak selama restore. Lab tidak membuat seed dengan direct SQL dari frontend. Purchase, Sales, Return, Produksi, Payroll, HPP, dan Finance tetap diuji melalui route/service resmi masing-masing.

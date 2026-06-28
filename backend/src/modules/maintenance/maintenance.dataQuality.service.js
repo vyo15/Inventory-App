@@ -1,4 +1,3 @@
-const fs = require("fs");
 const {
   getDb,
   getDatabaseGeneration,
@@ -27,6 +26,7 @@ const {
   createOfficialSqliteBackup,
   enrichBackupLog,
   getBackupLifecycleRuntimeStatus,
+  getManagedBackupPathStatus,
   getTableCounts,
 } = require("./backup");
 
@@ -538,20 +538,28 @@ const buildDataQualityAudit = async (db) => {
   const backupRows = await db.all(
     "SELECT id, filename, path, status FROM backup_logs WHERE status != 'retention_deleted' ORDER BY id DESC",
   );
-  const missingBackupFiles = backupRows.filter((row) => !row.path || !fs.existsSync(row.path));
+  const invalidBackupRegistryRows = backupRows
+    .map((row) => ({
+      row,
+      pathStatus: getManagedBackupPathStatus(row.path, { mustExist: false }),
+    }))
+    .filter(({ pathStatus }) => !pathStatus.managed || !pathStatus.exists);
   categories.push({
     key: "backup_registry",
     label: "Registry Backup",
     collection: "backup_logs",
-    count: missingBackupFiles.length,
+    count: invalidBackupRegistryRows.length,
     checkedRecords: backupRows.length,
-    isTruncated: missingBackupFiles.length > 10,
-    sampleCount: Math.min(missingBackupFiles.length, 10),
-    samples: missingBackupFiles.slice(0, 10).map((row) => ({
+    isTruncated: invalidBackupRegistryRows.length > 10,
+    sampleCount: Math.min(invalidBackupRegistryRows.length, 10),
+    samples: invalidBackupRegistryRows.slice(0, 10).map(({ row, pathStatus }) => ({
       reference: row.filename || row.id,
-      issue: "Log backup menunjuk ke file yang tidak ditemukan.",
+      issue: pathStatus.managed
+        ? "Log backup menunjuk ke file yang tidak ditemukan."
+        : "Log backup menunjuk ke path di luar folder backup resmi dan tidak boleh digunakan langsung.",
+      code: pathStatus.errorCode,
     })),
-    recommendation: "Verifikasi media backup eksternal. Jangan menghapus log tanpa memastikan file memang sudah tidak diperlukan.",
+    recommendation: "Import file backup eksternal melalui Maintenance Center. Jangan menggunakan atau menghapus path registry lama secara langsung.",
   });
 
   const financeAudit = await buildFinanceLedgerAudit(db);

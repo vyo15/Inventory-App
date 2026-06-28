@@ -13,10 +13,12 @@ const { broadcastDatabaseReplacement } = require("../realtime/realtime.service")
 const { runMigrations } = require("../../db/migrate");
 const {
   RESTORE_CONFIRM_KEYWORD,
+  assertManagedBackupRecord,
   createOfficialSqliteBackup,
   enrichBackupLog,
   extractBackupDatabaseToTemp,
   getBackupPreview,
+  inspectManagedBackupPath,
   normalizeBackupFilename,
 } = require("./backup");
 const { runDatabaseIntegrityChecks } = require("./maintenance.dataQuality.service");
@@ -77,39 +79,57 @@ const getActiveDbValidation = async (db) => {
 
 const registerRestoredBackupLog = async (db, backup, { status = "verified" } = {}) => {
   if (!backup?.filename || !backup?.path) return null;
+  const managedBackupPath = assertManagedBackupRecord(backup, {
+    mustExist: true,
+  });
+  const managedBackup = { ...backup, path: managedBackupPath };
 
   const existing = await db.get(
     "SELECT * FROM backup_logs WHERE filename = ? AND path = ? ORDER BY id DESC LIMIT 1",
-    [backup.filename, backup.path]
+    [managedBackup.filename, managedBackup.path]
   );
   if (existing) return enrichBackupLog(existing);
 
   const sizeBytes = Number(
-    backup.sizeBytes
-    ?? backup.size_bytes
-    ?? (fs.existsSync(backup.path) ? fs.statSync(backup.path).size : 0)
+    managedBackup.sizeBytes
+    ?? managedBackup.size_bytes
+    ?? fs.statSync(managedBackup.path).size
   );
-  const createdAt = backup.manifest?.createdAt || backup.createdAt || backup.created_at || new Date().toISOString();
+  const createdAt = managedBackup.manifest?.createdAt || managedBackup.createdAt || managedBackup.created_at || new Date().toISOString();
   const result = await db.run(
     `
       INSERT INTO backup_logs (filename, path, size_bytes, status, created_at)
       VALUES (?, ?, ?, ?, ?)
     `,
-    [backup.filename, backup.path, sizeBytes, status, createdAt]
+    [managedBackup.filename, managedBackup.path, sizeBytes, status, createdAt]
   );
 
   return enrichBackupLog({
     id: result.lastID,
-    filename: backup.filename,
-    path: backup.path,
+    filename: managedBackup.filename,
+    path: managedBackup.path,
     size_bytes: sizeBytes,
     status,
     created_at: createdAt,
   });
 };
 
-const executeRestore = async ({ confirmKeyword, filename, backupFileName, actor = "system" } = {}) => runSerializedDbOperation(async () => {
+const executeRestore = async ({
+  confirmKeyword,
+  filename,
+  backupFileName,
+  actor = "system",
+  preBackupType = "pre-restore",
+  preBackupAction = "pre_restore_backup_create",
+  preBackupNotes = "",
+  broadcastReason = "guarded_restore_completed",
+} = {}) => runSerializedDbOperation(async () => {
   const tempDir = path.join(env.backupDir, ".tmp", `restore-${Date.now()}`);
+  inspectManagedBackupPath(tempDir, {
+    allowDirectory: true,
+    allowInternalTmp: true,
+    mustExist: false,
+  });
   const activeDbPath = getDbPath();
   let requestedFilename = "";
   let backup = null;
@@ -144,14 +164,31 @@ const executeRestore = async ({ confirmKeyword, filename, backupFileName, actor 
       "SELECT * FROM backup_logs WHERE filename = ? ORDER BY id DESC LIMIT 1",
       [requestedFilename]
     );
+    if (!backup) {
+      return {
+        restored: false,
+        backupFound: false,
+        backupFileExists: false,
+        destructiveAllowed: false,
+      };
+    }
 
-    if (!backup?.path || !fs.existsSync(backup.path)) {
+    let managedBackupPath;
+    try {
+      managedBackupPath = assertManagedBackupRecord(backup, {
+        mustExist: true,
+      });
+    } catch (error) {
       return {
         restored: false,
         backupFound: Boolean(backup),
         backupFileExists: false,
+        managedBackupPath: false,
+        pathErrorCode: error?.code || "BACKUP_PATH_UNSAFE",
+        pathErrorMessage: error?.message || "Path backup tidak aman.",
       };
     }
+    backup = { ...backup, path: managedBackupPath };
 
     const preview = await getBackupPreview(backup);
     if (!preview.validForRestore) {
@@ -173,10 +210,10 @@ const executeRestore = async ({ confirmKeyword, filename, backupFileName, actor 
     }
 
     preRestoreBackup = await createOfficialSqliteBackup(db, {
-      type: "pre-restore",
+      type: preBackupType,
       actor,
-      action: "pre_restore_backup_create",
-      notes: `Backup otomatis sebelum restore dari ${requestedFilename}.`,
+      action: preBackupAction,
+      notes: preBackupNotes || `Backup otomatis sebelum restore dari ${requestedFilename}.`,
     });
 
     const extractedBackup = await extractBackupDatabaseToTemp(backup, tempDir);
@@ -296,7 +333,7 @@ const executeRestore = async ({ confirmKeyword, filename, backupFileName, actor 
 
     broadcastDatabaseReplacement({
       originClientId: getRequestContext().clientId || "",
-      reason: "guarded_restore_completed",
+      reason: broadcastReason,
     });
 
     return {
@@ -408,7 +445,14 @@ const executeRestore = async ({ confirmKeyword, filename, backupFileName, actor 
     if (restoreSucceeded && swapPath) {
       fs.rmSync(swapPath, { force: true });
     }
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    if (fs.existsSync(tempDir)) {
+      inspectManagedBackupPath(tempDir, {
+        allowDirectory: true,
+        allowInternalTmp: true,
+        mustExist: true,
+      });
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   }
 });
 
@@ -446,6 +490,9 @@ const createRestorePlan = async ({ filename, backupFileName, actor = "system" } 
       status: preview.backup.status,
       backupType: preview.backup.backupType,
       manifestStatus: preview.backup.manifestStatus,
+      managedPath: preview.backup.managedPath,
+      pathErrorCode: preview.backup.pathErrorCode,
+      pathErrorMessage: preview.backup.pathErrorMessage,
     } : null,
     manifest: preview?.manifest || preview?.backup?.manifest || null,
     validation: preview?.validation || null,

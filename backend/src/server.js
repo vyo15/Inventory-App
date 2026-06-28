@@ -11,6 +11,7 @@ const {
 } = require("./modules/maintenance/backup");
 const requestLogger = require("./middlewares/requestLogger");
 const { requestContextMiddleware } = require("./middlewares/requestContext");
+const { testingLabWriteGuard } = require("./middlewares/testingLabWriteGuard");
 const securityHeaders = require("./middlewares/securityHeaders");
 const { createCorsOptionsDelegate, enforceTrustedOrigin } = require("./middlewares/corsOptions");
 const { errorHandler, notFoundHandler } = require("./middlewares/errorHandler");
@@ -24,6 +25,7 @@ const categoriesRoutes = require("./modules/categories/categories.routes");
 const suppliersRoutes = require("./modules/suppliers/suppliers.routes");
 const pricingRulesRoutes = require("./modules/pricingRules/pricingRules.routes");
 const maintenanceRoutes = require("./modules/maintenance/maintenance.routes");
+const testingLabRoutes = require("./modules/testingLab/testingLab.routes");
 const auditLogsRoutes = require("./modules/auditLogs/auditLogs.routes");
 const migrationStatusRoutes = require("./modules/migrationStatus/migrationStatus.routes");
 const productsRoutes = require("./modules/products/products.routes");
@@ -51,6 +53,7 @@ app.use(cors(createCorsOptionsDelegate));
 app.use(express.json({ limit: "1mb" }));
 app.use(requestContextMiddleware);
 app.use(requestLogger);
+app.use(testingLabWriteGuard);
 
 app.get("/api", (_req, res) => success(res, "IMS layanan lokal API aktif", {
   service: "IMS local API",
@@ -85,6 +88,7 @@ app.use("/api/reports", reportsRoutes);
 app.use("/api/openapi.json", openApiRoutes);
 app.use("/api/realtime", realtimeRoutes);
 app.use("/api/maintenance", maintenanceRoutes);
+app.use("/api/testing-lab", testingLabRoutes);
 app.use("/api/audit-logs", auditLogsRoutes);
 app.use("/api/module-runtime-status", migrationStatusRoutes);
 app.use("/api/migration-status", migrationStatusRoutes);

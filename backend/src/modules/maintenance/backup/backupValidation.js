@@ -11,9 +11,13 @@ const {
   SUPPORTED_BACKUP_FORMATS,
 } = require("./backupConstants");
 const {
+  assertManagedBackupFile,
+  assertManagedBackupRecord,
   assertSufficientDiskSpace,
   ensureDir,
   getBackupStorageClass,
+  getManagedBackupRecordStatus,
+  inspectManagedBackupPath,
   isSupportedBackupPackageName,
 } = require("./backupPath");
 const { readBackupPackageEntry, sha256File } = require("./backupPackage");
@@ -198,25 +202,34 @@ const validateSqliteFile = async (dbFilePath) => {
 };
 const readBackupManifest = (backupPath) => {
   if (!backupPath) return null;
-  const sidecarPath = `${backupPath}.manifest.json`;
+  const managedPath = assertManagedBackupFile(backupPath, {
+    allowInternalTmp: true,
+    mustExist: true,
+    requireBackupArtifact: true,
+  });
+  const sidecarPath = `${managedPath}.manifest.json`;
   if (fs.existsSync(sidecarPath)) {
     return JSON.parse(fs.readFileSync(sidecarPath, "utf8"));
   }
-  if (isSupportedBackupPackageName(backupPath) && fs.existsSync(backupPath)) {
-    const manifestBuffer = readBackupPackageEntry(backupPath, SQLITE_PACKAGE_MANIFEST_FILE);
+  if (isSupportedBackupPackageName(managedPath)) {
+    const manifestBuffer = readBackupPackageEntry(managedPath, SQLITE_PACKAGE_MANIFEST_FILE);
     return manifestBuffer ? JSON.parse(manifestBuffer.toString("utf8")) : null;
   }
   return null;
 };
 
-const enrichBackupLog = (backup) => {
+const enrichBackupLog = (backup, { allowInternalTmp = false } = {}) => {
   if (!backup) return null;
-  const fileExists = Boolean(backup.path && fs.existsSync(backup.path));
+  const pathStatus = getManagedBackupRecordStatus(backup, {
+    allowInternalTmp,
+    mustExist: false,
+  });
+  const fileExists = pathStatus.managed && pathStatus.exists;
   let manifest = null;
-  let manifestStatus = "missing";
+  let manifestStatus = pathStatus.managed ? "missing" : "unmanaged";
   try {
-    manifest = fileExists ? readBackupManifest(backup.path) : null;
-    manifestStatus = manifest ? "available" : "missing";
+    manifest = fileExists ? readBackupManifest(pathStatus.path) : null;
+    if (pathStatus.managed) manifestStatus = manifest ? "available" : "missing";
   } catch {
     manifestStatus = "invalid";
   }
@@ -224,10 +237,11 @@ const enrichBackupLog = (backup) => {
   return {
     ...backup,
     fileExists,
+    managedPath: pathStatus.managed,
+    pathErrorCode: pathStatus.errorCode,
+    pathErrorMessage: pathStatus.errorMessage,
     backupType: manifest?.backupType || (String(backup.filename || "").includes("pre-restore") ? "pre-restore" : "manual-import"),
-    storageClass: ["daily", "monthly", "manual"].includes(path.basename(path.dirname(backup.path || "")))
-      ? path.basename(path.dirname(backup.path || ""))
-      : getBackupStorageClass(manifest?.backupType || backup.backupType),
+    storageClass: pathStatus.storageClass || getBackupStorageClass(manifest?.backupType || backup.backupType),
     manifestStatus,
     manifest,
   };
@@ -236,32 +250,33 @@ const enrichBackupLog = (backup) => {
 const enrichBackupLogs = (rows = []) => rows.map(enrichBackupLog);
 
 const extractBackupDatabaseToTemp = async (backup, tempDir) => {
-  if (!backup?.path || !fs.existsSync(backup.path)) {
-    throw new Error("File backup tidak ditemukan.");
-  }
+  const sourcePath = assertManagedBackupRecord(backup, {
+    allowInternalTmp: true,
+    mustExist: true,
+  });
 
   ensureDir(tempDir);
   const extractedDbPath = path.join(tempDir, SQLITE_PACKAGE_DATABASE_FILE);
-  const isPackage = isSupportedBackupPackageName(backup.filename || backup.path);
+  const isPackage = isSupportedBackupPackageName(backup.filename || sourcePath);
 
   if (!isPackage) {
-    const sourceStat = fs.statSync(backup.path);
+    const sourceStat = fs.statSync(sourcePath);
     assertSufficientDiskSpace({
       targetDir: tempDir,
       expectedWriteBytes: sourceStat.size,
       operation: "Ekstraksi backup legacy",
     });
-    fs.copyFileSync(backup.path, extractedDbPath);
+    fs.copyFileSync(sourcePath, extractedDbPath);
     const validation = await validateSqliteFile(extractedDbPath);
     return { dbPath: extractedDbPath, manifest: null, validation, compatibilityPackage: true };
   }
 
-  const manifest = readBackupManifest(backup.path);
+  const manifest = readBackupManifest(sourcePath);
   if (!manifest || !SUPPORTED_BACKUP_FORMATS.has(manifest.backupFormat)) {
     throw new Error("Manifest backup IMS tidak valid atau tidak ditemukan.");
   }
 
-  const fallbackPackageSize = fs.statSync(backup.path).size;
+  const fallbackPackageSize = fs.statSync(sourcePath).size;
   const expectedDatabaseSize = Number(manifest.databaseSizeBytes || fallbackPackageSize);
   assertSufficientDiskSpace({
     targetDir: tempDir,
@@ -269,7 +284,7 @@ const extractBackupDatabaseToTemp = async (backup, tempDir) => {
     operation: "Ekstraksi database dari paket backup",
   });
 
-  const databaseBuffer = readBackupPackageEntry(backup.path, SQLITE_PACKAGE_DATABASE_FILE);
+  const databaseBuffer = readBackupPackageEntry(sourcePath, SQLITE_PACKAGE_DATABASE_FILE);
   if (!databaseBuffer) throw new Error("File database tidak ditemukan di paket backup.");
   fs.writeFileSync(extractedDbPath, databaseBuffer);
 
@@ -286,13 +301,19 @@ const extractBackupDatabaseToTemp = async (backup, tempDir) => {
   return { dbPath: extractedDbPath, manifest, validation, compatibilityPackage: manifest.backupFormat === LEGACY_BACKUP_FORMAT };
 };
 
-const getBackupPreview = async (backup) => {
-  const enriched = enrichBackupLog(backup);
+const getBackupPreview = async (backup, { allowInternalTmp = false } = {}) => {
+  const enriched = enrichBackupLog(backup, { allowInternalTmp });
   if (!enriched?.fileExists) {
     return { backup: enriched, validation: null, validForRestore: false, safeForRestore: false };
   }
 
   const tempDir = path.join(env.backupDir, ".tmp", `preview-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`);
+  ensureDir(tempDir);
+  inspectManagedBackupPath(tempDir, {
+    allowDirectory: true,
+    allowInternalTmp: true,
+    mustExist: true,
+  });
   try {
     const extracted = await extractBackupDatabaseToTemp(enriched, tempDir);
     const validForRestore = extracted.validation?.valid === true;
@@ -309,6 +330,11 @@ const getBackupPreview = async (backup) => {
       compatibilityPackage: extracted.compatibilityPackage,
     };
   } finally {
+    inspectManagedBackupPath(tempDir, {
+      allowDirectory: true,
+      allowInternalTmp: true,
+      mustExist: true,
+    });
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 };

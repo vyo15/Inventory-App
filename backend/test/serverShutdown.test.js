@@ -85,6 +85,7 @@ const verifySignalShutdown = async (t, signal) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `ims-server-${signal.toLowerCase()}-`));
   const dbPath = path.join(tempDir, "data", "ims-test.sqlite");
   const backupDir = path.join(tempDir, "backups");
+  const logDir = path.join(tempDir, "logs");
   const backendRoot = path.resolve(__dirname, "..");
   const child = spawn(process.execPath, [path.join(backendRoot, "src", "server.js")], {
     cwd: backendRoot,
@@ -95,6 +96,7 @@ const verifySignalShutdown = async (t, signal) => {
       PORT: "0",
       IMS_AUTH_BOOTSTRAP_CODE: "SHUTDOWNTEST8421",
       IMS_LOG_TO_FILE: "false",
+      IMS_LOG_DIR: logDir,
       IMS_SQLITE_DB_PATH: dbPath,
       IMS_SQLITE_BACKUP_DIR: backupDir,
     },
@@ -125,6 +127,7 @@ const verifyRequestedShutdown = async (t, reason) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `ims-server-${reason.toLowerCase()}-`));
   const dbPath = path.join(tempDir, "data", "ims-test.sqlite");
   const backupDir = path.join(tempDir, "backups");
+  const logDir = path.join(tempDir, "logs");
   const backendRoot = path.resolve(__dirname, "..");
   const child = spawn(process.execPath, [path.join(backendRoot, "src", "server.js")], {
     cwd: backendRoot,
@@ -135,6 +138,7 @@ const verifyRequestedShutdown = async (t, reason) => {
       PORT: "0",
       IMS_AUTH_BOOTSTRAP_CODE: "SHUTDOWNTEST8421",
       IMS_LOG_TO_FILE: "false",
+      IMS_LOG_DIR: logDir,
       IMS_SQLITE_DB_PATH: dbPath,
       IMS_SQLITE_BACKUP_DIR: backupDir,
     },
@@ -192,6 +196,7 @@ test("startup failure menutup database dan tidak meninggalkan WAL/SHM", async (t
   const address = blocker.address();
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "ims-server-startup-failure-"));
   const dbPath = path.join(tempDir, "data", "ims-test.sqlite");
+  const logDir = path.join(tempDir, "logs");
   const backendRoot = path.resolve(__dirname, "..");
   const child = spawn(process.execPath, [path.join(backendRoot, "src", "server.js")], {
     cwd: backendRoot,
@@ -202,6 +207,7 @@ test("startup failure menutup database dan tidak meninggalkan WAL/SHM", async (t
       PORT: String(address.port),
       IMS_AUTH_BOOTSTRAP_CODE: "STARTUPFAIL8421",
       IMS_LOG_TO_FILE: "false",
+      IMS_LOG_DIR: logDir,
       IMS_SQLITE_DB_PATH: dbPath,
       IMS_SQLITE_BACKUP_DIR: path.join(tempDir, "backups"),
     },
@@ -224,6 +230,7 @@ test("startup failure menutup database dan tidak meninggalkan WAL/SHM", async (t
 test("shutdown yang diminta saat startup menunggu startup settle lalu menutup database", async (t) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "ims-server-early-shutdown-"));
   const dbPath = path.join(tempDir, "data", "ims-test.sqlite");
+  const logDir = path.join(tempDir, "logs");
   const backendRoot = path.resolve(__dirname, "..");
   const serverPath = path.join(backendRoot, "src", "server.js");
   const script = `
@@ -246,6 +253,7 @@ test("shutdown yang diminta saat startup menunggu startup settle lalu menutup da
       PORT: "0",
       IMS_AUTH_BOOTSTRAP_CODE: "EARLYSTOP8421",
       IMS_LOG_TO_FILE: "false",
+      IMS_LOG_DIR: logDir,
       IMS_SQLITE_DB_PATH: dbPath,
       IMS_SQLITE_BACKUP_DIR: path.join(tempDir, "backups"),
     },
@@ -268,6 +276,7 @@ test("shutdown yang diminta saat startup menunggu startup settle lalu menutup da
 test("server mengaktifkan scheduler lifecycle dan menghentikannya saat shutdown", async (t) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "ims-server-backup-scheduler-"));
   const dbPath = path.join(tempDir, "data", "ims-test.sqlite");
+  const logDir = path.join(tempDir, "logs");
   const backendRoot = path.resolve(__dirname, "..");
   const serverPath = path.join(backendRoot, "src", "server.js");
   const backupPath = path.join(backendRoot, "src", "modules", "maintenance", "backup");
@@ -295,6 +304,7 @@ test("server mengaktifkan scheduler lifecycle dan menghentikannya saat shutdown"
       PORT: "0",
       IMS_AUTH_BOOTSTRAP_CODE: "SCHEDULERTEST8421",
       IMS_LOG_TO_FILE: "false",
+      IMS_LOG_DIR: logDir,
       IMS_SQLITE_DB_PATH: dbPath,
       IMS_SQLITE_BACKUP_DIR: path.join(tempDir, "backups"),
     },

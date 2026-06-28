@@ -1,0 +1,66 @@
+.testing-lab-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.testing-lab-loading {
+  min-height: 360px;
+  display: grid;
+  place-items: center;
+}
+
+.testing-lab-sandbox-alert {
+  border-radius: var(--ims-radius-lg);
+}
+
+.testing-lab-summary .ant-card,
+.testing-lab-section.ant-card,
+.testing-lab-guard-card.ant-card {
+  border-color: var(--ims-border-color-soft);
+  box-shadow: none;
+}
+
+.testing-lab-section .ant-card-head {
+  min-height: 48px;
+}
+
+.testing-lab-readiness-item {
+  min-height: 62px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--ims-border-color-soft);
+  border-radius: var(--ims-radius-md);
+  background: var(--ims-bg-subtle);
+}
+
+.testing-lab-scenario-card {
+  height: 100%;
+  background: var(--ims-bg-subtle);
+}
+
+.testing-lab-active-session {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+@media (max-width: 768px) {
+  .testing-lab-page .ant-card-head-wrapper {
+    align-items: flex-start;
+    gap: 10px;
+    flex-direction: column;
+  }
+
+  .testing-lab-page .ant-card-extra {
+    width: 100%;
+  }
+
+  .testing-lab-page .ant-card-extra .ant-space {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+}

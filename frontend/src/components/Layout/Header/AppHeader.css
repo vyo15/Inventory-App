@@ -311,3 +311,25 @@ Risiko:
     font-size: var(--ims-font-size-meta);
   }
 }
+
+
+.app-header-testing-tag.ant-tag {
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  margin-inline-end: 0;
+  border-radius: 999px;
+  font-weight: var(--ims-font-weight-semibold);
+}
+
+@media (max-width: 768px) {
+  .app-header-testing-tag .ant-tag-content {
+    display: none;
+  }
+
+  .app-header-testing-tag.ant-tag {
+    width: 34px;
+    justify-content: center;
+    padding-inline: 0;
+  }
+}

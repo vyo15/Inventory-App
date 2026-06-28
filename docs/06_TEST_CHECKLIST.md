@@ -64,14 +64,20 @@ Coverage aktif saat ini:
 - Auth concurrency: dua perubahan admin paralel tetap menyisakan satu administrator aktif.
 - Password policy: maksimum 128 karakter aktif pada backend dan frontend shared policy.
 
-Test memakai database SQLite temporary di folder sistem dan tidak menunjuk ke database operasional `data/`. Runner selalu menimpa path database/backup/log ke suite temporary, helper integration test memverifikasi marker serta path aktif sebelum `DELETE FROM`, dan `db/connection` menolak membuka database di luar temporary ketika `NODE_ENV=test`.
+Test memakai database SQLite temporary di folder sistem dan tidak menunjuk ke runtime operasional. Runner selalu menimpa path database/backup/log ke suite temporary, helper integration test memverifikasi marker serta path aktif sebelum `DELETE FROM`, cleanup memvalidasi ulang realpath dan marker, dan runtime `NODE_ENV=test` maupun `NODE_TEST_CONTEXT` menolak database, backup, serta log di luar temporary. Runner juga membandingkan fingerprint database/WAL/SHM, backup, dan log runtime sebelum–sesudah suite.
 
 Guard anti-regression wajib:
 
 - [ ] `backend/test/testDatabaseIsolation.test.js` lulus.
 - [ ] Semua file yang memakai `configureTestDatabase()` memanggilnya sebelum import module `backend/src`.
-- [ ] Kegagalan `TEST_DATABASE_IMPORT_ORDER_VIOLATION`, `TEST_DATABASE_PATH_MISMATCH`, atau `TEST_DATABASE_RUNTIME_PATH_UNSAFE` menghentikan test tanpa menyentuh `data/`.
-- [ ] Sebelum dan sesudah `npm test`, timestamp/checksum database runtime tidak berubah karena test.
+- [ ] Kegagalan `TEST_DATABASE_IMPORT_ORDER_VIOLATION`, `TEST_DATABASE_PATH_MISMATCH`, `TEST_DATABASE_RUNTIME_PATH_UNSAFE`, `TEST_BACKUP_RUNTIME_PATH_UNSAFE`, `TEST_LOG_RUNTIME_PATH_UNSAFE`, atau `TEST_RUNTIME_FINGERPRINT_CHANGED` menghentikan test tanpa menyentuh runtime project.
+- [ ] Sebelum dan sesudah `npm test`, checksum database/WAL/SHM serta inventory backup/log runtime tidak berubah karena test.
+- [ ] Direct `node --test` tidak dipakai untuk test database kecuali seluruh path database/backup/log sudah diarahkan ke temporary melalui helper resmi.
+- [ ] Setiap test yang mengatur `IMS_SQLITE_DB_PATH` juga mengatur `IMS_SQLITE_BACKUP_DIR` dan `IMS_LOG_DIR`.
+- [ ] Direct import `sqlite`/`sqlite3` hanya ada pada allowlist fixture yang memakai path temporary.
+- [ ] Registry backup yang filename-nya tidak sama dengan basename path ditolak untuk download, preview, restore, promotion, dan retention.
+- [ ] File arbitrary di dalam folder backup resmi tetap ditolak; managed artifact hanya paket `.imsbackup`/`.imsbak.zip` atau SQLite legacy dengan header valid.
+- [ ] Backup SQLite legacy yang sudah berada di storage resmi tetap lolos ownership guard dan masuk preview compatibility.
 
 ## 1A.1 Concurrent write dan runtime counter
 
@@ -90,6 +96,9 @@ Guard anti-regression wajib:
 - [ ] Read request yang datang saat transaction aktif baru selesai setelah commit/rollback.
 - [ ] Satu callback gagal/rollback tidak membatalkan transaction lain dan operasi berikutnya tetap dapat commit.
 - [ ] Backup/restore tidak dijalankan bersamaan dengan write operasional; restore guard dan rollback file tetap lulus.
+- [ ] Registry backup dengan path di luar `backups/sqlite/{daily,monthly,manual}` ditandai unmanaged dan tidak dapat didownload, dipreview, direstore, dipromosikan, atau dihapus retention.
+- [ ] Backup external/legacy hanya dapat dipakai setelah import menyalin file fisik ke storage `manual`.
+- [ ] Symlink/junction yang keluar dari backup root ditolak oleh managed-path guard.
 
 ## 1B. Tooling dan line-ending regression
 
@@ -242,6 +251,8 @@ Guard anti-regression wajib:
 
 - [ ] Light mode terbaca.
 - [ ] Dark mode terbaca.
+- [ ] Inter Variable termuat dari bundle lokal saat browser offline; body, Ant Design, sidebar, header, table, modal, drawer, dan login memakai family yang sama tanpa request CDN.
+- [ ] Weight 400, 500, 600, 650, 680, 700, dan 760 tetap terbaca jelas pada angka Rupiah, stok, judul, label, serta dark mode.
 - [ ] Desktop `>= 1200px` menampilkan floating dock; active icon dan marker tetap seluruhnya berada di dalam rail.
 - [ ] Desktop `993-1199px` dan viewport tinggi pendek menampilkan dock compact tanpa icon keluar/overlap.
 - [ ] Klik top-level multi-halaman membuka Module Hub tanpa submenu pop-up; modul satu halaman langsung membuka halaman tujuan.
@@ -368,3 +379,33 @@ Referensi detail: `docs/21_RESPONSIVE_UI_UX_STANDARD.md`.
 - [ ] Deteksi missing/deleted/duplicate ledger, amount mismatch, direction mismatch, debit-credit mismatch, source ID/type mismatch, orphan ledger, dan ledger aktif untuk movement deleted.
 - [ ] Menjalankan audit tidak mengubah data bisnis tetapi membuat audit log `data_quality_audit` dengan actor dan ringkasan kategori.
 - [ ] Finance issue tetap manual-review; tidak ada tombol auto-repair side-effect transaksi.
+
+## Lab Pengujian Sandbox
+
+### Guard lingkungan
+- [ ] Menu Lab Pengujian hanya dapat dibuka Administrator.
+- [ ] Database operasional menampilkan status terkunci dan seluruh endpoint write testing menolak.
+- [ ] Sandbox memakai `IMS_DATABASE_PURPOSE=sandbox` dan `IMS_ENABLE_TESTING_LAB=true`.
+- [ ] Path database sandbox berbeda dari database operasional default, termasuk perbedaan symlink/case path.
+- [ ] Folder backup sandbox berbeda dari folder backup operasional.
+- [ ] Header menampilkan badge `MODE TESTING` ketika purpose sandbox aktif.
+
+### Baseline dan reset
+- [ ] Pembuatan baseline membutuhkan keyword `BUAT BASELINE TESTING`.
+- [ ] Baseline tersimpan sebagai backup tipe `test` dan berstatus verified.
+- [ ] Baseline tanpa administrator aktif atau backup invalid tidak dapat dipilih.
+- [ ] Reset membutuhkan keyword `RESET SANDBOX`.
+- [ ] Reset ditolak dengan HTTP 423 bila ada request write lain yang masih aktif.
+- [ ] Selama reset, mutation baru mendapat HTTP 423 dan GET tetap dapat berjalan.
+- [ ] Backup `pre-reset` dibuat sebelum restore baseline.
+- [ ] Reset mengembalikan master, stok, cost/HPP, katalog, counter, user, dan konfigurasi sesuai baseline.
+- [ ] Setelah reset, sesi aktif dan hasil sesi lama dibersihkan.
+- [ ] Event `database_replaced` memaksa client laptop/HP memuat dataset baru.
+
+### Skenario dan validasi
+- [ ] Data skenario dibuat melalui menu dan endpoint operasional existing, bukan direct insert dari frontend.
+- [ ] Snapshot sebelum dan sesudah mencakup seluruh tabel, transaksi, kesiapan master, stok, dan finance.
+- [ ] Diff sesi menunjukkan perubahan per tabel tanpa mengubah data.
+- [ ] Validasi memeriksa integrity SQLite, foreign key, administrator aktif, projection stok, saldo stok, dan duplicate ledger source.
+- [ ] Sesi selesai/cancel/reset tercatat pada audit log dan terlihat pada Riwayat Sesi.
+- [ ] Export hasil JSON tidak memuat token, password hash, atau payload pribadi realtime.

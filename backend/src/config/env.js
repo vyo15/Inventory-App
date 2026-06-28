@@ -1,6 +1,9 @@
-const path = require("path");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 
 const backendRoot = path.resolve(__dirname, "../..");
+const repositoryRoot = path.resolve(backendRoot, "..");
 
 const parsePositiveInteger = (value, fallback) => {
   const parsed = Number(value);
@@ -23,15 +26,77 @@ const resolveFromBackend = (value, fallback) => {
   return path.resolve(backendRoot, rawValue);
 };
 
+const isPathAtOrInside = (candidatePath, parentPath) => {
+  const candidate = path.resolve(candidatePath);
+  const parent = path.resolve(parentPath);
+  const relative = path.relative(parent, candidate);
+  return relative === "" || (!relative.startsWith(`..${path.sep}`)
+    && relative !== ".."
+    && !path.isAbsolute(relative));
+};
+
+const resolveThroughExistingAncestor = (candidatePath) => {
+  const resolvedCandidate = path.resolve(candidatePath);
+  let existingAncestor = resolvedCandidate;
+  while (!fs.existsSync(existingAncestor)) {
+    const parent = path.dirname(existingAncestor);
+    if (parent === existingAncestor) break;
+    existingAncestor = parent;
+  }
+
+  const realAncestor = fs.realpathSync(existingAncestor);
+  return path.resolve(realAncestor, path.relative(existingAncestor, resolvedCandidate));
+};
+
+const isTestRuntime = process.env.NODE_ENV === "test" || Boolean(process.env.NODE_TEST_CONTEXT);
+const defaultDbPath = resolveFromBackend(null, "../data/ims-sqlite-sidecar.sqlite");
+const defaultBackupDir = resolveFromBackend(null, "../backups/sqlite");
+const defaultLogDir = resolveFromBackend(null, "../logs");
+const getRuntimePathIdentity = (candidatePath) => {
+  const resolved = resolveThroughExistingAncestor(candidatePath);
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+};
+const normalizeDatabasePurpose = (value = "operational") => (
+  String(value || "operational").trim().toLowerCase() === "sandbox" ? "sandbox" : "operational"
+);
+
+const assertSafeTestRuntimePath = (candidatePath, label = "test runtime path") => {
+  if (!isTestRuntime) return path.resolve(candidatePath);
+
+  const resolvedCandidate = resolveThroughExistingAncestor(candidatePath);
+  const resolvedTempRoot = resolveThroughExistingAncestor(os.tmpdir());
+  const resolvedRepositoryRoot = resolveThroughExistingAncestor(repositoryRoot);
+  if (isPathAtOrInside(resolvedCandidate, resolvedTempRoot)
+    && !isPathAtOrInside(resolvedCandidate, resolvedRepositoryRoot)) {
+    return resolvedCandidate;
+  }
+
+  const error = new Error(
+    `Mode test menolak ${label} di luar folder temporary sistem atau di dalam source project. Runtime project tidak disentuh.`,
+  );
+  error.code = "TEST_RUNTIME_PATH_UNSAFE";
+  error.path = resolvedCandidate;
+  error.label = label;
+  error.repositoryRoot = resolvedRepositoryRoot;
+  error.tempRoot = resolvedTempRoot;
+  throw error;
+};
+
 const env = {
   port: Number(process.env.PORT || 3001),
   host: process.env.HOST || "0.0.0.0",
   corsOrigin: process.env.IMS_SQLITE_CORS_ORIGIN || "",
   corsOrigins: parseOrigins(process.env.IMS_SQLITE_CORS_ORIGIN),
   dbPath: resolveFromBackend(process.env.IMS_SQLITE_DB_PATH, "../data/ims-sqlite-sidecar.sqlite"),
+  defaultDbPath,
+  defaultBackupDir,
+  defaultLogDir,
+  getRuntimePathIdentity,
+  databasePurpose: normalizeDatabasePurpose(process.env.IMS_DATABASE_PURPOSE),
+  testingLabEnabled: parseBoolean(process.env.IMS_ENABLE_TESTING_LAB, false),
   backupDir: resolveFromBackend(process.env.IMS_SQLITE_BACKUP_DIR, "../backups/sqlite"),
   logDir: resolveFromBackend(process.env.IMS_LOG_DIR, "../logs"),
-  logToFile: parseBoolean(process.env.IMS_LOG_TO_FILE, process.env.NODE_ENV !== "test"),
+  logToFile: parseBoolean(process.env.IMS_LOG_TO_FILE, !isTestRuntime),
   logMaxBytes: parsePositiveInteger(process.env.IMS_LOG_MAX_BYTES, 5 * 1024 * 1024),
   logRetentionDays: parsePositiveInteger(process.env.IMS_LOG_RETENTION_DAYS, 30),
   dbQueueSlowWaitMs: parsePositiveInteger(process.env.IMS_DB_QUEUE_SLOW_WAIT_MS, 1_000),
@@ -41,6 +106,8 @@ const env = {
   authCookieSecure: parseBoolean(process.env.IMS_AUTH_COOKIE_SECURE, false),
   authAllowLegacyBearer: parseBoolean(process.env.IMS_AUTH_ALLOW_LEGACY_BEARER, false),
   authBootstrapCode: String(process.env.IMS_AUTH_BOOTSTRAP_CODE || "").trim(),
+  isTestRuntime,
+  assertSafeTestRuntimePath,
 };
 
 module.exports = env;

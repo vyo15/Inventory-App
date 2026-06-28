@@ -33,3 +33,72 @@ test("dev runner tetap memiliki timeout fallback tanpa fixed exit 300 ms", () =>
   assert.match(source, /process\.on\("SIGHUP"/);
   assert.match(source, /process\.on\("SIGBREAK"/);
 });
+
+const {
+  TESTING_LAB_FLAG,
+  buildRuntimeConfiguration,
+  createSafeEnv,
+  parseRunnerMode,
+} = require("./dev-all.cjs");
+
+test("npm runner membedakan mode operasional dan Lab Pengujian", () => {
+  assert.deepEqual(parseRunnerMode([]), { testingLab: false });
+  assert.deepEqual(parseRunnerMode([TESTING_LAB_FLAG]), { testingLab: true });
+});
+
+test("mode Lab menyuntikkan environment sandbox yang terpisah", () => {
+  const projectRoot = path.resolve(__dirname, "..");
+  const config = buildRuntimeConfiguration({
+    testingLab: true,
+    projectRoot,
+    baseEnv: {},
+  });
+
+  assert.equal(config.mode, "testing-lab");
+  assert.equal(config.envOverrides.IMS_ENABLE_TESTING_LAB, "true");
+  assert.equal(config.envOverrides.IMS_DATABASE_PURPOSE, "sandbox");
+  assert.equal(config.envOverrides.IMS_SQLITE_DB_PATH, path.join(projectRoot, "data", "ims-testing-sandbox.sqlite"));
+  assert.equal(config.envOverrides.IMS_SQLITE_BACKUP_DIR, path.join(projectRoot, "backups", "testing-sandbox"));
+  assert.equal(config.envOverrides.IMS_LOG_DIR, path.join(projectRoot, "logs", "testing-sandbox"));
+  assert.notEqual(config.databasePath, path.join(projectRoot, "data", "ims-sqlite-sidecar.sqlite"));
+  assert.notEqual(config.backupDir, path.join(projectRoot, "backups", "sqlite"));
+});
+
+test("mode operasional membersihkan environment sandbox lama tanpa mengubah parent env", () => {
+  const projectRoot = path.resolve(__dirname, "..");
+  const baseEnv = {
+    PATH: process.env.PATH || "",
+    IMS_ENABLE_TESTING_LAB: "true",
+    IMS_DATABASE_PURPOSE: "sandbox",
+    IMS_SQLITE_DB_PATH: "../data/ims-testing-sandbox.sqlite",
+    IMS_SQLITE_BACKUP_DIR: "../backups/testing-sandbox",
+    IMS_LOG_DIR: "../logs/testing-sandbox",
+  };
+  const originalSnapshot = { ...baseEnv };
+  const config = buildRuntimeConfiguration({
+    testingLab: false,
+    projectRoot,
+    baseEnv,
+  });
+  const childEnv = createSafeEnv({
+    baseEnv,
+    runtime: config,
+  });
+
+  assert.equal(config.mode, "operational");
+  assert.equal(config.databasePath, path.join(projectRoot, "data", "ims-sqlite-sidecar.sqlite"));
+  assert.equal(config.backupDir, path.join(projectRoot, "backups", "sqlite"));
+  assert.equal(childEnv.IMS_ENABLE_TESTING_LAB, "false");
+  assert.equal(childEnv.IMS_DATABASE_PURPOSE, "operational");
+  assert.equal(childEnv.IMS_SQLITE_DB_PATH, undefined);
+  assert.equal(childEnv.IMS_SQLITE_BACKUP_DIR, undefined);
+  assert.equal(childEnv.IMS_LOG_DIR, undefined);
+  assert.deepEqual(baseEnv, originalSnapshot);
+});
+
+test("package menyediakan command lab tanpa mengubah npm test", () => {
+  const packageJson = JSON.parse(fs.readFileSync(path.resolve(__dirname, "..", "package.json"), "utf8"));
+  assert.equal(packageJson.scripts.lab, "node scripts/dev-all.cjs --testing-lab");
+  assert.match(packageJson.scripts.test, /npm --prefix backend test/);
+  assert.match(packageJson.scripts.test, /npm --prefix frontend test/);
+});

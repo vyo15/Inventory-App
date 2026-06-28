@@ -96,7 +96,7 @@ npm run check
 
 Runner test menemukan seluruh file `backend/test/**/*.test.js`. Root check menjalankan test, syntax check backend, dan production build frontend. `git check`/pre-push juga menjalankan automated test.
 
-`npm test` wajib mengisolasi database, backup, dan log ke folder temporary sistem. Runner menimpa `IMS_SQLITE_DB_PATH`, `IMS_SQLITE_BACKUP_DIR`, dan `IMS_LOG_DIR`; helper integration test menolak reset bila path aktif berbeda dari database temporary milik test. Mode `NODE_ENV=test` juga menolak membuka database di luar folder temporary. Jika guard `TEST_DATABASE_*` gagal, hentikan test dan jangan mengubah path agar menunjuk ke `data/`.
+`npm test` wajib mengisolasi database, backup, dan log ke folder temporary sistem. Runner menimpa `IMS_SQLITE_DB_PATH`, `IMS_SQLITE_BACKUP_DIR`, dan `IMS_LOG_DIR`, memverifikasi ownership marker sebelum cleanup, serta membandingkan fingerprint database/backup/log runtime sebelum dan sesudah suite. Helper integration test menolak reset bila path aktif berbeda dari database temporary milik test. Runtime `NODE_ENV=test` maupun `NODE_TEST_CONTEXT` menolak database, backup, atau log di luar temporary. Jika guard `TEST_DATABASE_*`, `TEST_BACKUP_*`, `TEST_LOG_*`, `TEST_RUNTIME_*`, atau `TEST_RUNTIME_FINGERPRINT_CHANGED` muncul, hentikan test dan jangan mengarahkan path ke runtime project.
 
 ## Runtime data
 
@@ -116,7 +116,7 @@ Folder/file runtime tidak boleh masuk git atau patch.
 - Jangan mengubah jalur stock/sales/purchase/finance/production/payroll/HPP tanpa audit khusus.
 - Jangan hapus compatibility data historis total sebelum semua migrasi terbukti aman dan tidak ada runtime arsip aktif.
 - Jangan frontend langsung akses file database.
-- Jangan restore destructive tanpa preview, confirm guard, backup otomatis, dan audit log.
+- Jangan restore destructive tanpa preview, confirm guard, backup otomatis, dan audit log. Backup dari folder/media luar wajib diimport ke storage `manual`; registry path external tidak boleh digunakan atau dihapus langsung. Nama registry wajib cocok dengan basename file fisik, dan file managed harus berupa paket backup IMS atau SQLite legacy yang valid.
 - Semua akses database wajib lewat layanan lokal ini.
 
 ## Public endpoint hardening
