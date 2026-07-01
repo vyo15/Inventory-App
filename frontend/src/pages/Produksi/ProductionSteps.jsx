@@ -13,20 +13,11 @@ import {
 import {
   App as AntdApp,
   Badge,
-  Button,
-  Divider,
-  Card,
   Col,
-  Descriptions,
-  Drawer,
   Form,
   Input,
-  InputNumber,
-  Row,
   Select,
   Space,
-  Statistic,
-  Switch,
   Tag,
   Tooltip,
   Typography,
@@ -38,16 +29,11 @@ import {
 import {
   BASIS_TYPE_MAP,
   DEFAULT_PRODUCTION_STEP_FORM,
-  MONITORING_METRIC_MAP,
   PROCESS_TYPE_MAP,
-  PRODUCTION_STEP_BASIS_TYPES,
-  PRODUCTION_STEP_MONITORING_METRICS,
-  PRODUCTION_STEP_PAYROLL_MODES,
   PRODUCTION_STEP_PROCESS_TYPES,
   formatProductionStepPayrollPreview,
 } from "../../constants/productionStepOptions";
-import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
-import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/numberId";
+import formatNumber from "../../utils/formatters/numberId";
 import {
   createProductionStep,
   getAllProductionSteps,
@@ -62,11 +48,12 @@ import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import TableActionMenu from "../../components/Layout/Table/TableActionMenu";
-import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
-import InfoPopoverButton from "../../components/Layout/Feedback/InfoPopoverButton";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
+import ProductionStepDetailDrawer from "./components/ProductionStepDetailDrawer";
+import ProductionStepFormDrawer from "./components/ProductionStepFormDrawer";
+import ProductionStepRelationDrawer from "./components/ProductionStepRelationDrawer";
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
@@ -687,290 +674,52 @@ const ProductionSteps = () => {
 
       </PageContentCanvas>
 
-      <MobileDetailDrawer
-        title={`Detail Step Produksi: ${selectedStep?.name || "-"}`}
-        open={detailDrawerVisible}
-        onClose={() => setDetailDrawerVisible(false)}
-        width={760}
-      >
-        {/*
-=====================================================
-SECTION: Detail drawer tahapan produksi — AKTIF
-Fungsi:
-- Menampilkan konfigurasi step, rule payroll, dan relasi karyawan/BOM secara ringkas.
+<ProductionStepDetailDrawer
+        detailDrawerVisible={detailDrawerVisible}
+        handleOpenBomDrawer={handleOpenBomDrawer}
+        handleOpenEmployeeDrawer={handleOpenEmployeeDrawer}
+        selectedStep={selectedStep}
+        selectedStepPayrollPreview={selectedStepPayrollPreview}
+        setDetailDrawerVisible={setDetailDrawerVisible}
+      />
 
-Dipakai oleh:
-- Halaman ProductionSteps saat user membuka detail step produksi.
+<ProductionStepFormDrawer
+        editingStep={editingStep}
+        form={form}
+        formVisible={formVisible}
+        handleSubmit={handleSubmit}
+        resetFormState={resetFormState}
+        setFormVisible={setFormVisible}
+        submitting={submitting}
+      />
 
-Alasan perubahan:
-- Detail step dipisah menjadi metric, ringkasan, rule payroll, relasi, dan catatan agar tidak berupa satu Descriptions panjang.
-
-Catatan cleanup:
-- Belum ada; tombol relasi tetap memakai drawer existing.
-
-Risiko:
-- Jika payroll basis/rate atau relasi disembunyikan, Payroll Produksi dan BOM bisa salah dikonfigurasi.
-=====================================================
-*/}
-        {!selectedStep ? (
-          <EmptyStateBlock compact description="Tidak ada data" />
-        ) : (
-          <Space direction="vertical" size={16} style={{ width: "100%" }}>
-            <Row gutter={[12, 12]}>
-              <Col xs={24} sm={12}>
-                <Card size="small">
-                  <Statistic title="Karyawan Terkait" value={formatNumber(selectedStep.employeeCount || 0)} />
-                </Card>
-              </Col>
-              <Col xs={24} sm={12}>
-                <Card size="small">
-                  <Statistic title="Dipakai di BOM" value={formatNumber(selectedStep.bomCount || 0)} />
-                </Card>
-              </Col>
-            </Row>
-
-            <Card size="small" title="Ringkasan Step">
-              <Descriptions bordered column={1} size="small">
-                <Descriptions.Item label="Nama Step">{selectedStep.name || "-"}</Descriptions.Item>
-                <Descriptions.Item label="Kategori">
-                  {PROCESS_TYPE_MAP[selectedStep.processType] || selectedStep.processType || "-"}
-                </Descriptions.Item>
-                <Descriptions.Item label="Cara Kerja">
-                  {BASIS_TYPE_MAP[selectedStep.basisType] || "-"}
-                </Descriptions.Item>
-                <Descriptions.Item label="Monitoring Profil">
-                  {MONITORING_METRIC_MAP[selectedStep.monitoringMetric || "none"] || "Tidak memakai monitoring profil"}
-                </Descriptions.Item>
-                <Descriptions.Item label="Status">
-                  {selectedStep.isActive ? <Badge status="success" text="Aktif" /> : <Badge status="default" text="Nonaktif" />}
-                </Descriptions.Item>
-              </Descriptions>
-            </Card>
-
-            <Card size="small" title="Aturan Upah Produksi">
-              <Descriptions bordered column={1} size="small">
-                <Descriptions.Item label="Mode Bayar">{selectedStepPayrollPreview}</Descriptions.Item>
-                <Descriptions.Item label="Dasar Hitung">
-                  {selectedStep.payrollMode === "per_batch"
-                    ? "Mengikuti jumlah batch produksi"
-                    : "Mengikuti hasil baik pada Work Log"}
-                </Descriptions.Item>
-              </Descriptions>
-            </Card>
-
-            <Card size="small" title="Relasi">
-              <Space size={12} wrap>
-                <Button onClick={() => handleOpenEmployeeDrawer(selectedStep)}>
-                  Lihat karyawan ({formatNumber(selectedStep.employeeCount || 0)})
-                </Button>
-                <Button onClick={() => handleOpenBomDrawer(selectedStep)}>
-                  Lihat BOM ({formatNumber(selectedStep.bomCount || 0)})
-                </Button>
-              </Space>
-            </Card>
-
-            {selectedStep.description ? (
-              <Card size="small" title="Fungsi / Deskripsi">
-                <Typography.Paragraph style={{ marginBottom: 0 }}>
-                  {selectedStep.description}
-                </Typography.Paragraph>
-              </Card>
-            ) : null}
-          </Space>
-        )}
-      </MobileDetailDrawer>
-
-      <Drawer
-        title={editingStep?.id ? "Edit Step Produksi" : "Tambah Step Produksi"}
-        open={formVisible}
-        onClose={() => {
-          setFormVisible(false);
-          resetFormState();
-        }}
-        width={520}
-        destroyOnClose
-        extra={
-          <Space>
-            <Button
-              onClick={() => {
-                setFormVisible(false);
-                resetFormState();
-              }}
-            >
-              Batal
-            </Button>
-            <Button type="primary" loading={submitting} onClick={handleSubmit}>
-              Simpan
-            </Button>
-          </Space>
-        }
-      >
-        <Form form={form} layout="vertical" initialValues={{ ...DEFAULT_PRODUCTION_STEP_FORM, isActive: true }}>
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
-            <InfoPopoverButton
-              label="Panduan Step"
-              title="Cara menyusun Tahapan Produksi"
-              description="Buat satu step untuk satu proses kerja nyata. Gunakan nama yang universal agar step dapat dipakai lintas jenis bunga."
-              items={[
-                { key: "bom", label: "BOM", value: "Menentukan proses yang dijalankan oleh satu resep produksi." },
-                { key: "work-log", label: "Work Log", value: "Mencatat realisasi operator, hasil, dan penyelesaian proses." },
-                { key: "payroll", label: "Upah", value: "Tarif step dibaca saat Work Log selesai." },
-                { key: "naming", label: "Penamaan", value: "Gunakan nama proses, bukan nama produk atau jenis bunga tertentu." },
-              ]}
-            />
-          </div>
-          {/* =====================================================
-          SECTION: Production Step internal code hidden from main UI — AKTIF
-          Fungsi:
-          - Form Production Step tidak menampilkan input kode utama agar user fokus pada nama step, kategori, deskripsi, urutan, payroll rule, dan status.
-
-          Dipakai oleh:
-          - Drawer form ProductionSteps dan productionStepsService sebagai pembuat kode internal.
-
-          Alasan perubahan:
-          - Kode STP tetap dibuat otomatis oleh service, tetapi tidak perlu menjadi input utama konfigurasi step.
-
-          Catatan cleanup:
-          - Kode internal tetap dipakai untuk relasi/audit teknis, tetapi tidak ditampilkan sebagai informasi utama UI.
-
-          Risiko:
-          - Jangan mengubah relasi employee-worklog saat menyembunyikan kode internal.
-          ===================================================== */}
-          <Form.Item
-            label="Nama Step"
-            name="name"
-            rules={[{ required: true, message: "Nama step wajib diisi" }]}
-          >
-            <Input placeholder="Contoh: Potong Bahan Dasar" />
-          </Form.Item>
-
-          <Form.Item
-            label="Kategori"
-            name="processType"
-            tooltip="Menentukan arah perubahan hasil proses, bukan jenis bunga yang sedang dibuat."
-            rules={[{ required: true, message: "Kategori step wajib dipilih" }]}
-          >
-            <Select options={PRODUCTION_STEP_PROCESS_TYPES} placeholder="Pilih kategori step" />
-          </Form.Item>
-
-          <Form.Item label="Fungsi / Deskripsi" name="description">
-            <Input.TextArea autoSize={{ minRows: 2, maxRows: 4 }} placeholder="Jelaskan fungsi step ini secara singkat" />
-          </Form.Item>
-
-          <Form.Item
-            label="Cara Kerja Step"
-            name="basisType"
-            tooltip="Menentukan satuan aktivitas proses. Nilai ini berbeda dari Mode Bayar pada aturan upah."
-            rules={[{ required: true, message: "Cara kerja step wajib dipilih" }]}
-          >
-            <Select options={PRODUCTION_STEP_BASIS_TYPES} placeholder="Pilih cara kerja step" />
-          </Form.Item>
-
-          <Form.Item
-            label="Monitoring Profil Produksi"
-            name="monitoringMetric"
-            tooltip="Opsional. Pilih jenis hasil hanya jika step memakai Production Profile. Sistem tidak lagi menebak dari nama step."
-          >
-            <Select options={PRODUCTION_STEP_MONITORING_METRICS} />
-          </Form.Item>
-
-          <Divider orientation="left">Aturan Upah Produksi</Divider>
-
-          <Row gutter={12}>
-            <Col xs={24} md={12}>
-              <Form.Item
-                label="Mode Bayar"
-                name="payrollMode"
-                tooltip="Pilih tarif per qty hasil atau satu kali untuk setiap batch Work Log."
-              >
-                <Select options={PRODUCTION_STEP_PAYROLL_MODES} placeholder="Pilih mode bayar" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={12}>
-              <Form.Item
-                label="Tarif Upah"
-                name="payrollRate"
-                tooltip="Tarif operator yang dibaca saat Work Log selesai. Payroll final tetap berasal dari Work Log completed."
-              >
-                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} placeholder="Contoh: 2000" />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Form.Item
-            noStyle
-            shouldUpdate={(previousValues, currentValues) =>
-              previousValues.payrollMode !== currentValues.payrollMode ||
-              previousValues.payrollRate !== currentValues.payrollRate
-            }
-          >
-            {({ getFieldsValue }) => (
-              <Typography.Text
-                type="secondary"
-                style={{ display: "block", marginTop: -8, marginBottom: 16 }}
-              >
-                Ringkasan upah: {formatProductionStepPayrollPreview(getFieldsValue())}
-              </Typography.Text>
-            )}
-          </Form.Item>
-
-          <Form.Item label="Status Aktif" name="isActive" valuePropName="checked">
-            <Switch checkedChildren="Aktif" unCheckedChildren="Nonaktif" />
-          </Form.Item>
-        </Form>
-      </Drawer>
-
-      <MobileDetailDrawer
+<ProductionStepRelationDrawer
         title={`Karyawan pada Step: ${selectedStep?.name || "-"}`}
         open={employeeDrawerVisible}
         onClose={() => setEmployeeDrawerVisible(false)}
         width={760}
-      >
-        <Space direction="vertical" size={16} style={{ width: "100%" }}>
-          <Input
-            placeholder="Cari nama, role, atau tipe kerja..."
-            value={employeeDrawerSearch}
-            onChange={(e) => setEmployeeDrawerSearch(e.target.value)}
-            allowClear
-          />
+        searchPlaceholder="Cari nama, role, atau tipe kerja..."
+        searchValue={employeeDrawerSearch}
+        onSearchChange={setEmployeeDrawerSearch}
+        columns={employeeColumns}
+        dataSource={selectedStepEmployees}
+        mobileCardConfig={stepEmployeeMobileCardConfig}
+        emptyDescription="Belum ada karyawan terkait step ini"
+      />
 
-          <DataTableView
-            rowKey="id"
-            columns={employeeColumns}
-            dataSource={selectedStepEmployees}
-            pagination={{ pageSize: 8, showSizeChanger: true }}
-            showRefreshIndicator={false}
-            mobileCardConfig={stepEmployeeMobileCardConfig}
-            locale={{ emptyText: <EmptyStateBlock compact description="Belum ada karyawan terkait step ini" /> }}
-          />
-        </Space>
-      </MobileDetailDrawer>
-
-      <MobileDetailDrawer
+<ProductionStepRelationDrawer
         title={`BOM yang menggunakan Step: ${selectedStep?.name || "-"}`}
         open={bomDrawerVisible}
         onClose={() => setBomDrawerVisible(false)}
         width={860}
-      >
-        <Space direction="vertical" size={16} style={{ width: "100%" }}>
-          <Input
-            placeholder="Cari nama BOM atau target..."
-            value={bomDrawerSearch}
-            onChange={(e) => setBomDrawerSearch(e.target.value)}
-            allowClear
-          />
-
-          <DataTableView
-            rowKey="id"
-            columns={bomColumns}
-            dataSource={selectedStepBoms}
-            pagination={{ pageSize: 8, showSizeChanger: true }}
-            showRefreshIndicator={false}
-            mobileCardConfig={stepBomMobileCardConfig}
-            locale={{ emptyText: <EmptyStateBlock compact description="Step ini belum dipakai di BOM mana pun" /> }}
-          />
-        </Space>
-      </MobileDetailDrawer>
+        searchPlaceholder="Cari nama BOM atau target..."
+        searchValue={bomDrawerSearch}
+        onSearchChange={setBomDrawerSearch}
+        columns={bomColumns}
+        dataSource={selectedStepBoms}
+        mobileCardConfig={stepBomMobileCardConfig}
+        emptyDescription="Step ini belum dipakai di BOM mana pun"
+      />
     </div>
   );
 };

@@ -60,7 +60,7 @@ Konsekuensi:
 - Backup SQLite resmi sudah tersedia dengan checksum, manifest, dan restore guarded.
 - Auth lokal sudah aktif dengan user/role/status di SQLite.
 - Module Runtime Status tersedia di backend dan UI maintenance.
-- Repository mode frontend diarahkan ke SQLite sidecar.
+- Frontend memakai satu jalur resmi SQLite sidecar; switcher repository mode lama sudah dihapus.
 - Sales cancel/delete tetap dilarang; return menjadi jalur resmi barang kembali.
 - Stock mutation utama sudah diarahkan ke stock engine/backend commit.
 - Endpoint `POST /api/auth/login` dilindungi rate limit per IP: default 5 login gagal per 60 detik; login berhasil tidak menghabiskan kuota kegagalan.
@@ -177,10 +177,10 @@ Jangan membuat perhitungan stok baru di UI.
 ## Status temuan P0–P3 setelah hardening 2026-06-21
 
 - **Selesai di source:** application-level serialization untuk singleton SQLite, central transaction helper, concurrency regression, runtime business counter, Date.now reference fallback pada flow resmi, backup/restore exclusivity, password maksimum 128 karakter, graceful shutdown WAL/SHM, atomic cleanup import backup, direct dependency declaration, serta standardisasi formatter `formatNumberId`.
-- **Source review terbaru:** ZIP `Inventory-App-20260629-010427823-main-1d8626a9-dirty.zip` menjadi source of truth audit konsistensi ini. Label `dirty` berarti status staging/commit belum boleh diasumsikan dari arsip; working tree clean, commit lengkap, dan kesamaan upstream hanya dapat dibuktikan pada mesin project melalui `npm run git:check:full` dan `npm run verify:source`.
+- **Source review terbaru:** ZIP `Inventory-App-clean.zip` divalidasi sebagai source aktual untuk refactor 2026-06-30. Arsip yang diterima masih membawa file runtime pada `logs/` dan `backups/`, sehingga tidak dianggap artifact source-ready; output patch wajib changed-files-only dan ZIP source berikutnya harus dibuat melalui script clean ZIP resmi.
 - **Masih residual:** chunk terbesar setelah vendor split stabil sekitar 706.6 KiB dari budget 1074.2 KiB. React/React Router dan Day.js dipisahkan tanpa circular chunk; business/page modules tetap mengikuti route lazy.
 - **Masih residual dependency:** `xlsx@0.18.5` dan `esbuild@0.27.7` tetap terdokumentasi; tidak ada force upgrade/override major.
-- **Arsitektur service setelah cleanup:** public facade Produksi tetap di `production.service.js`; lifecycle Planning/Order dipisah ke `production.order.service.js`, guard/router ke `production.guards.js`, primitive bersama ke `production.shared.js`, dan kalkulasi murni ke `production.calculations.js`. Maintenance memisahkan audit/repair data quality ke `maintenance.dataQuality.service.js` tanpa memindahkan backup/restore/rollback dari facade. Pemisahan transaction domain yang lebih jauh tetap ditunda sampai full SQLite regression lokal lulus. Repository-mode compatibility masih memiliki importer aktif dan belum dihapus.
+- **Arsitektur service setelah cleanup:** public facade Produksi tetap di `production.service.js`; lifecycle Planning/Order dipisah ke `production.order.service.js`, guard/router ke `production.guards.js`, primitive bersama ke `production.shared.js`, dan kalkulasi murni ke `production.calculations.js`. Maintenance memisahkan audit/repair data quality ke `maintenance.dataQuality.service.js` tanpa memindahkan backup/restore/rollback dari facade. Frontend repository-mode switcher yang selalu mengembalikan SQLite sudah dihapus; repository domain tetap dipertahankan sebagai boundary pemanggilan service/adapter.
 - **Maintenance hardening:** preview purge memakai indeks referensi JSON satu kali per audit run, memblokir mapping legacy, dan tidak mengizinkan hard purge User agar identitas audit tetap utuh. Data-quality audit menghitung total penuh, menyimpan sample terbatas, memperluas finance reconciliation, dan mencatat audit run. Audit tetap on-demand; scheduler otomatis dan auto-repair finance belum tersedia karena perlu review performa/operasional terpisah.
 - **Quality evidence aktif:** frontend critical-flow coverage memakai provider V8 dengan threshold baseline dan CI mengunggah `coverage-summary.json` bersama CycloneDX SBOM backend/frontend.
 - **Masih hardening non-blocker:** TypeScript source dan breached-password screening online belum ditambahkan. OpenAPI administrator-only, security headers tanpa dependency, structured JSON logger/rotation, password umum lokal, Node runtime pinning, dan queue telemetry sudah aktif.
@@ -250,7 +250,7 @@ Automated test frontend sekarang juga menjaga:
 
 - Wrapper `productionCodeGenerator.js` dihapus setelah audit import/usage tidak menemukan pemanggil aktif.
 - Export compatibility `getStoredLocalAuthToken` dihapus setelah audit usage membuktikan tidak memiliki pemanggil; pembacaan token legacy tetap terpusat internal di `sqliteBackendStatusService.js` selama P8A.
-- Redirect route lama, format backup legacy, repository mode, dan Bearer compatibility tetap dipertahankan karena masih memiliki fungsi compatibility atau belum terbukti aman untuk dihapus.
+- Redirect route lama, format backup legacy, dan Bearer compatibility tetap dipertahankan karena masih memiliki fungsi compatibility atau belum terbukti aman untuk dihapus. Frontend repository-mode switcher sudah dihapus karena arsitektur resmi hanya SQLite.
 
 ### Temuan merge P4 yang dikoreksi
 
@@ -267,7 +267,7 @@ Test discovery otomatis menemukan bahwa empat file regression Production P4 suda
 - Dead compatibility files yang tidak mempunyai importer dihapus setelah usage scan.
 - GitHub Actions quality gate dan README root ditambahkan.
 - Legacy Bearer sekarang opt-in dan default nonaktif; flag hanya dipakai sementara untuk migrasi perangkat lama.
-- Refactor domain Produksi sudah memisahkan Planning/Order, guard/router, primitive bersama, dan kalkulasi murni sambil menjaga public facade identik. Complete Work Log, stock mutation, payroll, HPP, finance, dan audit tetap berada pada boundary backend resmi. Maintenance memisahkan data-quality audit/repair dari backup/restore facade. Pemisahan lebih jauh dan penghapusan repository-mode compatibility tetap pekerjaan terpisah setelah full SQLite regression lokal.
+- Refactor domain Produksi sudah memisahkan Planning/Order, guard/router, primitive bersama, kalkulasi murni, serta komponen form/detail halaman besar sambil menjaga public facade identik. Complete Work Log, stock mutation, payroll, HPP, finance, dan audit tetap berada pada boundary backend resmi. Maintenance memisahkan data-quality audit/repair dari backup/restore facade. Repository-mode compatibility frontend sudah dihapus setelah seluruh importer terbukti selalu memakai SQLite.
 - Placeholder frontend `businessCodeGenerator.js` dan `businessCodeCounterService.js` tetap dihapus karena tidak mempunyai importer. Tabel existing `business_code_counters` sekarang dipakai runtime melalui helper backend bersama; concurrency code allocation dilindungi transaction dan regression test.
 
 ## Update cleanup architecture C0–C16 — 2026-06-28
@@ -283,5 +283,7 @@ Source terbaru telah menjalani cleanup behavior-preserving:
 - Primitive `CompactCell`, filter periode Finance, Purchase defaults/quantity, payroll tally, dan state mutation helper mengurangi duplikasi UI.
 - Detail drawer utama dipisahkan dari page orchestration tanpa memindahkan business mutation ke presentational component.
 - Architecture/source-hygiene test mencegah business engine kembali ke `utils`, formula canonical kembali disalin, atau facade kembali membesar.
+- Refactor UI 2026-06-30 memisahkan form, detail drawer, modal anak, visual Dashboard, setup drawer, presentasi backup, dan modal User Management dari page orchestration. Service existing, route, role guard, schema, status flow, stock mutation, payroll, HPP, finance posting, restore guard, serta audit log tidak diubah.
+- CSS Dashboard mengganti 13 override `!important` dengan selector scoped; override lebar drawer responsif tetap dipertahankan karena harus mengalahkan style inline Ant Design. Shared CSS lain tetap memerlukan visual regression bertahap dan tidak dibersihkan massal.
 
 Peta struktur dan guard final tersedia di `docs/22_CLEANUP_ARCHITECTURE.md`.

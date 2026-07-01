@@ -16,6 +16,10 @@ const helperSource = fs.readFileSync(
   path.resolve("src/pages/Utilities/components/restorePreviewHelpers.js"),
   "utf8",
 );
+const presentationSource = fs.readFileSync(
+  path.resolve("src/pages/Utilities/components/offlineDatabaseCenterPresentation.jsx"),
+  "utf8",
+);
 
 const buildCompleteTableCounts = (overrides = {}) => Object.fromEntries([
   ...DATA_COVERAGE_GROUPS.flatMap((group) => group.tables.map(([table]) => [table, 0])),
@@ -100,7 +104,7 @@ describe("OfflineDatabaseCenter restore account guard", () => {
     expect(source).toContain("InfoPopoverButton");
     expect(source).toContain('label="Informasi"');
     expect(source).toContain('label="Kebijakan"');
-    expect(source).toContain('title="Detail file backup"');
+    expect(presentationSource).toContain('title="Detail file backup"');
     expect(source).not.toContain("offline-db-status-strip-backup");
   });
 
@@ -128,8 +132,8 @@ describe("OfflineDatabaseCenter restore account guard", () => {
       storedTotal: 2,
       statusAware: true,
     });
-    expect(source).toContain("Arsip histori");
-    expect(source).toContain("tersimpan");
+    expect(presentationSource).toContain("Arsip histori");
+    expect(presentationSource).toContain("tersimpan");
   });
 
   it("memakai pagination untuk daftar backup tanpa memotong diam-diam", () => {

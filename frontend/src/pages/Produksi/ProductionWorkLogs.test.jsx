@@ -3,6 +3,10 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const source = fs.readFileSync(path.resolve("src/pages/Produksi/ProductionWorkLogs.jsx"), "utf8");
+const formSource = fs.readFileSync(
+  path.resolve("src/pages/Produksi/components/ProductionWorkLogFormDrawer.jsx"),
+  "utf8",
+);
 const modalSource = fs.readFileSync(
   path.resolve("src/pages/Produksi/components/WorkLogCompleteModal.jsx"),
   "utf8",
@@ -17,8 +21,8 @@ describe("ProductionWorkLogs page contract", () => {
   });
 
   it("menjaga line PO terkunci dan action completion tetap tersedia", () => {
-    expect(source).toContain("buildWorkLogLineActionColumn");
-    expect(source).toContain("Terkunci dari PO");
+    expect(formSource).toContain("buildWorkLogLineActionColumn");
+    expect(formSource).toContain("dari PO terkunci");
     expect(source).toContain("Selesaikan");
     expect(source).not.toContain("Tambah Work Log");
   });
@@ -31,7 +35,7 @@ describe("ProductionWorkLogs page contract", () => {
 
   it("membatasi tepat satu operator agar payroll hasil bersama tidak berlipat", () => {
     expect(source).toContain("completionEmployeeState");
-    expect(source).toContain("maxCount={1}");
+    expect(modalSource).toContain("maxCount={1}");
     expect(modalSource).toContain("Pilih tepat 1 operator");
     expect(modalSource).toContain("pisahkan Production Order/Work Log per operator");
   });

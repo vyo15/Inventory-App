@@ -11,7 +11,6 @@ import {
   Dropdown,
   Form,
   Input,
-  Modal,
   Pagination,
   Select,
   Space,
@@ -21,11 +20,8 @@ import {
   Upload,
 } from "antd";
 import {
-  CameraOutlined,
   CheckCircleOutlined,
-  DeleteOutlined,
   EditOutlined,
-  LockOutlined,
   MoreOutlined,
   PlusOutlined,
   SearchOutlined,
@@ -53,12 +49,13 @@ import {
   updateSystemUserProfile,
   updateSystemUserStatus,
 } from "../../services/System/userService";
-import PageFormModal from "../../components/Layout/Forms/PageFormModal";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import { DataRefreshIndicator } from "../../components/Layout/Feedback/DataLoadingState";
 import { getLocalPasswordPolicyHint, validateLocalPasswordPolicy } from "../../services/System/localAuthService";
+import UserProfileFormModal from "./components/UserProfileFormModal";
+import UserStatusChangeModal from "./components/UserStatusChangeModal";
 import "./UserManagement.css";
 
 const { Text } = Typography;
@@ -739,184 +736,35 @@ const UserManagement = () => {
 
       </PageContentCanvas>
 
-      <PageFormModal
-        title={formMode === FORM_MODE.CREATE
-          ? "Tambah Akun"
-          : isEditingSelf
-            ? "Edit Profil Saya"
-            : "Edit Akun Lokal"}
+      <UserProfileFormModal
         open={isModalOpen}
-        onCancel={closeModal}
-        okText="Simpan"
-        cancelText="Batal"
         form={form}
+        isCreate={formMode === FORM_MODE.CREATE}
+        isEditingSelf={isEditingSelf}
+        isSaving={isSaving}
+        isProcessingAvatar={isProcessingAvatar}
+        avatarDraft={avatarDraft}
+        modalInitials={modalInitials}
+        assignableRoleOptions={assignableRoleOptions}
+        passwordPolicyHint={PASSWORD_POLICY_HINT}
+        avatarMimeTypes={AVATAR_MIME_TYPES}
+        normalizeUsername={normalizeUsernameValue}
+        validateUsernamePattern={validateUsernamePattern}
+        validateUniqueUsername={validateUniqueUsername}
+        validatePassword={validateLocalPasswordField}
+        onCancel={closeModal}
         onFinish={handleSaveProfile}
-        confirmLoading={isSaving || isProcessingAvatar}
-        modalProps={{ destroyOnHidden: true, width: 620 }}
-        formProps={{ requiredMark: false }}
-      >
-        <div className="ims-user-photo-field">
-          <Avatar
-            className="ims-user-photo-preview"
-            size={88}
-            src={avatarDraft || undefined}
-            alt="Preview foto profil"
-          >
-            {modalInitials}
-          </Avatar>
-          <div className="ims-user-photo-copy">
-            <h4>Foto Profil</h4>
-            <p>
-              Foto opsional. JPG, PNG, atau WebP maksimal 2 MB akan dipotong 1:1 dan diperkecil otomatis.
-            </p>
-            <div className="ims-user-photo-actions">
-              <Upload
-                accept={AVATAR_MIME_TYPES.join(",")}
-                beforeUpload={handleAvatarUpload}
-                showUploadList={false}
-                disabled={isProcessingAvatar || isSaving}
-              >
-                <Button icon={<CameraOutlined />} loading={isProcessingAvatar}>
-                  {avatarDraft ? "Ganti Foto" : "Pilih Foto"}
-                </Button>
-              </Upload>
-              <Button
-                danger
-                icon={<DeleteOutlined />}
-                disabled={!avatarDraft || isProcessingAvatar || isSaving}
-                onClick={handleRemoveAvatar}
-              >
-                Hapus Foto
-              </Button>
-            </div>
-          </div>
-        </div>
+        onAvatarUpload={handleAvatarUpload}
+        onRemoveAvatar={handleRemoveAvatar}
+      />
 
-        <Form.Item
-          label="Username"
-          name="username"
-          normalize={(value) => normalizeUsernameValue(value)}
-          rules={[
-            { required: true, message: "Username wajib diisi." },
-            { validator: validateUsernamePattern },
-            { validator: validateUniqueUsername },
-          ]}
-        >
-          <Input disabled={formMode === FORM_MODE.EDIT} placeholder="contoh: user-gudang" />
-        </Form.Item>
-
-        <Form.Item
-          label="Nama Tampilan"
-          name="displayName"
-          rules={[{ required: true, message: "Nama tampilan wajib diisi." }]}
-        >
-          <Input placeholder="contoh: Admin Toko" />
-        </Form.Item>
-
-        <Form.Item
-          label={formMode === FORM_MODE.CREATE ? "Password" : "Password Baru"}
-          name="password"
-          rules={formMode === FORM_MODE.CREATE
-            ? [
-                { required: true, message: "Password akun wajib diisi." },
-                { validator: validateLocalPasswordField },
-              ]
-            : [{ validator: (_, value) => (value
-                ? validateLocalPasswordField(_, value)
-                : Promise.resolve()) }]}
-        >
-          <Input.Password
-            autoComplete="new-password"
-            prefix={<LockOutlined />}
-            placeholder={formMode === FORM_MODE.CREATE
-              ? PASSWORD_POLICY_HINT
-              : "Isi jika ingin ganti password"}
-          />
-        </Form.Item>
-
-        <Form.Item
-          label="Konfirmasi Password"
-          name="confirmPassword"
-          dependencies={["password"]}
-          rules={[
-            ({ getFieldValue }) => ({
-              validator(_, value) {
-                const password = getFieldValue("password");
-                if (!password && formMode === FORM_MODE.EDIT) return Promise.resolve();
-                if (!value && formMode === FORM_MODE.CREATE) {
-                  return Promise.reject(new Error("Konfirmasi password wajib diisi."));
-                }
-                if (password && value !== password) {
-                  return Promise.reject(new Error("Konfirmasi password belum sama."));
-                }
-                return Promise.resolve();
-              },
-            }),
-          ]}
-        >
-          <Input.Password
-            autoComplete="new-password"
-            prefix={<LockOutlined />}
-            placeholder="Ulangi password"
-          />
-        </Form.Item>
-
-        <Form.Item
-          label="Role"
-          name="role"
-          rules={[{ required: true, message: "Role wajib dipilih." }]}
-          extra={isEditingSelf ? "Role akun sendiri dikunci untuk menjaga akses administrator." : undefined}
-        >
-          <Select
-            disabled={isEditingSelf}
-            options={assignableRoleOptions}
-            placeholder="Pilih Administrator atau User"
-          />
-        </Form.Item>
-
-        <Form.Item
-          label="Status"
-          name="status"
-          rules={[{ required: true, message: "Status wajib dipilih." }]}
-          extra={isEditingSelf ? "Status akun yang sedang digunakan tidak dapat diubah." : undefined}
-        >
-          <Select
-            disabled={isEditingSelf}
-            options={[
-              { label: USER_STATUS_LABELS[USER_STATUS.ACTIVE], value: USER_STATUS.ACTIVE },
-              { label: USER_STATUS_LABELS[USER_STATUS.INACTIVE], value: USER_STATUS.INACTIVE },
-            ]}
-          />
-        </Form.Item>
-      </PageFormModal>
-
-      <Modal
-        title={statusChangeRequest?.nextStatus === USER_STATUS.INACTIVE
-          ? "Nonaktifkan user?"
-          : "Aktifkan user?"}
+      <UserStatusChangeModal
         open={isStatusModalOpen}
+        request={statusChangeRequest}
+        loading={isUpdatingStatus}
         onCancel={handleCloseStatusModal}
-        onOk={handleConfirmStatusChange}
-        confirmLoading={isUpdatingStatus}
-        okText={statusChangeRequest?.nextStatus === USER_STATUS.INACTIVE
-          ? "Nonaktifkan"
-          : "Aktifkan"}
-        okButtonProps={{ danger: statusChangeRequest?.nextStatus === USER_STATUS.INACTIVE }}
-        cancelText="Batal"
-        destroyOnHidden
-      >
-        <Space direction="vertical" size={8}>
-          <Text>
-            Profile: <Text strong>{statusChangeRequest?.userRecord?.displayName || "User"}</Text>{" "}
-            (<Text code>@{statusChangeRequest?.userRecord?.username || "-"}</Text>)
-          </Text>
-          <Text>
-            {statusChangeRequest?.nextStatus === USER_STATUS.INACTIVE
-              ? "User tidak bisa login sampai diaktifkan lagi."
-              : "User bisa login kembali."}
-          </Text>
-        </Space>
-      </Modal>
+        onConfirm={handleConfirmStatusChange}
+      />
     </div>
   );
 };

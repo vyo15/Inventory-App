@@ -123,73 +123,12 @@
   white-space: normal;
 }
 
-.reset-maintenance-guide-panel {
-  background: var(--ims-bg-card-soft);
-  border: 1px solid var(--ims-border-color-soft);
-  border-radius: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 12px 14px;
-}
-
-.reset-maintenance-guide-heading {
-  align-items: flex-start;
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
-}
-
-.reset-maintenance-guide-heading > div {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-
-.reset-maintenance-guide-grid {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.reset-maintenance-guide-step {
-  background: var(--ims-bg-card);
-  border: 1px solid var(--ims-border-color-soft);
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  min-width: 0;
-  padding: 10px 11px;
-}
-
-.reset-maintenance-guide-step-header {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-  justify-content: space-between;
-}
-
-.reset-maintenance-guide-step-header > span {
-  color: var(--ims-text-muted);
-  font-size: var(--ims-font-size-caption);
-  font-weight: var(--ims-font-weight-strong);
-}
-
 .maintenance-checklist-item {
   height: 100%;
 }
 
 .maintenance-checklist-item .ant-card-body {
   height: 100%;
-}
-
-@media (max-width: 1100px) {
-  .reset-maintenance-guide-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 768px) {
@@ -203,8 +142,7 @@
     margin-bottom: 10px;
   }
 
-  .reset-maintenance-group-heading,
-  .reset-maintenance-guide-heading {
+  .reset-maintenance-group-heading {
     align-items: stretch;
     flex-direction: column;
   }
@@ -222,8 +160,7 @@
     width: 100%;
   }
 
-  .reset-maintenance-latest-grid,
-  .reset-maintenance-guide-grid {
+  .reset-maintenance-latest-grid {
     grid-template-columns: 1fr;
   }
 

@@ -13,17 +13,11 @@ import {
   App as AntdApp,
   Button,
   Col,
-  DatePicker,
-  Descriptions,
-  Drawer,
   Form,
   Input,
-  InputNumber,
   Popconfirm,
-  Row,
   Select,
   Space,
-  Tag,
   Typography,
 } from "antd";
 import {
@@ -31,22 +25,16 @@ import {
   EyeOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
-import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import ProductionFilterCard from "../../components/Produksi/shared/ProductionFilterCard";
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import { CompactCellText } from "../../components/Layout/Table/CompactCell";
-import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
-import ImsNotice from "../../components/Layout/Feedback/ImsNotice";
 import InfoPopoverButton from "../../components/Layout/Feedback/InfoPopoverButton";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
-import {
-  DEFAULT_PRODUCTION_PAYROLL_FORM,
-  getCompactPayrollStatusTags,
-} from "../../constants/productionPayrollOptions";
-import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/numberId";
+import { DEFAULT_PRODUCTION_PAYROLL_FORM } from "../../constants/productionPayrollOptions";
+import formatNumber from "../../utils/formatters/numberId";
 import formatCurrency from "../../utils/formatters/currencyId";
 import {
   buildPayrollDraftFromWorkLog,
@@ -58,6 +46,8 @@ import {
 } from "../../services/Produksi/productionPayrollsService";
 import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
+import ProductionPayrollDetailDrawer from "./components/ProductionPayrollDetailDrawer";
+import ProductionPayrollFormDrawer from "./components/ProductionPayrollFormDrawer";
 
 // =====================================================
 // IMS NOTE [AKTIF/GUARDED] - Formatter angka payroll
@@ -82,52 +72,8 @@ import { resolveDisplayReference } from "../../utils/references/displayReference
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data historis decimal tidak dimigrasi otomatis.
 // Behavior: input baru no-decimal; business rules dan schema/alur data utama tetap sama.
 
-const PAYROLL_STATUS_HELP = {
-  draft: "Payroll belum final dan masih perlu dicek sebelum dibayar.",
-  confirmed: "Payroll sudah disetujui tetapi belum ditandai dibayar.",
-  paid: "Payroll sudah ditandai dibayar dan akan membuat Cash Out otomatis bila nominal > 0.",
-  cancelled: "Payroll dibatalkan dan tidak dipakai sebagai pembayaran aktif.",
-};
-
-const PAYROLL_PAYMENT_STATUS_HELP = {
-  unpaid: "Belum dibayar secara internal payroll.",
-  partial: "Sebagian pembayaran sudah dicatat secara internal payroll.",
-  paid: "Sudah dibayar; Cash Out otomatis dibuat dengan source Payroll Produksi jika nominal > 0.",
-};
-
-const isEditableProductionPayroll = (record = {}) => record.paymentStatus !== "paid";
-
-const renderPayrollStatusTags = (record = {}) => (
-  <Space size={4} wrap>
-    {getCompactPayrollStatusTags(record).map((item) => (
-      <Tag key={item.key} color={item.color}>
-        {item.label}
-      </Tag>
-    ))}
-  </Space>
-);
-
-const getCompactPayrollStatusHelp = (record = {}) => {
-  const statusHelp = PAYROLL_STATUS_HELP[record.status];
-  const paymentHelp = PAYROLL_PAYMENT_STATUS_HELP[record.paymentStatus];
-
-  if (record.status && record.paymentStatus && record.status === record.paymentStatus) {
-    return statusHelp || paymentHelp || "Status payroll.";
-  }
-
-  return [statusHelp, paymentHelp].filter(Boolean).join(" ") || "Status payroll dan pembayaran internal line payroll.";
-};
-
-const PayrollDetailValue = ({ children, help }) => (
-  <Space direction="vertical" size={0}>
-    <span>{children}</span>
-    {help ? (
-      <Typography.Text type="secondary" className="ims-cell-meta">
-        {help}
-      </Typography.Text>
-    ) : null}
-  </Space>
-);
+import { isEditableProductionPayroll } from "./helpers/productionPayrollsPageHelpers";
+import { ProductionPayrollStatusTags } from "./components/ProductionPayrollStatusTags";
 
 /*
 =====================================================
@@ -506,7 +452,7 @@ const ProductionPayrolls = () => {
       title: "Status",
       key: "status",
       width: 150,
-      render: (_, record) => renderPayrollStatusTags(record),
+      render: (_, record) => <ProductionPayrollStatusTags record={record} />,
     },
     {
       title: "Aksi",
@@ -558,7 +504,7 @@ const ProductionPayrolls = () => {
       record.workerName || "Karyawan belum diisi",
       record.stepName || "Step belum diisi",
     ],
-    tags: (record) => renderPayrollStatusTags(record),
+    tags: (record) => <ProductionPayrollStatusTags record={record} />,
     meta: [
       { label: "Nominal", value: (record) => formatCurrency(record.finalAmount || 0) },
       { label: "Work Log", value: (record) => record.workNumber || "-" },
@@ -656,324 +602,25 @@ const ProductionPayrolls = () => {
 
       </PageContentCanvas>
 
-      <Drawer
-        title={
-          editingRecord?.id
-            ? "Edit Payroll Produksi"
-            : "Tambah Payroll Produksi"
-        }
-        open={formVisible}
-        onClose={() => {
-          setFormVisible(false);
-          resetFormState();
-        }}
-        width={860}
-        destroyOnClose
-        extra={
-          <Space>
-            <Button
-              onClick={() => {
-                setFormVisible(false);
-                resetFormState();
-              }}
-            >
-              Batal
-            </Button>
-            <Button type="primary" loading={submitting} onClick={handleSubmit}>
-              Simpan
-            </Button>
-          </Space>
-        }
-      >
-        <Form
-          form={form}
-          layout="vertical"
-          initialValues={{
-            ...DEFAULT_PRODUCTION_PAYROLL_FORM,
-            payrollDate: dayjs(),
-          }}
-        >
-          <Row gutter={16}>
-            <Col xs={24} md={8}>
-              <Form.Item
-                label="No. Payroll"
-                name="payrollNumber"
-              >
-                <Input placeholder="Otomatis: PAY-DDMMYYYY-001" disabled />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item
-                label="Tanggal Payroll"
-                name="payrollDate"
-                rules={[
-                  { required: true, message: "Tanggal payroll wajib diisi" },
-                ]}
-              >
-                <DatePicker style={{ width: "100%" }} format="DD/MM/YYYY" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Typography.Text type="secondary">
-                Draft payroll disarankan diambil dari work log completed.
-              </Typography.Text>
-            </Col>
-          </Row>
+<ProductionPayrollFormDrawer
+        editingRecord={editingRecord}
+        employeeOptions={employeeOptions}
+        form={form}
+        formVisible={formVisible}
+        handleGenerateFromWorkLog={handleGenerateFromWorkLog}
+        handleSubmit={handleSubmit}
+        referenceData={referenceData}
+        resetFormState={resetFormState}
+        setFormVisible={setFormVisible}
+        submitting={submitting}
+        workLogOptions={workLogOptions}
+      />
 
-          <Row gutter={16}>
-            <Col xs={24} md={16}>
-              <Select
-                style={{ width: "100%", marginBottom: 16 }}
-                showSearch
-                optionFilterProp="label"
-                placeholder="Pilih work log completed untuk generate draft payroll..."
-                options={workLogOptions}
-                onChange={handleGenerateFromWorkLog}
-              />
-            </Col>
-          </Row>
-
-          <Row gutter={16}>
-            <Col xs={24} md={12}>
-              <Form.Item
-                label="Work Log"
-                name="workLogId"
-                rules={[{ required: true, message: "Work log wajib dipilih" }]}
-              >
-                <Select
-                  showSearch
-                  optionFilterProp="label"
-                  options={workLogOptions}
-                  placeholder="Pilih work log..."
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={12}>
-              <Form.Item label="Karyawan" name="workerId">
-                <Select
-                  showSearch
-                  optionFilterProp="label"
-                  options={employeeOptions}
-                  placeholder="Pilih karyawan..."
-                  onChange={(value) => {
-                    const employee = referenceData.employees.find(
-                      (item) => item.id === value,
-                    );
-                    form.setFieldsValue({
-                      workerCode: employee?.code || "",
-                      workerName: employee?.name || "",
-                    });
-                  }}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Row gutter={16}>
-            <Col xs={24} md={6}>
-              <Form.Item label="Payroll Mode" name="payrollMode">
-                <Select
-                  options={[
-                    { value: "per_qty", label: "Per Qty" },
-                    { value: "per_batch", label: "Per Batch" },
-                  ]}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={6}>
-              <Form.Item label="Payroll Rate" name="payrollRate">
-                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={6}>
-              <Form.Item label="Payroll Qty Base" name="payrollQtyBase">
-                <InputNumber min={1} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={6}>
-              <Form.Item label="Output Qty Used" name="outputQtyUsed">
-                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Row gutter={16}>
-            <Col xs={24} md={4}>
-              <Form.Item label="Bonus" name="bonusAmount">
-                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={4}>
-              <Form.Item label="Potongan" name="deductionAmount">
-                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={4}>
-              <Form.Item label="Worked Qty" name="workedQty">
-                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={4}>
-              <Form.Item label="Team Worker Count" name="teamWorkerCount">
-                <InputNumber min={1} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item shouldUpdate noStyle>
-                {({ getFieldsValue }) => {
-                  const values = getFieldsValue();
-                  const rate = Number(values.payrollRate || 0);
-                  const qtyBase = Number(values.payrollQtyBase || 1);
-                  const outputQtyUsed = Number(values.outputQtyUsed || 0);
-                  const bonus = Number(values.bonusAmount || 0);
-                  const deduction = Number(values.deductionAmount || 0);
-
-                  let amountCalculated = 0;
-
-                  if (values.payrollMode === "per_batch") {
-                    const workedQty = Number(values.workedQty || outputQtyUsed || 0);
-                    amountCalculated = workedQty * rate;
-                  } else {
-                    amountCalculated =
-                      qtyBase > 0 ? (outputQtyUsed / qtyBase) * rate : 0;
-                  }
-
-                  const finalAmount = amountCalculated + bonus - deduction;
-
-                  return (
-                    <Form.Item label="Preview Final Amount">
-                      <Input value={formatCurrency(finalAmount)} disabled />
-                    </Form.Item>
-                  );
-                }}
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Row gutter={16}>
-            <Col xs={24}>
-              <Form.Item label="Catatan Perhitungan" name="calculationNotes">
-                <Input.TextArea rows={2} />
-              </Form.Item>
-            </Col>
-            <Col xs={24}>
-              <Form.Item label="Catatan Internal" name="notes">
-                <Input.TextArea rows={2} />
-              </Form.Item>
-            </Col>
-          </Row>
-        </Form>
-      </Drawer>
-
-      <MobileDetailDrawer
-        title="Detail Payroll Produksi"
-        open={detailVisible}
-        onClose={() => setDetailVisible(false)}
-        width={640}
-      >
-        {!selectedRecord ? (
-          <EmptyStateBlock compact description="Tidak ada data" />
-        ) : (
-          <>
-            {/* =====================================================
-                ACTIVE / READ-ONLY CONTEXT
-                Fungsi blok:
-                - memberi konteks singkat agar user memahami detail payroll sebagai
-                  line pembayaran per operator dari Work Log completed.
-                Alasan perubahan:
-                - Task 3 meminta help text tanpa mengubah status, nominal, atau service.
-                Status:
-                - aktif dipakai; bukan kandidat cleanup.
-            ===================================================== */}
-            <ImsNotice
-              variant="info"
-              compact
-              className="ims-mb-16"
-              title="Detail payroll operator"
-              description="Payroll final berasal dari Work Log completed dan rule tahapan."
-            />
-
-            <Descriptions column={1} bordered size="small">
-              <Descriptions.Item label="No. Line Payroll">
-                <PayrollDetailValue help="Nomor unik untuk satu baris payroll. Satu Work Log bisa menghasilkan beberapa line jika ada lebih dari satu operator.">
-                  {resolveDisplayReference(selectedRecord, { fields: ["payrollNumber"], fallback: "-" })}
-                </PayrollDetailValue>
-              </Descriptions.Item>
-              <Descriptions.Item label="Tanggal Payroll">
-                <PayrollDetailValue help="Tanggal pencatatan line payroll di modul Payroll Produksi.">
-                  {selectedRecord.payrollDate
-                    ? dayjs(
-                        selectedRecord.payrollDate?.toDate
-                          ? selectedRecord.payrollDate.toDate()
-                          : selectedRecord.payrollDate,
-                      ).format("DD/MM/YYYY")
-                    : "-"}
-                </PayrollDetailValue>
-              </Descriptions.Item>
-              <Descriptions.Item label="Operator / Karyawan">
-                <PayrollDetailValue help="Karyawan produksi yang menerima payroll dari line ini.">
-                  {selectedRecord.workerName || "-"}
-                </PayrollDetailValue>
-              </Descriptions.Item>
-              <Descriptions.Item label="Work Log Asal">
-                <PayrollDetailValue help="Pekerjaan produksi yang menjadi sumber payroll. Dipakai untuk audit ke hasil produksi.">
-                  {selectedRecord.workNumber || "-"}
-                </PayrollDetailValue>
-              </Descriptions.Item>
-              <Descriptions.Item label="Target Produksi">
-                <PayrollDetailValue help="Produk/semi finished yang dikerjakan pada Work Log terkait.">
-                  {selectedRecord.targetName || "-"}
-                </PayrollDetailValue>
-              </Descriptions.Item>
-              <Descriptions.Item label="Step / Tahapan">
-                <PayrollDetailValue help="Tahapan produksi yang menentukan rule, mode, dan tarif payroll.">
-                  {selectedRecord.stepName || "-"}
-                </PayrollDetailValue>
-              </Descriptions.Item>
-              <Descriptions.Item label="Sistem Bayar">
-                <PayrollDetailValue help="Mode payroll dari rule tahapan, misalnya per qty atau per batch.">
-                  {selectedRecord.payrollMode || "-"}
-                </PayrollDetailValue>
-              </Descriptions.Item>
-              <Descriptions.Item label="Payroll Rate / Tarif">
-                <PayrollDetailValue help="Tarif dasar dari rule Tahapan Produksi yang dipakai untuk menghitung payroll.">
-                  {formatCurrency(selectedRecord.payrollRate)}
-                </PayrollDetailValue>
-              </Descriptions.Item>
-              <Descriptions.Item label="Qty Dasar / Output Qty Used">
-                <PayrollDetailValue help="Jumlah output yang dipakai sebagai dasar hitung payroll. Biasanya dari Good Qty atau basis output sesuai rule tahapan.">
-                  {formatNumber(selectedRecord.outputQtyUsed)}
-                </PayrollDetailValue>
-              </Descriptions.Item>
-              <Descriptions.Item label="Amount Calculated / Hasil Hitung Sistem">
-                <PayrollDetailValue help="Nominal hasil hitung otomatis dari sistem sebelum bonus dan potongan manual.">
-                  {formatCurrency(selectedRecord.amountCalculated)}
-                </PayrollDetailValue>
-              </Descriptions.Item>
-              <Descriptions.Item label="Final Amount / Nominal Akhir">
-                <PayrollDetailValue help="Nominal akhir line payroll setelah bonus dan potongan. Nilai ini yang dipakai sebagai nilai payroll final.">
-                  {formatCurrency(selectedRecord.finalAmount)}
-                </PayrollDetailValue>
-              </Descriptions.Item>
-              <Descriptions.Item label="Status">
-                <PayrollDetailValue help={getCompactPayrollStatusHelp(selectedRecord)}>
-                  {renderPayrollStatusTags(selectedRecord)}
-                </PayrollDetailValue>
-              </Descriptions.Item>
-              <Descriptions.Item label="Calculation Notes / Catatan Sistem">
-                <PayrollDetailValue help="Catatan otomatis dari sistem tentang cara payroll dihitung. Berguna untuk audit jika nominal perlu dicek ulang.">
-                  {selectedRecord.calculationNotes || "-"}
-                </PayrollDetailValue>
-              </Descriptions.Item>
-              <Descriptions.Item label="Notes / Catatan Manual">
-                <PayrollDetailValue help="Catatan manual dari user/admin. Tidak mengubah nominal payroll kecuali ada penyesuaian bonus atau potongan yang disimpan di field terkait.">
-                  {selectedRecord.notes || "-"}
-                </PayrollDetailValue>
-              </Descriptions.Item>
-            </Descriptions>
-          </>
-        )}
-      </MobileDetailDrawer>
+<ProductionPayrollDetailDrawer
+        detailVisible={detailVisible}
+        selectedRecord={selectedRecord}
+        setDetailVisible={setDetailVisible}
+      />
     </div>
   );
 };

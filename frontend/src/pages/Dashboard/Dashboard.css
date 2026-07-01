@@ -94,8 +94,8 @@
   gap: 12px;
 }
 
-.dashboard-hero-eyebrow {
-  color: rgba(255, 255, 255, 0.82) !important;
+.dashboard-hero-card .dashboard-hero-eyebrow.ant-typography {
+  color: rgba(255, 255, 255, 0.82);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.07em;
@@ -108,18 +108,18 @@
   color: var(--ims-dashboard-hero-text);
 }
 
-.dashboard-hero-value {
-  margin-top: 14px !important;
-  color: var(--ims-dashboard-hero-text) !important;
-  font-size: clamp(29px, 3vw, 40px) !important;
-  font-weight: 800 !important;
+.dashboard-hero-card h2.dashboard-hero-value.ant-typography {
+  margin-top: 14px;
+  color: var(--ims-dashboard-hero-text);
+  font-size: clamp(29px, 3vw, 40px);
+  font-weight: 800;
   letter-spacing: -0.025em;
-  line-height: 1.1 !important;
+  line-height: 1.1;
 }
 
-.dashboard-hero-note {
-  margin-top: 5px !important;
-  color: rgba(255, 255, 255, 0.74) !important;
+.dashboard-hero-card .dashboard-hero-note.ant-typography {
+  margin-top: 5px;
+  color: rgba(255, 255, 255, 0.74);
   font-size: 12px;
 }
 
@@ -130,9 +130,9 @@
   margin-top: 18px;
 }
 
-.dashboard-hero-trend > .ant-typography {
+.dashboard-hero-card .dashboard-hero-trend > .ant-typography {
   max-width: 150px;
-  color: rgba(255, 255, 255, 0.7) !important;
+  color: rgba(255, 255, 255, 0.7);
   font-size: 10.5px;
   line-height: 1.35;
 }
@@ -180,9 +180,9 @@
   background: rgba(255, 255, 255, 0.1);
 }
 
-.dashboard-hero-mini-stats .ant-typography {
+.dashboard-hero-card .dashboard-hero-mini-stats .ant-typography {
   display: block;
-  color: rgba(255, 255, 255, 0.72) !important;
+  color: rgba(255, 255, 255, 0.72);
   font-size: 10.5px;
 }
 
@@ -288,22 +288,22 @@
   white-space: nowrap;
 }
 
-.dashboard-kpi-label {
-  color: var(--ims-text-secondary) !important;
+.dashboard-kpi .dashboard-kpi-label.ant-typography {
+  color: var(--ims-text-secondary);
   font-size: 12px;
   font-weight: 600;
 }
 
-.dashboard-kpi h3.ant-typography {
-  margin-top: auto !important;
+.dashboard-kpi > h3.ant-typography {
+  margin-top: auto;
   color: var(--ims-text-primary);
   font-size: clamp(20px, 2vw, 25px);
   font-weight: 800;
   letter-spacing: -0.015em;
 }
 
-.dashboard-kpi-detail {
-  color: var(--ims-text-muted) !important;
+.dashboard-kpi .dashboard-kpi-detail.ant-typography {
+  color: var(--ims-text-muted);
   font-size: 11px;
   line-height: 1.4;
 }

@@ -2,23 +2,16 @@
 
 File ini hanya contoh. Jangan commit `frontend/.env.local` karena file env lokal harus tetap ignored oleh Git.
 
+Frontend tidak lagi memakai variabel `VITE_*_REPOSITORY_MODE`. Seluruh modul selalu menggunakan backend SQLite lokal/LAN.
+
 ## Laptop yang sama
 
 ```env
 VITE_AUTH_MODE=sqlite
 # VITE_SQLITE_API_BASE_URL=http://localhost:3001
-VITE_SUPPLIERS_REPOSITORY_MODE=sqlite
-VITE_PRICING_RULES_REPOSITORY_MODE=sqlite
-VITE_PRODUCTS_REPOSITORY_MODE=sqlite
-VITE_RAW_MATERIALS_REPOSITORY_MODE=sqlite
-VITE_STOCK_READ_MODELS_REPOSITORY_MODE=sqlite
-VITE_STOCK_ADJUSTMENTS_REPOSITORY_MODE=sqlite
-VITE_TRANSACTIONS_REPOSITORY_MODE=sqlite
-VITE_SEMI_FINISHED_REPOSITORY_MODE=sqlite
-VITE_FINANCE_REPOSITORY_MODE=sqlite
-VITE_PRODUCTION_REPOSITORY_MODE=sqlite
-VITE_REPORTS_REPOSITORY_MODE=sqlite
 ```
+
+Kosongkan `VITE_SQLITE_API_BASE_URL` agar frontend otomatis memakai hostname halaman saat ini dengan port backend `3001`.
 
 ## HP/laptop lain satu WiFi
 
@@ -27,17 +20,6 @@ Ganti `IP-LAPTOP` dengan IP komputer yang menjalankan backend:
 ```env
 VITE_AUTH_MODE=sqlite
 VITE_SQLITE_API_BASE_URL=http://IP-LAPTOP:3001
-VITE_SUPPLIERS_REPOSITORY_MODE=sqlite
-VITE_PRICING_RULES_REPOSITORY_MODE=sqlite
-VITE_PRODUCTS_REPOSITORY_MODE=sqlite
-VITE_RAW_MATERIALS_REPOSITORY_MODE=sqlite
-VITE_STOCK_READ_MODELS_REPOSITORY_MODE=sqlite
-VITE_STOCK_ADJUSTMENTS_REPOSITORY_MODE=sqlite
-VITE_TRANSACTIONS_REPOSITORY_MODE=sqlite
-VITE_SEMI_FINISHED_REPOSITORY_MODE=sqlite
-VITE_FINANCE_REPOSITORY_MODE=sqlite
-VITE_PRODUCTION_REPOSITORY_MODE=sqlite
-VITE_REPORTS_REPOSITORY_MODE=sqlite
 ```
 
-Catatan: Runtime aktif source saat ini memakai SQLite. Production/Payroll/HPP tetap guarded secara business flow, tetapi repository mode tidak boleh diarahkan kembali ke runtime arsip.
+Production, Payroll, HPP, Stock, Purchase, Sales, Finance, dan Restore tetap guarded melalui service/backend resmi. Menghapus repository-mode switcher tidak mengubah business guard atau memberi izin direct database write dari frontend.

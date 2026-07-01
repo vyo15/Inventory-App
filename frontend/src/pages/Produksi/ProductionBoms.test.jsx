@@ -3,6 +3,10 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const source = fs.readFileSync(path.resolve("src/pages/Produksi/ProductionBoms.jsx"), "utf8");
+const formSource = fs.readFileSync(
+  path.resolve("src/pages/Produksi/components/ProductionBomFormDrawer.jsx"),
+  "utf8",
+);
 const serviceSource = fs.readFileSync(
   path.resolve("src/services/Produksi/productionBomsService.js"),
   "utf8",
@@ -19,7 +23,7 @@ describe("ProductionBoms page contract", () => {
   });
 
   it("aksi material dan step tetap memakai builder bersama dengan handler terpisah", () => {
-    expect(source).toContain("buildBomLineActionColumn");
+    expect(formSource).toContain("buildBomLineActionColumn");
     expect(source).toContain("openMaterialModal");
     expect(source).toContain("openStepModal");
     expect(source).toContain("handleRemoveMaterialLine");
@@ -27,9 +31,9 @@ describe("ProductionBoms page contract", () => {
   });
 
   it("mengunci satu BOM menjadi satu tahapan pekerjaan", () => {
-    expect(source).toContain('title="Tahapan Pekerjaan"');
-    expect(source).toContain("Satu resep/BOM mewakili satu perubahan stok");
-    expect(source).toContain("addButtonDisabled={stepLines.length >= 1}");
+    expect(formSource).toContain('title="Tahapan Pekerjaan"');
+    expect(formSource).toContain("Satu resep/BOM mewakili satu perubahan stok");
+    expect(formSource).toContain("addButtonDisabled={stepLines.length >= 1}");
     expect(source).toContain("BOM wajib memiliki tepat 1 Tahapan Produksi aktif");
     expect(serviceSource).toContain('routingMode: "single_step"');
   });

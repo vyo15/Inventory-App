@@ -21,18 +21,10 @@ import {
   App as AntdApp,
   Badge,
   Button,
-  Card,
-  Col,
-  DatePicker,
-  Descriptions,
-  Drawer,
   Dropdown,
   Form,
   Input,
-  InputNumber,
-  Modal,
   Progress,
-  Row,
   Select,
   Space,
   Tag,
@@ -50,8 +42,6 @@ import ProductionPageHeader from "../../components/Produksi/shared/ProductionPag
 import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
-import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
-import ImsNotice from "../../components/Layout/Feedback/ImsNotice";
 import InfoPopoverButton from "../../components/Layout/Feedback/InfoPopoverButton";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import {
@@ -66,14 +56,12 @@ import {
   updateProductionPlan,
 } from "../../services/Produksi/productionPlanningService";
 import { buildVariantOptionsFromItem } from "../../utils/variants/variantStockHelpers";
-import {
-  formatNumberId,
-  formatPercentId,
-  formatQuantityId,
-  parseIntegerIdInput,
-} from "../../utils/formatters/numberId";
+import { formatNumberId, formatPercentId, formatQuantityId } from "../../utils/formatters/numberId";
 import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { buildDisplayReferenceSearchText, resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
+import ProductionPlanOrderDrawer from "./components/ProductionPlanOrderDrawer";
+import ProductionPlanningDetailDrawer from "./components/ProductionPlanningDetailDrawer";
+import ProductionPlanningFormDrawer from "./components/ProductionPlanningFormDrawer";
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
@@ -946,273 +934,47 @@ const ProductionPlanning = () => {
 
       </PageContentCanvas>
 
-      <Drawer
-        title={editingPlan ? "Edit Production Planning" : "Tambah Production Planning"}
-        open={formVisible}
-        onClose={() => {
-          setFormVisible(false);
-          setEditingPlan(null);
-        }}
-        width={720}
-        extra={
-          <Space>
-            <Button onClick={() => setFormVisible(false)}>Batal</Button>
-            <Button type="primary" loading={submitting} onClick={handleSubmit}>
-              Simpan
-            </Button>
-          </Space>
-        }
-      >
-        <ImsNotice
-          variant="guard"
-          compact
-          className="ims-mb-16"
-          title="Form ini tidak mengubah stok; progress dari Work Log completed."
-        />
+<ProductionPlanningFormDrawer
+        PERIOD_OPTIONS={PERIOD_OPTIONS}
+        PRIORITY_OPTIONS={PRIORITY_OPTIONS}
+        TARGET_TYPE_OPTIONS={TARGET_TYPE_OPTIONS}
+        editingPlan={editingPlan}
+        form={form}
+        formVisible={formVisible}
+        getDefaultPeriodRange={getDefaultPeriodRange}
+        getTargetOptions={getTargetOptions}
+        handleSubmit={handleSubmit}
+        referenceData={referenceData}
+        selectedTargetItem={selectedTargetItem}
+        setEditingPlan={setEditingPlan}
+        setFormVisible={setFormVisible}
+        submitting={submitting}
+        targetTypeValue={targetTypeValue}
+        targetVariantOptions={targetVariantOptions}
+        toDatePickerValue={toDatePickerValue}
+      />
 
-        {/* =====================================================
-            ACTIVE - form planning.
-            Fungsi:
-            - menyimpan target produksi, periode, deadline, prioritas, dan varian target;
-            - tidak menyimpan actual progress manual karena progress dihitung service.
-        ===================================================== */}
-        <Form form={form} layout="vertical">
-          <Form.Item label="Judul Planning" name="title">
-            <Input placeholder="Contoh: Target kelopak mawar merah minggu ini" />
-          </Form.Item>
+<ProductionPlanningDetailDrawer
+        canCreatePoFromPlan={canCreatePoFromPlan}
+        detailVisible={detailVisible}
+        formatDateDisplay={formatDateDisplay}
+        getStatusMeta={getStatusMeta}
+        handleOpenPoDrawer={handleOpenPoDrawer}
+        selectedPlan={selectedPlan}
+        setDetailVisible={setDetailVisible}
+      />
 
-          <Row gutter={12}>
-            <Col xs={24} md={8}>
-              <Form.Item label="Tipe Periode" name="periodType" rules={[{ required: true, message: "Tipe periode wajib dipilih" }]}>
-                <Select
-                  options={PERIOD_OPTIONS}
-                  onChange={(value) => {
-                    const range = getDefaultPeriodRange(value);
-                    form.setFieldsValue({
-                      periodStartDate: toDatePickerValue(range.start),
-                      periodEndDate: toDatePickerValue(range.end),
-                      dueDate: toDatePickerValue(range.end),
-                    });
-                  }}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item label="Mulai Periode" name="periodStartDate" rules={[{ required: true, message: "Mulai periode wajib diisi" }]}>
-                <DatePicker style={{ width: "100%" }} format="DD/MM/YYYY" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item label="Akhir Periode" name="periodEndDate" rules={[{ required: true, message: "Akhir periode wajib diisi" }]}>
-                <DatePicker style={{ width: "100%" }} format="DD/MM/YYYY" />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Row gutter={12}>
-            <Col xs={24} md={8}>
-              <Form.Item label="Deadline" name="dueDate" rules={[{ required: true, message: "Deadline wajib diisi" }]}>
-                <DatePicker style={{ width: "100%" }} format="DD/MM/YYYY" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item label="Target Type" name="targetType" rules={[{ required: true, message: "Target type wajib dipilih" }]}>
-                <Select
-                  options={TARGET_TYPE_OPTIONS}
-                  onChange={() => {
-                    form.setFieldsValue({
-                      targetItemId: undefined,
-                      targetVariantKey: undefined,
-                    });
-                  }}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item label="Prioritas" name="priority">
-                <Select options={PRIORITY_OPTIONS} />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Form.Item label="Target Item" name="targetItemId" rules={[{ required: true, message: "Target item wajib dipilih" }]}>
-            <Select
-              showSearch
-              optionFilterProp="label"
-              placeholder="Pilih produk / semi finished..."
-              options={getTargetOptions({ targetType: targetTypeValue, referenceData })}
-              onChange={() => {
-                form.setFieldsValue({ targetVariantKey: undefined });
-              }}
-            />
-          </Form.Item>
-
-          {targetVariantOptions.length > 0 ? (
-            <Form.Item
-              label="Varian Target"
-              name="targetVariantKey"
-              rules={[{ required: true, message: "Varian target wajib dipilih" }]}
-              tooltip="Progress mengikuti varian target."
-            >
-              <Select
-                showSearch
-                optionFilterProp="label"
-                placeholder="Pilih varian target..."
-                options={targetVariantOptions}
-              />
-            </Form.Item>
-          ) : null}
-
-          <Form.Item label="Jumlah Target Produksi" name="targetQty" rules={[{ required: true, message: "Target qty wajib diisi" }]}>
-            <InputNumber min={1} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} addonAfter={selectedTargetItem?.unit || "pcs"} />
-          </Form.Item>
-
-          <Form.Item label="Catatan" name="notes">
-            <Input.TextArea rows={3} placeholder="Catatan rencana produksi..." />
-          </Form.Item>
-        </Form>
-      </Drawer>
-
-      <MobileDetailDrawer
-        title="Detail Production Planning"
-        open={detailVisible}
-        onClose={() => setDetailVisible(false)}
-        width={820}
-        extra={
-          selectedPlan && canCreatePoFromPlan(selectedPlan) ? (
-            <Button type="primary" icon={<LinkOutlined />} onClick={() => handleOpenPoDrawer(selectedPlan)}>
-              Buat PO
-            </Button>
-          ) : null
-        }
-      >
-        {!selectedPlan ? (
-          <EmptyStateBlock compact description="Tidak ada data planning" />
-        ) : (
-          <Space direction="vertical" size={16} style={{ width: "100%" }}>
-            <Descriptions bordered column={1} size="small">
-              <Descriptions.Item label="Kode">{resolveDisplayReference(selectedPlan, { fields: ["planCode", "code"], fallback: "-" })}</Descriptions.Item>
-              <Descriptions.Item label="Judul">{selectedPlan.title || "-"}</Descriptions.Item>
-              <Descriptions.Item label="Periode">
-                {formatDateDisplay(selectedPlan.periodStartDate)} - {formatDateDisplay(selectedPlan.periodEndDate)}
-              </Descriptions.Item>
-              <Descriptions.Item label="Deadline">{formatDateDisplay(selectedPlan.dueDate)}</Descriptions.Item>
-              <Descriptions.Item label="Target">
-                {selectedPlan.targetItemName || "-"}
-                {selectedPlan.targetVariantLabel ? ` · ${selectedPlan.targetVariantLabel}` : ""}
-              </Descriptions.Item>
-              <Descriptions.Item label="Progress">
-                {formatQuantityId(selectedPlan.actualCompletedQty)} / {formatQuantityId(selectedPlan.targetQty)} {selectedPlan.targetUnit || "pcs"} ({formatPercentId(selectedPlan.progressPercent)})
-              </Descriptions.Item>
-              <Descriptions.Item label="Sisa Target">
-                {formatQuantityId(selectedPlan.remainingQty)} {selectedPlan.targetUnit || "pcs"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Status">
-                <Badge status={getStatusMeta(selectedPlan.status).badge} text={getStatusMeta(selectedPlan.status).label} />
-              </Descriptions.Item>
-              <Descriptions.Item label="Production Order Terkait">
-                {(selectedPlan.linkedProductionOrderCodes || []).length > 0 ? (
-                  <Space wrap>
-                    {(selectedPlan.linkedProductionOrderCodes || []).map((code) => (
-                      <Tag key={code} color="blue">{code}</Tag>
-                    ))}
-                  </Space>
-                ) : (
-                  <Text type="secondary">Belum ada PO terkait.</Text>
-                )}
-              </Descriptions.Item>
-              <Descriptions.Item label="Catatan">{selectedPlan.notes || "-"}</Descriptions.Item>
-            </Descriptions>
-
-            <Card size="small" title="Progress Target">
-              <Progress percent={Math.min(Number(selectedPlan.progressPercent || 0), 100)} />
-              <Text type="secondary">
-                Progress hanya dihitung dari Work Log completed milik PO yang terhubung dengan planning ini.
-              </Text>
-            </Card>
-          </Space>
-        )}
-      </MobileDetailDrawer>
-
-      <Drawer
-        title="Buat Production Order dari Planning"
-        open={poDrawerVisible}
-        onClose={() => setPoDrawerVisible(false)}
-        width={640}
-        extra={
-          <Space>
-            <Button onClick={() => setPoDrawerVisible(false)}>Batal</Button>
-            <Button type="primary" loading={poSubmitting} onClick={handleCreatePo}>
-              Buat PO
-            </Button>
-          </Space>
-        }
-      >
-        {!selectedPlanForPo ? (
-          <EmptyStateBlock compact description="Pilih planning lebih dulu" />
-        ) : (
-          <Space direction="vertical" size={16} style={{ width: "100%" }}>
-            <ImsNotice
-              variant="info"
-              compact
-              title="PO tetap memakai BOM; planning hanya referensi target."
-            />
-
-            <Card size="small">
-              <Space direction="vertical" size={2}>
-                <Text strong>{selectedPlanForPo.planCode} · {selectedPlanForPo.targetItemName}</Text>
-                <Text type="secondary">
-                  Sisa target {formatQuantityId(selectedPlanForPo.remainingQty)} {selectedPlanForPo.targetUnit || "pcs"}
-                  {selectedPlanForPo.targetVariantLabel ? ` · Varian ${selectedPlanForPo.targetVariantLabel}` : ""}
-                </Text>
-              </Space>
-            </Card>
-
-            {/* =====================================================
-                ACTIVE / GUARDED - form PO dari planning.
-                Fungsi:
-                - user memilih BOM dan qty batch secara eksplisit;
-                - create PO tetap lewat service PO existing agar requirement BOM tidak dilewati.
-            ===================================================== */}
-            <Form form={poForm} layout="vertical">
-              <Form.Item label="BOM" name="bomId" rules={[{ required: true, message: "BOM wajib dipilih" }]}>
-                <Select
-                  showSearch
-                  optionFilterProp="label"
-                  placeholder="Pilih BOM untuk target planning..."
-                  options={getMatchingBomOptions({ plan: selectedPlanForPo, referenceData })}
-                  notFoundContent="Belum ada BOM aktif yang cocok dengan target planning ini."
-                />
-              </Form.Item>
-
-              <Form.Item label="Qty Batch Produksi" name="orderQty" rules={[{ required: true, message: "Qty batch wajib diisi" }]}>
-                <InputNumber min={1} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
-              </Form.Item>
-
-              <Row gutter={12}>
-                <Col xs={24} md={12}>
-                  <Form.Item label="Rencana Mulai" name="plannedStartDate">
-                    <DatePicker style={{ width: "100%" }} format="DD/MM/YYYY" />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} md={12}>
-                  <Form.Item label="Rencana Selesai" name="plannedEndDate">
-                    <DatePicker style={{ width: "100%" }} format="DD/MM/YYYY" />
-                  </Form.Item>
-                </Col>
-              </Row>
-
-              <Form.Item label="Prioritas PO" name="priority">
-                <Select options={PRIORITY_OPTIONS} />
-              </Form.Item>
-
-              <Form.Item label="Catatan PO" name="notes">
-                <Input.TextArea rows={3} />
-              </Form.Item>
-            </Form>
-          </Space>
-        )}
-      </Drawer>
+<ProductionPlanOrderDrawer
+        PRIORITY_OPTIONS={PRIORITY_OPTIONS}
+        getMatchingBomOptions={getMatchingBomOptions}
+        handleCreatePo={handleCreatePo}
+        poDrawerVisible={poDrawerVisible}
+        poForm={poForm}
+        poSubmitting={poSubmitting}
+        referenceData={referenceData}
+        selectedPlanForPo={selectedPlanForPo}
+        setPoDrawerVisible={setPoDrawerVisible}
+      />
     </div>
   );
 };

@@ -23,8 +23,8 @@ import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
-import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
 import StockAdjustmentPanel from "./components/StockAdjustmentPanel";
+import StockItemDetailDrawer from "./components/StockItemDetailDrawer";
 import { getInventoryLogs } from "../../services/Inventory/inventoryService";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
@@ -955,65 +955,13 @@ const StockManagement = () => {
 
       </PageContentCanvas>
 
-      <MobileDetailDrawer
-        title="Detail Riwayat Stok"
-        open={Boolean(selectedStockLogDetail)}
+      <StockItemDetailDrawer
+        record={selectedStockLogDetail}
         onClose={closeStockLogDetail}
-        width="min(100vw, 420px)"
-      >
-        {selectedStockLogDetail ? (
-          <Space direction="vertical" size={14} style={{ width: "100%" }}>
-            <div className="ims-cell-stack">
-              <Text type="secondary">Tanggal</Text>
-              <Text strong>{formatLogDate(selectedStockLogDetail.timestamp)}</Text>
-            </div>
-            <div className="ims-cell-stack">
-              <Text type="secondary">Item</Text>
-              <Text strong>{selectedStockLogDetail.itemName || "-"}</Text>
-              <Text type="secondary">
-                {selectedStockLogDetail.itemTypeLabel || resolveItemTypeLabel(selectedStockLogDetail.collectionName)}
-                {selectedStockLogDetail.variantLabelResolved ? ` • Varian: ${selectedStockLogDetail.variantLabelResolved}` : ""}
-              </Text>
-            </div>
-            <Space wrap>
-              <Tag color={selectedStockLogDetail.directionMeta?.color || "default"}>
-                {selectedStockLogDetail.directionMeta?.label || "-"}
-              </Tag>
-              <Tag color={selectedStockLogDetail.sourceMeta?.color || "default"}>
-                {selectedStockLogDetail.sourceMeta?.label || "-"}
-              </Tag>
-            </Space>
-            <div className="ims-cell-stack">
-              <Text type="secondary">Qty</Text>
-              <Text
-                strong
-                style={{ color: selectedStockLogDetail.directionMeta?.value === "in" ? "var(--ims-color-success-text)" : "var(--ims-color-danger-text)" }}
-              >
-                {formatLogQuantityWithUnit(selectedStockLogDetail.quantityChange, selectedStockLogDetail)}
-              </Text>
-            </div>
-            <div className="ims-cell-stack">
-              <Text type="secondary">Referensi Audit</Text>
-              {Array.isArray(selectedStockLogDetail.referenceItems) && selectedStockLogDetail.referenceItems.length > 0 ? (
-                <Space direction="vertical" size={6}>
-                  {selectedStockLogDetail.referenceItems.map((item) => (
-                    <div key={`${item.label}-${item.referenceId || item.detail}`} className="ims-cell-stack ims-cell-stack-tight">
-                      <Text strong>{item.label}</Text>
-                      {item.detail ? <Text type="secondary">{item.detail}</Text> : null}
-                    </div>
-                  ))}
-                </Space>
-              ) : (
-                <Text type="secondary">-</Text>
-              )}
-            </div>
-            <div className="ims-cell-stack">
-              <Text type="secondary">Catatan</Text>
-              <Text>{selectedStockLogDetail.noteText || "-"}</Text>
-            </div>
-          </Space>
-        ) : null}
-      </MobileDetailDrawer>
+        formatDate={formatLogDate}
+        formatQuantity={formatLogQuantityWithUnit}
+        resolveTypeLabel={resolveItemTypeLabel}
+      />
     </>
   );
 };

@@ -7,7 +7,6 @@ import {
 import { Link } from "react-router-dom";
 import {
   Button,
-  Drawer,
   Progress,
   Space,
   Tag,
@@ -17,13 +16,10 @@ import {
   AppstoreOutlined,
   ArrowRightOutlined,
   BarChartOutlined,
-  BuildOutlined,
-  CheckCircleOutlined,
   ClockCircleOutlined,
   DatabaseOutlined,
   DollarCircleOutlined,
   HistoryOutlined,
-  PlusCircleOutlined,
   ReloadOutlined,
   ShoppingCartOutlined,
   ToolOutlined,
@@ -70,6 +66,19 @@ import {
   normalizeStatus,
   sortDashboardAlertItems,
 } from "./helpers/dashboardPageHelpers";
+import {
+  buildInitialSetupPhaseGroups,
+  buildInitialSetupSteps,
+  readInitialSetupDismissed,
+  writeInitialSetupDismissed,
+} from "./helpers/dashboardInitialSetupHelpers";
+import buildDashboardQuickActions from "./components/dashboardQuickActions";
+import DashboardInitialSetupDrawer from "./components/DashboardInitialSetupDrawer";
+import {
+  DashboardMiniTrend,
+  DashboardSalesChart,
+  DashboardTopProducts,
+} from "./components/DashboardVisuals";
 import "./Dashboard.css";
 
 const { Text, Title } = Typography;
@@ -80,430 +89,6 @@ const DASHBOARD_TAG_COLORS = Object.freeze({
   info: "blue",
   success: "green",
 });
-
-const INITIAL_SETUP_DISMISSED_STORAGE_KEY = "ims.dashboard.initialSetup.dismissed";
-
-const INITIAL_SETUP_PHASES = Object.freeze([
-  {
-    key: "foundation",
-    label: "Fase 1 · Fondasi",
-    description: "Siapkan struktur dasar sebelum membuat master dan transaksi.",
-  },
-  {
-    key: "operational-master",
-    label: "Fase 2 · Master Operasional",
-    description: "Lengkapi item, sumber restock, dan resep produksi.",
-  },
-  {
-    key: "go-live",
-    label: "Fase 3 · Go-Live",
-    description: "Pastikan stok awal tercatat dan buat backup baseline.",
-  },
-]);
-
-const readInitialSetupDismissed = () => {
-  try {
-    return window.localStorage.getItem(INITIAL_SETUP_DISMISSED_STORAGE_KEY) === "1";
-  } catch {
-    return false;
-  }
-};
-
-const writeInitialSetupDismissed = (dismissed) => {
-  try {
-    if (dismissed) {
-      window.localStorage.setItem(INITIAL_SETUP_DISMISSED_STORAGE_KEY, "1");
-    } else {
-      window.localStorage.removeItem(INITIAL_SETUP_DISMISSED_STORAGE_KEY);
-    }
-  } catch {
-    // Preferensi UI tidak boleh mengganggu Dashboard jika storage browser tidak tersedia.
-  }
-};
-
-const DASHBOARD_CHART_SIZE = Object.freeze({
-  width: 760,
-  height: 200,
-  left: 28,
-  right: 20,
-  top: 24,
-  bottom: 30,
-});
-
-const formatCompactCurrency = (value) =>
-  new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(Math.round(getNumericValue(value)));
-
-const buildDashboardQuickActions = (role) => [
-  {
-    key: "sales",
-    routeKey: ROUTE_ACCESS_KEYS.SALES,
-    label: "Tambah Penjualan",
-    description: "Catat transaksi penjualan baru.",
-    to: "/sales",
-    icon: <PlusCircleOutlined />,
-  },
-  {
-    key: "purchases",
-    routeKey: ROUTE_ACCESS_KEYS.PURCHASES,
-    label: "Tambah Pembelian",
-    description: "Catat pembelian dan penambahan stok.",
-    to: "/purchases",
-    icon: <ShoppingCartOutlined />,
-  },
-  {
-    key: "stock",
-    routeKey: ROUTE_ACCESS_KEYS.STOCK_MANAGEMENT,
-    label: "Cek Stok",
-    description: "Periksa stok tersedia dan stok yang telah dipesan.",
-    to: APP_ROUTES.INVENTORY.STOCK_MANAGEMENT,
-    icon: <AppstoreOutlined />,
-  },
-  {
-    key: "stock-report",
-    routeKey: ROUTE_ACCESS_KEYS.STOCK_REPORT,
-    label: "Laporan Stok",
-    description: "Lihat laporan stok untuk pemeriksaan lanjutan.",
-    to: "/report-stock",
-    icon: <BarChartOutlined />,
-  },
-  {
-    key: "planning",
-    routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_PLANNING,
-    label: "Perencanaan Produksi",
-    description: "Pantau target mingguan dan bulanan produksi.",
-    to: APP_ROUTES.PRODUCTION.PLANNING,
-    icon: <ClockCircleOutlined />,
-  },
-  {
-    key: "worklog",
-    routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_WORK_LOGS,
-    label: "Work Log Produksi",
-    description: "Pantau pekerjaan produksi yang sedang berjalan.",
-    to: APP_ROUTES.PRODUCTION.WORK_LOGS,
-    icon: <BuildOutlined />,
-  },
-  {
-    key: "payroll",
-    routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_PAYROLLS,
-    label: "Payroll Produksi",
-    description: "Tinjau payroll yang belum dibayar.",
-    to: APP_ROUTES.PRODUCTION.PAYROLLS,
-    icon: <DollarCircleOutlined />,
-  },
-  {
-    key: "cash-in",
-    routeKey: ROUTE_ACCESS_KEYS.CASH_IN,
-    label: "Kas Masuk",
-    description: "Catat dan tinjau pemasukan operasional.",
-    to: "/cash-in",
-    icon: <WalletOutlined />,
-  },
-  {
-    key: "cash-out",
-    routeKey: ROUTE_ACCESS_KEYS.CASH_OUT,
-    label: "Kas Keluar",
-    description: "Catat dan tinjau biaya operasional.",
-    to: "/cash-out",
-    icon: <WalletOutlined />,
-  },
-].filter(({ routeKey }) => canAccessRoute(routeKey, role));
-
-const buildInitialSetupSteps = (readiness = {}) => {
-  const flags = readiness?.flags || {};
-  const counts = readiness?.counts || {};
-  const diagnostics = readiness?.diagnostics || {};
-  const categoryTotal = Object.values(counts.categoriesByType || {})
-    .reduce((total, value) => total + getNumericValue(value), 0);
-
-  return [
-    {
-      key: "categoriesReady",
-      phase: "foundation",
-      label: "Kategori & Kelompok",
-      description: `${formatNumberId(categoryTotal)} kategori aktif untuk bentuk produk, jenis bunga, dan bahan.`,
-      to: "/categories",
-    },
-    {
-      key: "productionStepsReady",
-      phase: "foundation",
-      label: "Tahapan Produksi",
-      description: `${formatNumberId(counts.productionSteps)} tahapan aktif untuk BOM dan Work Log.`,
-      to: APP_ROUTES.PRODUCTION.STEPS,
-    },
-    {
-      key: "productionEmployeesReady",
-      phase: "foundation",
-      label: "Karyawan Produksi",
-      description: `${formatNumberId(counts.productionEmployees)} operator aktif untuk Work Log dan payroll.`,
-      to: APP_ROUTES.PRODUCTION.EMPLOYEES,
-    },
-    {
-      key: "masterItemsReady",
-      phase: "operational-master",
-      label: "Master Produk dan Bahan",
-      description: `${formatNumberId(counts.products)} produk · ${formatNumberId(counts.rawMaterials)} bahan · ${formatNumberId(counts.semiFinished)} komponen.`,
-      to: "/master-data",
-    },
-    {
-      key: "supplierCatalogReady",
-      phase: "operational-master",
-      label: "Supplier & Katalog Restock",
-      description: `${formatNumberId(counts.suppliers)} supplier · ${formatNumberId(counts.supplierOffers)} penawaran aktif.`,
-      to: "/suppliers",
-    },
-    {
-      key: "productionBomsReady",
-      phase: "operational-master",
-      label: "BOM / Resep Produksi",
-      description: `${formatNumberId(counts.productionBoms)} BOM aktif sebagai dasar kebutuhan material.`,
-      to: APP_ROUTES.PRODUCTION.BOMS,
-    },
-    {
-      key: "openingStockReady",
-      phase: "go-live",
-      label: "Stok Awal Tercatat",
-      description: diagnostics.positiveStockWithoutHistory
-        ? `${formatNumberId(diagnostics.positiveStockWithoutHistoryItems)} item memiliki stok positif tanpa histori transaksi atau penyesuaian resmi.`
-        : getNumericValue(counts.positiveStockItems) > 0
-          ? `${formatNumberId(counts.positiveStockItems)} item memiliki stok dengan histori resmi.`
-          : "Semua master masih dimulai dari stok 0; tidak ada opening stock yang perlu dicatat.",
-      to: APP_ROUTES.INVENTORY.STOCK_MANAGEMENT,
-      warning: Boolean(diagnostics.positiveStockWithoutHistory),
-    },
-    {
-      key: "baselineBackupReady",
-      phase: "go-live",
-      label: "Backup Baseline Setup",
-      description: diagnostics.latestVerifiedBackupAt
-        ? `Backup verified terakhir: ${formatDashboardDate(diagnostics.latestVerifiedBackupAt)}.`
-        : "Buat backup verified setelah seluruh master dan stok awal selesai diperiksa.",
-      to: "/utilities/reset-maintenance-data",
-    },
-  ].map((step, index) => ({
-    ...step,
-    order: index + 1,
-    complete: Boolean(flags[step.key]),
-  }));
-};
-
-const buildInitialSetupPhaseGroups = (steps = []) => INITIAL_SETUP_PHASES.map((phase) => ({
-  ...phase,
-  steps: steps.filter((step) => step.phase === phase.key),
-}));
-
-const buildChartGeometry = (series = []) => {
-  const {
-    width,
-    height,
-    left,
-    right,
-    top,
-    bottom,
-  } = DASHBOARD_CHART_SIZE;
-  const chartWidth = width - left - right;
-  const chartHeight = height - top - bottom;
-  const amounts = series.map((item) => Math.max(getNumericValue(item.amount), 0));
-  const maxAmount = Math.max(...amounts, 0);
-  const step = series.length > 1 ? chartWidth / (series.length - 1) : chartWidth;
-  const points = series.map((item, index) => {
-    const x = left + (step * index);
-    const ratio = maxAmount > 0 ? Math.max(getNumericValue(item.amount), 0) / maxAmount : 0;
-    const y = top + chartHeight - (ratio * chartHeight);
-    return {
-      ...item,
-      x,
-      y,
-    };
-  });
-  const pointString = points.map((item) => `${item.x},${item.y}`).join(" ");
-  const areaPointString = points.length > 0
-    ? `${left},${height - bottom} ${pointString} ${width - right},${height - bottom}`
-    : "";
-  const peak = points.reduce(
-    (currentPeak, item) =>
-      getNumericValue(item.amount) > getNumericValue(currentPeak?.amount) ? item : currentPeak,
-    null,
-  );
-
-  return {
-    areaPointString,
-    maxAmount,
-    peak,
-    pointString,
-    points,
-  };
-};
-
-const DashboardMiniTrend = ({ series = [], label }) => {
-  const maxAbsoluteAmount = Math.max(
-    ...series.map((item) => Math.abs(getNumericValue(item.amount))),
-    1,
-  );
-
-  return (
-    <div className="dashboard-hero-trend" aria-label={label}>
-      <div className="dashboard-hero-trend-bars" aria-hidden="true">
-        {series.map((item) => {
-          const amount = getNumericValue(item.amount);
-          const isZero = amount === 0;
-          const barHeight = isZero
-            ? 8
-            : Math.max(Math.round((Math.abs(amount) / maxAbsoluteAmount) * 100), 8);
-
-          return (
-            <span
-              key={item.key}
-              className={isZero ? "is-zero" : amount < 0 ? "is-negative" : "is-positive"}
-              style={{ height: `${barHeight}%` }}
-              title={`${item.label}: ${formatCurrency(amount)}`}
-            />
-          );
-        })}
-      </div>
-      <Text>{label}</Text>
-    </div>
-  );
-};
-
-const DashboardSalesChart = ({ series = [] }) => {
-  const geometry = useMemo(() => buildChartGeometry(series), [series]);
-  const totalAmount = series.reduce(
-    (total, item) => total + getNumericValue(item.amount),
-    0,
-  );
-  const hasData = geometry.maxAmount > 0;
-
-  return (
-    <div className="dashboard-insight-card dashboard-sales-chart-card">
-      <div className="dashboard-insight-heading">
-        <div>
-          <Title level={4}>Tren Penjualan 30 Hari</Title>
-          <Text>Nilai penjualan harian dari transaksi yang sudah tercatat.</Text>
-        </div>
-        <div className="dashboard-insight-total">
-          <strong>{formatCurrency(totalAmount)}</strong>
-          <small>total 30 hari</small>
-        </div>
-      </div>
-
-      {hasData ? (
-        <>
-          <div className="dashboard-sales-chart-wrap">
-            <svg
-              viewBox={`0 0 ${DASHBOARD_CHART_SIZE.width} ${DASHBOARD_CHART_SIZE.height}`}
-              role="img"
-              aria-label="Grafik nilai penjualan harian selama 30 hari terakhir"
-              preserveAspectRatio="none"
-            >
-              <line
-                className="dashboard-sales-chart-grid"
-                x1={DASHBOARD_CHART_SIZE.left}
-                x2={DASHBOARD_CHART_SIZE.width - DASHBOARD_CHART_SIZE.right}
-                y1={DASHBOARD_CHART_SIZE.height - DASHBOARD_CHART_SIZE.bottom}
-                y2={DASHBOARD_CHART_SIZE.height - DASHBOARD_CHART_SIZE.bottom}
-              />
-              <line
-                className="dashboard-sales-chart-grid is-secondary"
-                x1={DASHBOARD_CHART_SIZE.left}
-                x2={DASHBOARD_CHART_SIZE.width - DASHBOARD_CHART_SIZE.right}
-                y1={DASHBOARD_CHART_SIZE.top + ((DASHBOARD_CHART_SIZE.height - DASHBOARD_CHART_SIZE.top - DASHBOARD_CHART_SIZE.bottom) / 2)}
-                y2={DASHBOARD_CHART_SIZE.top + ((DASHBOARD_CHART_SIZE.height - DASHBOARD_CHART_SIZE.top - DASHBOARD_CHART_SIZE.bottom) / 2)}
-              />
-              <polygon
-                className="dashboard-sales-chart-area"
-                points={geometry.areaPointString}
-              />
-              <polyline
-                className="dashboard-sales-chart-line"
-                points={geometry.pointString}
-              />
-              {geometry.peak ? (
-                <circle
-                  className="dashboard-sales-chart-peak"
-                  cx={geometry.peak.x}
-                  cy={geometry.peak.y}
-                  r="5"
-                >
-                  <title>
-                    Puncak {geometry.peak.label}: {formatCurrency(geometry.peak.amount)}
-                  </title>
-                </circle>
-              ) : null}
-              {geometry.points.length > 0 ? (
-                <circle
-                  className="dashboard-sales-chart-latest"
-                  cx={geometry.points[geometry.points.length - 1].x}
-                  cy={geometry.points[geometry.points.length - 1].y}
-                  r="4"
-                >
-                  <title>
-                    Hari terakhir {geometry.points[geometry.points.length - 1].label}:{" "}
-                    {formatCurrency(geometry.points[geometry.points.length - 1].amount)}
-                  </title>
-                </circle>
-              ) : null}
-            </svg>
-          </div>
-          <div className="dashboard-chart-legend">
-            <span>
-              <i className="is-primary" />
-              Penjualan harian
-            </span>
-            <span>
-              <i className="is-gold" />
-              Puncak {geometry.peak?.label || "-"} · {formatCompactCurrency(geometry.peak?.amount || 0)}
-            </span>
-          </div>
-        </>
-      ) : (
-        <div className="dashboard-empty-wrap dashboard-empty-chart">
-          <EmptyStateBlock compact description="Belum ada penjualan dalam 30 hari terakhir." />
-        </div>
-      )}
-    </div>
-  );
-};
-
-const DashboardTopProducts = ({ products = [] }) => (
-  <div className="dashboard-insight-card dashboard-top-products-card">
-    <div className="dashboard-insight-heading">
-      <div>
-        <Title level={4}>Produk Terlaris</Title>
-        <Text>Bulan berjalan berdasarkan jumlah item penjualan.</Text>
-      </div>
-    </div>
-
-    {products.length > 0 ? (
-      <div className="dashboard-top-products-list">
-        {products.map((item) => (
-          <div key={item.key} className="dashboard-top-product-row">
-            <span className={`dashboard-top-product-rank${item.rank === 1 ? " is-first" : ""}`}>
-              {item.rank}
-            </span>
-            <div>
-              <div className="dashboard-top-product-copy">
-                <strong>{item.name}</strong>
-                <span>{formatNumberId(item.quantity)} {item.unit}</span>
-              </div>
-              <div className="dashboard-top-product-track" aria-hidden="true">
-                <span style={{ width: `${item.sharePercent}%` }} />
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    ) : (
-      <div className="dashboard-empty-wrap dashboard-empty-chart">
-        <EmptyStateBlock compact description="Belum ada item penjualan bulan ini." />
-      </div>
-    )}
-  </div>
-);
 
 const Dashboard = () => {
   const { profile } = useAuth();
@@ -1024,97 +609,15 @@ const Dashboard = () => {
 
       {loadWarning ? <ImsNotice variant="data-quality" compact title={loadWarning} /> : null}
 
-      <Drawer
-        title={
-          <div className="dashboard-setup-drawer-title">
-            <span className="dashboard-setup-drawer-title-icon"><DatabaseOutlined /></span>
-            <span>
-              <strong>Setup Database Awal</strong>
-              <small>Urutan aman sebelum transaksi harian dimulai.</small>
-            </span>
-          </div>
-        }
+      <DashboardInitialSetupDrawer
         open={Boolean(showInitialSetup && isInitialSetupOpen)}
+        completedSteps={completedInitialSetupSteps}
+        requiredSteps={requiredInitialSetupSteps}
+        progressPercent={setupReadiness?.progress?.percent}
+        nextStep={nextInitialSetupStep}
+        phaseGroups={initialSetupPhaseGroups}
         onClose={closeInitialSetup}
-        placement="right"
-        width={500}
-        rootClassName="dashboard-setup-drawer-root"
-        className="dashboard-setup-drawer"
-        destroyOnHidden
-        extra={
-          <Tag color="blue" className="dashboard-setup-drawer-progress-tag">
-            {formatNumberId(completedInitialSetupSteps)}/{formatNumberId(requiredInitialSetupSteps)} selesai
-          </Tag>
-        }
-        footer={
-          <div className="dashboard-setup-drawer-footer">
-            <Text>Checklist hanya membaca data dan tidak membuat transaksi otomatis.</Text>
-            <Button onClick={closeInitialSetup}>Sembunyikan sementara</Button>
-          </div>
-        }
-      >
-        {showInitialSetup ? (
-          <div className="dashboard-setup-drawer-content">
-            <section className="dashboard-setup-summary">
-              <div className="dashboard-setup-summary-topline">
-                <span>Progress setup</span>
-                <strong>{formatNumberId(completedInitialSetupSteps)} dari {formatNumberId(requiredInitialSetupSteps)} selesai</strong>
-              </div>
-              <Progress
-                percent={getNumericValue(setupReadiness?.progress?.percent)}
-                showInfo={false}
-                size="small"
-              />
-              {nextInitialSetupStep ? (
-                <div className="dashboard-setup-next-step">
-                  <span>Langkah berikutnya</span>
-                  <strong>{nextInitialSetupStep.order}. {nextInitialSetupStep.label}</strong>
-                  <Text>{nextInitialSetupStep.description}</Text>
-                  <Link
-                    to={nextInitialSetupStep.to}
-                    className="dashboard-setup-next-action"
-                    onClick={closeInitialSetup}
-                  >
-                    Isi sekarang <ArrowRightOutlined />
-                  </Link>
-                </div>
-              ) : null}
-            </section>
-
-            <div className="dashboard-setup-phase-list">
-              {initialSetupPhaseGroups.map((phase) => (
-                <section key={phase.key} className="dashboard-setup-phase">
-                  <div className="dashboard-setup-phase-heading">
-                    <strong>{phase.label}</strong>
-                    <small>{phase.description}</small>
-                  </div>
-                  <div className="dashboard-setup-step-list">
-                    {phase.steps.map((step) => (
-                      <Link
-                        key={step.key}
-                        to={step.to}
-                        onClick={closeInitialSetup}
-                        className={`dashboard-setup-step ${step.complete ? "is-complete" : step.warning ? "is-warning" : "is-pending"}`}
-                      >
-                        <span className="dashboard-setup-step-number">{step.order}</span>
-                        <span className="dashboard-setup-step-copy">
-                          <strong>{step.label}</strong>
-                          <small>{step.description}</small>
-                        </span>
-                        <span className="dashboard-setup-step-status">
-                          {step.complete ? <CheckCircleOutlined /> : step.warning ? <WarningOutlined /> : <ClockCircleOutlined />}
-                          <span>{step.complete ? "Siap" : step.warning ? "Perlu audit" : "Belum siap"}</span>
-                        </span>
-                        <ArrowRightOutlined className="dashboard-setup-step-arrow" />
-                      </Link>
-                    ))}
-                  </div>
-                </section>
-              ))}
-            </div>
-          </div>
-        ) : null}
-      </Drawer>
+      />
 
       {isInitialDashboardLoading ? (
         <PageSection title="Menyiapkan Dashboard" subtitle="Memuat ringkasan operasional terbaru.">

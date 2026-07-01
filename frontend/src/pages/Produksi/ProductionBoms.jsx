@@ -18,51 +18,30 @@ import { buildCountSummary,
 import { getBomMaterialItemOptions,
   getBomTargetOptions,
   toReferenceOptions } from '../../utils/produksi/productionReferenceHelpers';
-import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import ProductionPageHeader from '../../components/Produksi/shared/ProductionPageHeader';
 import PageContentCanvas from '../../components/Layout/Page/PageContentCanvas';
 import ProductionSummaryCards from '../../components/Produksi/shared/ProductionSummaryCards';
 import ProductionFilterCard from '../../components/Produksi/shared/ProductionFilterCard';
-import EditableLineSection from '../../components/Produksi/shared/EditableLineSection';
-import DataTableView from '../../components/Layout/Table/DataTableView';
 import TableActionMenu from '../../components/Layout/Table/TableActionMenu';
-import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
-import ImsNotice from "../../components/Layout/Feedback/ImsNotice";
 import InfoPopoverButton from "../../components/Layout/Feedback/InfoPopoverButton";
 import {
   App as AntdApp,
   Badge,
-  Button,
   Col,
-  Descriptions,
-  Divider,
-  Drawer,
   Form,
   Input,
-  InputNumber,
-  Modal,
-  Popconfirm,
-  Row,
   Select,
   Space,
-  Switch,
   Tag,
   Tooltip,
   Typography,
 } from "antd";
+import { EditOutlined, EyeOutlined } from "@ant-design/icons";
 import {
-  DeleteOutlined,
-  EditOutlined,
-  EyeOutlined,
-} from "@ant-design/icons";
-import {
-  BOM_MATERIAL_ITEM_TYPE_MAP,
   BOM_TARGET_TYPE_MAP,
-  calculateBomTotals,
   DEFAULT_BOM_MATERIAL_LINE,
   DEFAULT_BOM_STEP_LINE,
   DEFAULT_PRODUCTION_BOM_FORM,
-  PRODUCTION_BOM_MATERIAL_ITEM_TYPES,
   PRODUCTION_BOM_TARGET_TYPES,
 } from "../../constants/productionBomOptions";
 import {
@@ -73,6 +52,10 @@ import {
   updateProductionBom,
 } from "../../services/Produksi/productionBomsService";
 import ProductionBomListView from "./components/ProductionBomListView";
+import ProductionBomDetailDrawer from "./components/ProductionBomDetailDrawer";
+import ProductionBomFormDrawer from "./components/ProductionBomFormDrawer";
+import ProductionBomMaterialModal from "./components/ProductionBomMaterialModal";
+import ProductionBomStepModal from "./components/ProductionBomStepModal";
 import {
   clampTwoLineStyle,
   compactTagStyle,
@@ -83,15 +66,11 @@ import {
 // =====================================================
 // SECTION: helper format angka Indonesia
 // =====================================================
-import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/numberId";
-import formatCurrency, { formatHppUnitCurrencyId } from "../../utils/formatters/currencyId";
+import formatNumber from "../../utils/formatters/numberId";
+import formatCurrency from "../../utils/formatters/currencyId";
 import { getFormArrayValue, getNextSequenceNumber, removeArrayItemByIndex, upsertArrayItemByIndex } from "../../utils/forms/formArrayHelpers";
 import { buildBomMaterialFormLine, buildBomStepFormLine } from "../../utils/produksi/productionLineBuilders";
-import {
-  calculateBomStepLineCost,
-  hydrateBomMaterialLineWithLiveCost,
-  resolveBomCostSourceLabel,
-} from "../../utils/produksi/productionBomCostHelpers";
+import { hydrateBomMaterialLineWithLiveCost } from "../../utils/produksi/productionBomCostHelpers";
 import { inferHasVariants } from "../../utils/variants/variantStockHelpers";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 
@@ -104,27 +83,6 @@ import { showFormValidationFeedback } from '../../utils/forms/formValidationFeed
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data historis decimal tidak dimigrasi otomatis.
 // Behavior: input baru no-decimal; business rules dan schema/alur data utama tetap sama.
-
-const buildBomLineActionColumn = ({ deleteTitle, onDelete, onEdit }) => ({
-  title: "Aksi",
-  width: 140,
-  className: "app-table-action-column",
-  render: (_, record, index) => (
-    <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-      <Button className="ims-action-button" size="small" onClick={() => onEdit(index, record)}>
-        Edit
-      </Button>
-      <Popconfirm
-        title={deleteTitle}
-        onConfirm={() => onDelete(index)}
-        okText="Ya"
-        cancelText="Batal"
-      >
-        <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />} />
-      </Popconfirm>
-    </Space>
-  ),
-});
 
 const ProductionBoms = () => {
   const { message } = AntdApp.useApp();
@@ -1043,760 +1001,51 @@ const ProductionBoms = () => {
       {/* SECTION: drawer form tambah/edit BOM */}
       </PageContentCanvas>
 
-      <Drawer
-        title={editingBom?.id ? "Edit BOM Produksi" : "Tambah BOM Produksi"}
-        open={formVisible}
-        onClose={() => {
-          setFormVisible(false);
-          resetFormState();
-        }}
-        width={980}
-        destroyOnClose
-        extra={
-          <Space>
-            <Button
-              onClick={() => {
-                setFormVisible(false);
-                resetFormState();
-              }}
-            >
-              Batal
-            </Button>
-            <Button type="primary" loading={submitting} onClick={handleSubmit}>
-              Simpan
-            </Button>
-          </Space>
-        }
-      >
-        <Form
-          form={form}
-          layout="vertical"
-          initialValues={{
-            ...DEFAULT_PRODUCTION_BOM_FORM,
-            targetType: "product",
-          }}
-        >
-          {formErrorSummary ? (
-            <ImsNotice
-              variant="critical"
-              compact
-              className="ims-mb-16"
-              title={formErrorSummary}
-            />
-          ) : null}
-          <Divider orientation="left">Informasi Dasar</Divider>
-
-          {/* =====================================================
-          SECTION: BOM internal code hidden from main UI — AKTIF
-          Fungsi:
-          - Menyembunyikan input kode BOM dari form tambah/edit agar user fokus pada target, komposisi bahan, step, dan formula BOM.
-
-          Dipakai oleh:
-          - Drawer form Production BOM dan productionBomsService sebagai pembuat kode internal.
-
-          Alasan perubahan:
-          - Kode BOM tetap dibuat otomatis oleh service, tetapi tidak perlu menjadi input utama di UI.
-
-          Catatan cleanup:
-          - Kode internal disimpan untuk relasi/audit teknis, tetapi tidak ditampilkan di UI operasional.
-
-          Risiko:
-          - Jangan menambahkan input manual code karena dapat membuat relasi BOM dan duplicate guard tidak konsisten.
-          ===================================================== */}
-          <Row gutter={16}>
-            <Col xs={24}>
-              <Form.Item
-                label="Nama BOM"
-                name="name"
-                rules={[{ required: true, message: "Nama BOM wajib diisi" }]}
-              >
-                <Input placeholder="Contoh: BOM Produksi Mawar Standar" />
-              </Form.Item>
-            </Col>
-
-            <Col xs={24}>
-              <Form.Item label="Deskripsi" name="description">
-                <Input.TextArea rows={2} placeholder="Deskripsi BOM..." />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Divider orientation="left">Target BOM</Divider>
-
-          <Form.Item shouldUpdate noStyle>
-            {({ getFieldValue }) => {
-              const targetType = getFieldValue("targetType") || "product";
-              const targetOptions = getTargetOptions(targetType);
-
-              return (
-                <>
-                  {targetType === "product" && targetOptions.length === 0 ? (
-                    <ImsNotice
-                      variant="guard"
-                      compact
-                      className="ims-mb-16"
-                      title="Target product belum terbaca. Pastikan master Produk Jadi sudah ada dan halaman BOM sudah refresh."
-                    />
-                  ) : null}
-
-                  {targetType === "semi_finished_material" &&
-                  targetOptions.length === 0 ? (
-                    <ImsNotice
-                      variant="guard"
-                      compact
-                      className="ims-mb-16"
-                      title="Target semi finished belum tersedia. Tambahkan Semi Finished Materials terlebih dahulu."
-                    />
-                  ) : null}
-
-                  <Row gutter={16}>
-                    <Col xs={24} md={8}>
-                      <Form.Item
-                        label="Target Type"
-                        name="targetType"
-                        rules={[
-                          {
-                            required: true,
-                            message: "Target type wajib dipilih",
-                          },
-                        ]}
-                      >
-                        <Select
-                          options={PRODUCTION_BOM_TARGET_TYPES}
-                          onChange={() => {
-                            form.setFieldsValue({
-                              targetId: undefined,
-                            });
-
-                            const currentMaterialLines =
-                              form.getFieldValue("materialLines") || [];
-
-                            form.setFieldValue(
-                              "materialLines",
-                              currentMaterialLines.map((line) => ({
-                                ...line,
-                                itemType: line.itemType || "raw_material",
-                              })),
-                            );
-                          }}
-                        />
-                      </Form.Item>
-                    </Col>
-
-                    <Col xs={24} md={16}>
-                      <Form.Item
-                        label="Target Item"
-                        name="targetId"
-                        rules={[
-                          {
-                            required: true,
-                            message: "Target item wajib dipilih",
-                          },
-                        ]}
-                      >
-                        <Select
-                          key={`target-${targetType}-${targetOptions.length}`}
-                          showSearch
-                          optionFilterProp="label"
-                          options={targetOptions}
-                          placeholder="Pilih target BOM..."
-                          notFoundContent="Tidak ada target yang bisa dipilih"
-                        />
-                      </Form.Item>
-                    </Col>
-
-                    <Col xs={24} md={12}>
-                      <Form.Item
-                        label="Hasil per Produksi"
-                        name="batchOutputQty"
-                        tooltip="Isi jumlah output yang dihasilkan untuk 1 resep BOM ini. Contoh: 1 bunga, 10 tangkai, atau 20 potong komponen."
-                      >
-                        <InputNumber min={1} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
-                      </Form.Item>
-                    </Col>
-
-                    <Col xs={24} md={12}>
-                      <Form.Item
-                        label="Status Aktif"
-                        name="isActive"
-                        valuePropName="checked"
-                        tooltip="Biarkan aktif kalau resep ini masih dipakai. Nonaktifkan hanya jika BOM lama sudah tidak digunakan."
-                      >
-                        <Switch />
-                      </Form.Item>
-                    </Col>
-                  </Row>
-                </>
-              );
-            }}
-          </Form.Item>
-
-          <Form.Item shouldUpdate noStyle>
-            {({ getFieldValue }) => {
-              const targetType = getFieldValue("targetType") || "product";
-              const materialLines = getFieldValue("materialLines") || [];
-              const stepLines = getFieldValue("stepLines") || [];
-              const batchOutputQty = getFieldValue("batchOutputQty") || 1;
-
-              const materialColumns = [
-                {
-                  title: "Item",
-                  key: "item",
-                  render: (_, record) => (
-                    <div>
-                      <div className="ims-cell-title">{record.itemName || "-"}</div>
-                    </div>
-                  ),
-                },
-                {
-                  title: "Tipe",
-                  dataIndex: "itemType",
-                  width: 160,
-                  render: (value) => <Tag>{BOM_MATERIAL_ITEM_TYPE_MAP[value] || "-"}</Tag>,
-                },
-                {
-                  title: "Kebutuhan per Produksi",
-                  key: "qty",
-                  width: 220,
-                  render: (_, record) => (
-                    <Space direction="vertical" size={0}>
-                      <Typography.Text>
-                        {formatNumber(record.qtyPerBatch)} {record.unit || "pcs"}
-                      </Typography.Text>
-                      <Typography.Text type="secondary">
-                        Estimasi biaya: {formatCurrency(record.totalCostSnapshot)}
-                      </Typography.Text>
-                      <Typography.Text type="secondary" className="ims-cell-meta">
-                        Source: {resolveBomCostSourceLabel(record.costSourceSnapshot)}
-                      </Typography.Text>
-                    </Space>
-                  ),
-                },
-                // Nested/subtable editor sengaja tetap non-sticky karena tidak punya masalah horizontal scroll nyata.
-                buildBomLineActionColumn({
-                  deleteTitle: "Keluarkan material dari BOM ini?",
-                  onDelete: handleRemoveMaterialLine,
-                  onEdit: openMaterialModal,
-                }),
-              ];
-
-              const stepColumns = [
-                {
-                  title: "Urutan Langkah",
-                  key: "step",
-                  render: (_, record) => (
-                    <div>
-                      <div className="ims-cell-title">
-                        Langkah {formatNumber(record.sequenceNo)} - {record.stepName || "-"}
-                      </div>
-                      {record.notes ? (
-                        <div className="ims-cell-meta">{record.notes}</div>
-                      ) : null}
-                    </div>
-                  ),
-                },
-                {
-                  title: "Estimasi Upah",
-                  key: "laborEstimate",
-                  width: 190,
-                  render: (_, record) => (
-                    <Space direction="vertical" size={0}>
-                      <Typography.Text>{formatCurrency(calculateBomStepLineCost(record, { batchOutputQty }))}</Typography.Text>
-                      <Typography.Text type="secondary" className="ims-cell-meta">
-                        {record.payrollMode === "per_qty" ? "Per Qty" : "Per Batch"}
-                      </Typography.Text>
-                    </Space>
-                  ),
-                },
-                // Nested/subtable editor sengaja tetap non-sticky karena aksi masih langsung terlihat di dalam modal BOM.
-                buildBomLineActionColumn({
-                  deleteTitle: "Keluarkan tahap dari BOM ini?",
-                  onDelete: handleRemoveStepLine,
-                  onEdit: openStepModal,
-                }),
-              ];
-
-              return (
-                <>
-                  <EditableLineSection
-                    title="Komposisi Bahan"
-                    description={
-                      targetType === "product"
-                        ? "Untuk produk jadi, pakai Semi Finished Materials sebagai komponen utama dan Raw Materials hanya untuk bahan assembly/consumable seperti lem tembak."
-                        : "Untuk target semi finished, komposisi bahan boleh mengambil Raw Materials atau Semi Finished Materials sesuai kebutuhan proses."
-                    }
-                    addButtonText="Tambah Bahan"
-                    onAdd={() => openMaterialModal()}
-                    dataSource={materialLines}
-                    columns={materialColumns}
-                    emptyText="Belum ada material line"
-                  />
-
-                  <EditableLineSection
-                    title="Tahapan Pekerjaan"
-                    description="Satu resep/BOM mewakili satu perubahan stok, satu Work Log, dan satu aturan upah. Buat BOM terpisah untuk tahap produksi berikutnya."
-                    alert={stepLines.length > 1 ? {
-                      type: "warning",
-                      message: "BOM lama ini memiliki lebih dari satu tahapan.",
-                      description: "Pilih dan pertahankan satu tahapan yang benar sebelum menyimpan ulang BOM.",
-                    } : undefined}
-                    addButtonText="Pilih Tahapan Produksi"
-                    onAdd={() => openStepModal()}
-                    addButtonDisabled={stepLines.length >= 1}
-                    dataSource={stepLines}
-                    columns={stepColumns}
-                    emptyText="Belum ada tahapan produksi"
-                  />
-                </>
-              );
-            }}
-          </Form.Item>
-
-          <Divider orientation="left">Biaya Estimasi</Divider>
-
-          <Form.Item shouldUpdate noStyle>
-            {({ getFieldValue }) => {
-              const totals = calculateBomTotals(
-                getFieldValue("materialLines") || [],
-                getFieldValue("stepLines") || [],
-                {
-                  batchOutputQty: getFieldValue("batchOutputQty"),
-                  overheadCostEstimate: getFieldValue("overheadCostEstimate"),
-                },
-              );
-
-              return (
-                <>
-                  <Row gutter={16}>
-                    <Col xs={24} md={6}>
-                      <Form.Item label="Estimasi Material">
-                        <Input value={formatCurrency(totals.materialCostEstimate)} disabled />
-                      </Form.Item>
-                    </Col>
-
-                    <Col xs={24} md={6}>
-                      <Form.Item label="Estimasi Upah Step">
-                        <Input value={formatCurrency(totals.laborCostEstimate)} disabled />
-                      </Form.Item>
-                    </Col>
-
-                    <Col xs={24} md={6}>
-                      <Form.Item label="Overhead Manual" name="overheadCostEstimate">
-                        <InputNumber
-                          min={0}
-                          step={1}
-                          precision={0}
-                          parser={parseIntegerIdInput}
-                          style={{ width: "100%" }}
-                        />
-                      </Form.Item>
-                    </Col>
-
-                    <Col xs={24} md={6}>
-                      <Form.Item label="Total Estimasi">
-                        <Input value={formatCurrency(totals.totalCostEstimate)} disabled />
-                      </Form.Item>
-                    </Col>
-                  </Row>
-
-                  <Typography.Text type="secondary" className="ims-cell-meta">
-                    Estimasi BOM memakai modal bahan dari master, tarif upah dari step, dan overhead manual sementara. HPP final tetap mengikuti Work Log dan payroll final.
-                  </Typography.Text>
-                </>
-              );
-            }}
-          </Form.Item>
-
-        </Form>
-      </Drawer>
+<ProductionBomFormDrawer
+        editingBom={editingBom}
+        form={form}
+        formErrorSummary={formErrorSummary}
+        formVisible={formVisible}
+        getTargetOptions={getTargetOptions}
+        handleRemoveMaterialLine={handleRemoveMaterialLine}
+        handleRemoveStepLine={handleRemoveStepLine}
+        handleSubmit={handleSubmit}
+        openMaterialModal={openMaterialModal}
+        openStepModal={openStepModal}
+        resetFormState={resetFormState}
+        setFormVisible={setFormVisible}
+        submitting={submitting}
+      />
 
       {/* SECTION: drawer detail BOM */}
-      <MobileDetailDrawer
-        title="Detail BOM Produksi"
-        open={detailVisible}
-        onClose={() => setDetailVisible(false)}
-        width={760}
-      >
-        {!selectedBom ? (
-          <EmptyStateBlock compact description="Tidak ada data" />
-        ) : (
-          <>
-            <Descriptions
-              column={1}
-              bordered
-              size="small"
-              style={{ marginBottom: 16 }}
-            >
-              <Descriptions.Item label="Nama">
-                {selectedBom.name || "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Target Type">
-                {BOM_TARGET_TYPE_MAP[selectedBom.targetType] || "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Target Name">
-                {selectedBom.targetName || "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Estimasi Material">
-                {formatCurrency(selectedBom.materialCostEstimate)}
-              </Descriptions.Item>
-              <Descriptions.Item label="Estimasi Upah Step">
-                {formatCurrency(selectedBom.laborCostEstimate)}
-              </Descriptions.Item>
-              <Descriptions.Item label="Overhead Manual">
-                {formatCurrency(selectedBom.overheadCostEstimate)}
-              </Descriptions.Item>
-              <Descriptions.Item label="Estimasi Total">
-                {formatCurrency(selectedBom.totalCostEstimate)}
-              </Descriptions.Item>
-              <Descriptions.Item label="Status">
-                {selectedBom.isActive ? "Aktif" : "Nonaktif"}
-              </Descriptions.Item>
-            </Descriptions>
-
-            <Divider orientation="left">Komposisi Bahan</Divider>
-
-            <DataTableView
-              rowKey={(record) => record.id}
-              pagination={false}
-              size="small"
-              showRefreshIndicator={false}
-              dataSource={selectedBom.materialLines || []}
-              locale={{ emptyText: "Belum ada material line" }}
-              mobileCardConfig={{
-                title: (record) => record.itemName || "Material",
-                tags: (record) => <Tag>{BOM_MATERIAL_ITEM_TYPE_MAP[record.itemType] || "-"}</Tag>,
-                meta: [
-                  { label: "Qty Total", value: (record) => formatNumber(record.totalRequiredQty) },
-                  { label: "Cost", value: (record) => formatCurrency(record.totalCostSnapshot) },
-                  { label: "Cost/Unit", value: (record) => `${formatHppUnitCurrencyId(record.costPerUnitSnapshot)} / ${record.unit || "pcs"}` },
-                ],
-                subtext: (record) => resolveBomCostSourceLabel(record.costSourceSnapshot),
-              }}
-              columns={[
-                {
-                  title: "Item",
-                  key: "item",
-                  render: (_, record) => (
-                    <div>
-                      <div className="ims-cell-title">
-                        {record.itemName || "-"}
-                      </div>
-                    </div>
-                  ),
-                },
-                {
-                  title: "Tipe",
-                  dataIndex: "itemType",
-                  render: (value) => (
-                    <Tag>{BOM_MATERIAL_ITEM_TYPE_MAP[value] || "-"}</Tag>
-                  ),
-                },
-                {
-                  title: "Qty Total",
-                  dataIndex: "totalRequiredQty",
-                  render: (value) => formatNumber(value),
-                },
-                {
-                  title: "Cost",
-                  key: "cost",
-                  render: (_, record) => (
-                    <Space direction="vertical" size={0}>
-                      <Typography.Text>{formatCurrency(record.totalCostSnapshot)}</Typography.Text>
-                      <Typography.Text type="secondary" className="ims-cell-meta">
-                        {formatHppUnitCurrencyId(record.costPerUnitSnapshot)} / {record.unit || "pcs"}
-                      </Typography.Text>
-                      <Typography.Text type="secondary" className="ims-cell-meta">
-                        {resolveBomCostSourceLabel(record.costSourceSnapshot)}
-                      </Typography.Text>
-                    </Space>
-                  ),
-                },
-              ]}
-            />
-
-            <Divider orientation="left">Tahapan Pekerjaan</Divider>
-
-            <DataTableView
-              rowKey={(record) => record.id}
-              pagination={false}
-              size="small"
-              showRefreshIndicator={false}
-              dataSource={selectedBom.stepLines || []}
-              locale={{ emptyText: "Belum ada step line" }}
-              mobileCardConfig={{
-                title: (record) => `Langkah ${formatNumber(record.sequenceNo)} - ${record.stepName || "-"}`,
-                meta: [
-                  { label: "Estimasi Upah", value: (record) => formatCurrency(record.laborCostEstimateSnapshot || 0) },
-                ],
-                subtext: (record) => record.notes || null,
-              }}
-              columns={[
-                {
-                  title: "Urutan Langkah",
-                  key: "step",
-                  render: (_, record) => (
-                    <div>
-                      <div className="ims-cell-title">
-                        Langkah {formatNumber(record.sequenceNo)} -{" "}
-                        {record.stepName || "-"}
-                      </div>
-                      {record.notes ? (
-                        <div className="ims-cell-meta">{record.notes}</div>
-                      ) : null}
-                    </div>
-                  ),
-                },
-                {
-                  title: "Estimasi Upah",
-                  key: "laborEstimate",
-                  width: 160,
-                  render: (_, record) => formatCurrency(record.laborCostEstimateSnapshot || 0),
-                },
-              ]}
-            />
-          </>
-        )}
-      </MobileDetailDrawer>
+<ProductionBomDetailDrawer
+        detailVisible={detailVisible}
+        selectedBom={selectedBom}
+        setDetailVisible={setDetailVisible}
+      />
 
       {/* SECTION: modal material line */}
-      <Modal
-        title={
-          editingMaterialIndex !== null
-            ? "Edit Material Line"
-            : "Tambah Material Line"
-        }
-        open={materialModalVisible}
-        onCancel={() => {
-          setMaterialModalVisible(false);
-          setEditingMaterialIndex(null);
-          materialForm.resetFields();
-        }}
-        onOk={handleSaveMaterialLine}
-        okText="Simpan"
-        destroyOnClose
-      >
-        <Form
-          form={materialForm}
-          layout="vertical"
-          initialValues={DEFAULT_BOM_MATERIAL_LINE}
-        >
-          <Form.Item shouldUpdate noStyle>
-            {() => {
-              const targetType = getCurrentTargetType();
-
-              return (
-                <Form.Item
-                  label="Jenis Bahan"
-                  name="itemType"
-                  rules={[
-                    { required: true, message: "Jenis bahan wajib dipilih" },
-                  ]}
-                  tooltip={
-                    targetType === "product"
-                      ? "Produk jadi boleh memakai Semi Finished untuk komponen, dan Raw Material untuk consumable assembly seperti lem tembak."
-                      : undefined
-                  }
-                >
-                  <Select
-                    options={PRODUCTION_BOM_MATERIAL_ITEM_TYPES}
-                    onChange={() => {
-                      materialForm.setFieldsValue({
-                        itemId: undefined,
-                        unit: "pcs",
-                        costPerUnitSnapshot: 0,
-                        costSourceSnapshot: "",
-                        materialHasVariants: false,
-                        materialVariantStrategy: "none",
-                        fixedVariantKey: "",
-                        fixedVariantLabel: "",
-                      });
-                    }}
-                  />
-                </Form.Item>
-              );
-            }}
-          </Form.Item>
-
-          <Form.Item shouldUpdate noStyle>
-            {({ getFieldValue }) => {
-              const targetType = getCurrentTargetType();
-              const itemType =
-                getFieldValue("itemType") ||
-                (targetType === "product" ? "semi_finished_material" : "raw_material");
-
-              const options = getMaterialItemOptions(targetType, itemType);
-
-              return (
-                <Form.Item
-                  label="Item Bahan"
-                  name="itemId"
-                  rules={[
-                    {
-                      required: true,
-                      message: "Item bahan wajib dipilih",
-                    },
-                  ]}
-                >
-                  <Select
-                    showSearch
-                    optionFilterProp="label"
-                    options={options}
-                    placeholder="Pilih item bahan..."
-                    notFoundContent="Tidak ada item bahan yang bisa dipilih"
-                    onChange={(value) => {
-                      const selected = options.find(
-                        (item) => item.value === value,
-                      )?.raw;
-
-                      const materialHasVariants = inferHasVariants(selected || {});
-
-                      const hydratedLine = hydrateBomMaterialLineWithLiveCost({
-                        itemType: getFieldValue("itemType"),
-                        item: selected || {},
-                        line: {
-                          ...materialForm.getFieldsValue(),
-                          itemId: value,
-                          itemType: getFieldValue("itemType"),
-                        },
-                      });
-
-                      materialForm.setFieldsValue({
-                        unit: hydratedLine.unit || "pcs",
-                        costPerUnitSnapshot: Number(hydratedLine.costPerUnitSnapshot || 0),
-                        costSourceSnapshot: hydratedLine.costSourceSnapshot || "",
-                        materialHasVariants,
-                        materialVariantStrategy: materialHasVariants ? "inherit" : "none",
-                        fixedVariantKey: "",
-                        fixedVariantLabel: "",
-                      });
-                    }}
-                  />
-                </Form.Item>
-              );
-            }}
-          </Form.Item>
-
-          <Form.Item shouldUpdate noStyle>
-            {({ getFieldValue }) => {
-              const targetType = getCurrentTargetType();
-              const itemType =
-                getFieldValue("itemType") ||
-                (targetType === "product" ? "semi_finished_material" : "raw_material");
-              const options = getMaterialItemOptions(targetType, itemType);
-              const selectedItem = options.find(
-                (item) => item.value === getFieldValue("itemId"),
-              )?.raw;
-              const hasVariants = inferHasVariants(selectedItem || {});
-
-              return (
-                <>
-                  <Form.Item name="materialHasVariants" hidden>
-                    <Input />
-                  </Form.Item>
-                  <Form.Item name="materialVariantStrategy" hidden>
-                    <Input />
-                  </Form.Item>
-                  <Form.Item name="fixedVariantKey" hidden>
-                    <Input />
-                  </Form.Item>
-                  <Form.Item name="fixedVariantLabel" hidden>
-                    <Input />
-                  </Form.Item>
-                  <Form.Item name="costSourceSnapshot" hidden>
-                    <Input />
-                  </Form.Item>
-
-                  <ImsNotice
-                    variant="info"
-                    compact
-                    className="ims-mb-16"
-                    title={
-                      hasVariants
-                        ? "Item bahan ini punya varian. Variant tidak dipilih di BOM dan akan otomatis mengikuti variant target saat Production Order dibuat."
-                        : "Item bahan ini tidak memakai varian. Saat Production Order dibuat, stok akan dibaca dari master item."
-                    }
-                    description={`Estimasi biaya membaca ${resolveBomCostSourceLabel(getFieldValue("costSourceSnapshot"))}.`}
-                  />
-                </>
-              );
-            }}
-          </Form.Item>
-
-          <Row gutter={12}>
-            <Col span={12}>
-              <Form.Item
-                label="Kebutuhan per Produksi"
-                name="qtyPerBatch"
-                tooltip="Isi jumlah bahan yang dibutuhkan untuk 1 kali produksi sesuai output BOM ini."
-              >
-                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                label="Satuan Bahan"
-                name="unit"
-                tooltip="Diambil otomatis dari master bahan yang dipilih."
-              >
-                <Input disabled />
-              </Form.Item>
-            </Col>
-          </Row>
-
-        </Form>
-      </Modal>
+<ProductionBomMaterialModal
+        editingMaterialIndex={editingMaterialIndex}
+        getCurrentTargetType={getCurrentTargetType}
+        getMaterialItemOptions={getMaterialItemOptions}
+        handleSaveMaterialLine={handleSaveMaterialLine}
+        materialForm={materialForm}
+        materialModalVisible={materialModalVisible}
+        setEditingMaterialIndex={setEditingMaterialIndex}
+        setMaterialModalVisible={setMaterialModalVisible}
+      />
 
       {/* SECTION: modal step line */}
-      <Modal
-        title={
-          editingStepIndex !== null ? "Edit Step Line" : "Tambah Step Line"
-        }
-        open={stepModalVisible}
-        onCancel={() => {
-          setStepModalVisible(false);
-          setEditingStepIndex(null);
-          stepForm.resetFields();
-        }}
-        onOk={handleSaveStepLine}
-        okText="Simpan"
-        width={720}
-        destroyOnClose
-      >
-        <Form
-          form={stepForm}
-          layout="vertical"
-          initialValues={DEFAULT_BOM_STEP_LINE}
-        >
-          <Row gutter={12}>
-            <Col span={14}>
-              <Form.Item
-                label="Step Produksi"
-                name="stepId"
-                rules={[{ required: true, message: "Step wajib dipilih" }]}
-              >
-                <Select
-                  showSearch
-                  optionFilterProp="label"
-                  options={stepOptions}
-                  placeholder="Pilih step produksi..."
-                  notFoundContent="Belum ada production step"
-                />
-              </Form.Item>
-            </Col>
-
-            <Col span={10}>
-              <Form.Item
-                label="Urutan Langkah"
-                name="sequenceNo"
-                tooltip="Terisi otomatis sesuai urutan penambahan step."
-              >
-                <InputNumber min={1} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-          </Row>
-
-        </Form>
-      </Modal>
+<ProductionBomStepModal
+        editingStepIndex={editingStepIndex}
+        handleSaveStepLine={handleSaveStepLine}
+        setEditingStepIndex={setEditingStepIndex}
+        setStepModalVisible={setStepModalVisible}
+        stepForm={stepForm}
+        stepModalVisible={stepModalVisible}
+        stepOptions={stepOptions}
+      />
     </div>
   );
 };

@@ -1,7 +1,7 @@
 # CLEANUP ARCHITECTURE — IMS Bunga Flanel
 
 Status: **AKTIF / SOURCE-VERIFIED / BEHAVIOR-PRESERVING**  
-Tanggal validasi: **2026-06-28**
+Tanggal validasi: **2026-06-30**
 
 Dokumen ini mengunci hasil cleanup C0–C16. Cleanup merapikan authority, folder, facade, duplikasi, dan komponen UI tanpa mengubah schema, route, role guard, atau flow bisnis guarded.
 
@@ -79,6 +79,10 @@ Backend tetap enforcement utama. Shared contract tidak boleh digunakan untuk mel
 - Purchase memakai satu default builder, satu quantity field, dan helper mutation-result bersama Return.
 - Detail drawer Produk, Bahan Baku, Supplier, Penjualan, dan channel Penjualan dipisahkan dari page orchestration.
 - Page tetap memanggil service existing; business mutation tidak dipindahkan ke komponen presentasi.
+- Repository-mode switcher frontend yang hanya memiliki satu mode SQLite sudah dihapus; repository domain tipis tetap dipertahankan agar page tidak mengikat langsung ke transport.
+- Form/detail/modal anak dipisahkan dari page Produksi, Sales, Purchases, Products, Raw Materials, Supplier Purchase, Pricing Rules, Stock Adjustment, Stock Management, Dashboard, Database Center, dan User Management.
+- Dashboard visual, quick action, dan checklist setup berada pada komponen/helper domain Dashboard; restore guard dan auth mutation tetap di page/service pemiliknya.
+- Cleanup CSS dilakukan scoped. `!important` tidak boleh dihapus massal tanpa visual regression light/dark, desktop/mobile, modal, table, dan Ant Design override.
 
 ## Source hygiene guard
 

@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const source = fs.readFileSync(
-  path.resolve("src/pages/Produksi/SemiFinishedMaterials.jsx"),
+  path.resolve("src/pages/Produksi/components/SemiFinishedMaterialFormDrawer.jsx"),
   "utf8",
 );
 

@@ -292,7 +292,7 @@ Ketiga fase monthly, retention, dan daily ditangani terpisah. Kegagalan satu fas
 
 `/api/maintenance/status` memakai kontrak versi eksplisit dan capability flag untuk `sqliteOnlyRuntime`, `tableCounts`, live refresh, dan pemeriksaan konsistensi tabel. Frontend memvalidasi kontrak tersebut sebelum menampilkan count. Count yang hilang atau response backend lama harus ditampilkan sebagai `belum tersedia`, bukan `0`. Database Center melakukan refresh status setiap 15 detik ketika halaman terlihat serta saat window kembali fokus.
 
-Semua modul runtime menggunakan satu backend Express dan satu koneksi SQLite dari `backend/src/db/connection.js`. Environment repository mode lama tidak boleh mengalihkan Finance, Pricing, Stock Adjustment, atau modul lain ke sumber data berbeda. Audit strict harus memeriksa seluruh tabel pada `backend/src/db/schema.js`, seluruh route utama pada `backend/src/server.js`, sisa runtime Firebase/Firestore/IndexedDB, dan override mode non-SQLite pada file environment frontend.
+Semua modul runtime menggunakan satu backend Express dan satu koneksi SQLite dari `backend/src/db/connection.js`. Frontend repository-mode switcher lama sudah dihapus; Finance, Pricing, Stock Adjustment, dan modul lain tidak memiliki jalur runtime non-SQLite. Audit strict harus memeriksa seluruh tabel pada `backend/src/db/schema.js`, seluruh route utama pada `backend/src/server.js`, serta sisa runtime Firebase/Firestore/IndexedDB atau override sumber data non-SQLite pada file environment frontend.
 
 Sebelum snapshot, packaging, import, atau ekstraksi preview/restore, backend memeriksa ruang kosong pada filesystem target. Operasi dibatalkan dengan error yang jelas jika kapasitas tidak cukup. Paket `.imsbackup` memakai ZIP klasik tanpa ZIP64; satu entry database harus di bawah 4 GB.
 
@@ -359,6 +359,8 @@ Shared cross-runtime contract aktif:
 - canonical Supplier pricing core.
 
 Frontend boleh memakai shared pure contract untuk konsistensi tampilan/validasi awal, tetapi backend tetap melakukan enforcement final.
+
+Page frontend besar memakai pola `page orchestration → form/detail/presentational component → service existing`. Ekstraksi komponen tidak boleh memindahkan stock mutation, transaction commit, production lifecycle, payroll/HPP authority, finance posting, restore execution, atau role enforcement dari service/backend resmi.
 
 ## Audit kualitas data dan reconciliation — 2026-06-28
 

@@ -2,12 +2,6 @@
 
 // SECTION: database lokal pricing adapters
 import * as sqlitePricingRulesAdapter from "../../data/adapters/sqlite/sqlitePricingRulesAdapter";
-import { isSqliteRepositoryModuleEnabled } from "../../data/repositories/repositoryModeService";
-
-export const isSqlitePricingRulesRepositoryMode = () =>
-  isSqliteRepositoryModuleEnabled();
-
-
 export const subscribePricingRulesFromRepository = (callback, onError) =>
   sqlitePricingRulesAdapter.subscribePricingRules(callback, onError);
 
@@ -506,7 +500,6 @@ export const applyPricingRuleToItems = async ({
 
   // SECTION: jalur database lokal tidak boleh menulis arsip lama.
   // Seluruh harga dikirim dalam satu batch transaction backend agar tidak ada partial apply.
-  if (isSqlitePricingRulesRepositoryMode()) {
     let skippedManualCount = 0;
     let invalidBaseCostCount = 0;
     let invalidMarketplaceBufferCount = 0;
@@ -561,26 +554,23 @@ export const applyPricingRuleToItems = async ({
       })
       : { updatedCount: 0 };
 
-    return {
-      previewData,
-      updatedItems: (Array.isArray(batchResult?.updatedItems) ? batchResult.updatedItems : []).map((item) => ({
-        id: item.id,
-        [targetType === "products" ? "price" : "sellingPrice"]: item.newPrice,
-        pricingMode: "rule",
-        pricingRuleId: normalizedRule.id,
-        versionToken: item.versionToken || null,
-        updatedAt: item.versionToken || null,
-      })),
-      summary: {
-        totalItems: previewData.length,
-        updatedCount: Number(batchResult?.updatedCount || 0),
-        skippedManualCount,
-        invalidBaseCostCount,
-        invalidMarketplaceBufferCount,
-        unchangedCount,
-      },
-    };
-  }
-
-  throw new Error("Modul aturan harga belum aktif. Cek konfigurasi layanan lokal.");
+  return {
+    previewData,
+    updatedItems: (Array.isArray(batchResult?.updatedItems) ? batchResult.updatedItems : []).map((item) => ({
+      id: item.id,
+      [targetType === "products" ? "price" : "sellingPrice"]: item.newPrice,
+      pricingMode: "rule",
+      pricingRuleId: normalizedRule.id,
+      versionToken: item.versionToken || null,
+      updatedAt: item.versionToken || null,
+    })),
+    summary: {
+      totalItems: previewData.length,
+      updatedCount: Number(batchResult?.updatedCount || 0),
+      skippedManualCount,
+      invalidBaseCostCount,
+      invalidMarketplaceBufferCount,
+      unchangedCount,
+    },
+  };
 };

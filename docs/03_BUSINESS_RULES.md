@@ -1280,10 +1280,9 @@ Rule aktif:
 - Runtime offline/local web sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN, bukan database browser arsip.
 - `frontend/.env.example` dibuat SQLite-first: `VITE_AUTH_MODE=sqlite`.
 - `.env.local` tidak boleh di-commit.
-- `VITE_SUPPLIERS_REPOSITORY_MODE=sqlite` aktif untuk Supplier. Relasi purchase/raw/history tetap wajib mengikuti service/endpoint SQLite aktual dan tidak boleh direct write dari UI.
+- Supplier dan modul lain selalu memakai service/endpoint SQLite aktual; tidak ada lagi environment repository-mode dan UI tetap dilarang melakukan direct write.
 - Categories dan Customers boleh CRUD lewat repository SQLite/backend.
-- runtime arsip tidak dipertahankan sebagai fallback runtime aktif; repository mode source aktif hanya `sqlite_sidecar`.
-- Konstanta mode lama `offline_local` dan `hybrid_sync` sudah dihapus dari `repositoryMode.js` agar tidak terlihat sebagai mode aktif.
+- runtime arsip tidak dipertahankan sebagai fallback runtime aktif; switcher repository mode sudah dihapus karena source aktif hanya memakai SQLite sidecar.
 
 Cleanup yang sudah dilakukan:
 - Folder data historis `src/data/adapters/database-browser-arsip/`, `src/data/local/`, dan `src/data/sync/` dihapus dari source aktif.

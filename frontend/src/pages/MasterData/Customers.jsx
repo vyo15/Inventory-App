@@ -24,8 +24,6 @@ import {
   listCustomers,
   updateCustomer,
 } from "../../data/repositories/customersRepository";
-import { REPOSITORY_MODES } from "../../data/repositories/repositoryMode";
-import { getRepositoryModeStatus } from "../../data/repositories/repositoryModeService";
 import {
   resolveCustomerDisplayCode,
   resolveCustomerFormCode,
@@ -34,7 +32,6 @@ import {
 const Customers = () => {
   const { message } = AntdApp.useApp();
   const [customers, setCustomers] = useState([]);
-  const [repositoryMode, setRepositoryMode] = useState(REPOSITORY_MODES.SQLITE_SIDECAR);
   const [loading, setLoading] = useState(true);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -42,13 +39,10 @@ const Customers = () => {
   const [customerCodeLoading, setCustomerCodeLoading] = useState(false);
   const [form] = Form.useForm();
 
-  const getModeOptions = useCallback((mode = repositoryMode) => ({ mode }), [repositoryMode]);
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
     try {
-      const modeStatus = await getRepositoryModeStatus();
-      setRepositoryMode(modeStatus.mode);
-      const data = await listCustomers(getModeOptions(modeStatus.mode));
+      const data = await listCustomers();
       setCustomers(data);
     } catch (error) {
       console.error("Gagal ambil data customer:", error);
@@ -56,7 +50,7 @@ const Customers = () => {
     } finally {
       setLoading(false);
     }
-  }, [getModeOptions, message]);
+  }, [message]);
 
   useEffect(() => {
     fetchCustomers();
@@ -70,9 +64,7 @@ const Customers = () => {
     setCustomerCodeLoading(true);
 
     try {
-      const modeStatus = await getRepositoryModeStatus();
-      setRepositoryMode(modeStatus.mode);
-      const generatedCode = await generateCustomerCode({}, getModeOptions(modeStatus.mode));
+      const generatedCode = await generateCustomerCode();
       form.setFieldsValue({ code: generatedCode, customerCode: generatedCode });
     } catch (error) {
       console.error("Gagal membuat kode customer otomatis:", error);
@@ -85,10 +77,10 @@ const Customers = () => {
   const handleAddOrEditCustomer = async (values) => {
     try {
       if (isEditing && currentId) {
-        await updateCustomer(currentId, values, getModeOptions());
+        await updateCustomer(currentId, values);
         message.success("Customer berhasil diubah!");
       } else {
-        await createCustomer(values, getModeOptions());
+        await createCustomer(values);
         message.success("Customer berhasil ditambahkan!");
       }
       form.resetFields();
@@ -114,7 +106,7 @@ const Customers = () => {
 
   const handleDeactivate = async (id) => {
     try {
-      await deleteCustomer(id, getModeOptions());
+      await deleteCustomer(id);
       message.success("Customer berhasil dinonaktifkan.");
       fetchCustomers();
     } catch (error) {
