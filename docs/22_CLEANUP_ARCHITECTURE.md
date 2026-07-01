@@ -1,7 +1,7 @@
 # CLEANUP ARCHITECTURE — IMS Bunga Flanel
 
 Status: **AKTIF / SOURCE-VERIFIED / BEHAVIOR-PRESERVING**  
-Tanggal validasi: **2026-06-30**
+Tanggal validasi: **2026-07-01**
 
 Dokumen ini mengunci hasil cleanup C0–C16. Cleanup merapikan authority, folder, facade, duplikasi, dan komponen UI tanpa mengubah schema, route, role guard, atau flow bisnis guarded.
 
@@ -81,8 +81,14 @@ Backend tetap enforcement utama. Shared contract tidak boleh digunakan untuk mel
 - Page tetap memanggil service existing; business mutation tidak dipindahkan ke komponen presentasi.
 - Repository-mode switcher frontend yang hanya memiliki satu mode SQLite sudah dihapus; repository domain tipis tetap dipertahankan agar page tidak mengikat langsung ke transport.
 - Form/detail/modal anak dipisahkan dari page Produksi, Sales, Purchases, Products, Raw Materials, Supplier Purchase, Pricing Rules, Stock Adjustment, Stock Management, Dashboard, Database Center, dan User Management.
+- Komponen form besar menerima contract props terkelompok (`formState`, `referenceData`, `selectionState`, `actions`, dan kelompok domain terkait), bukan puluhan prop datar. Grouping hanya mengurangi coupling presentational; mutation dan derived business state tetap dimiliki page/service.
+- Close/reset drawer yang sebelumnya menyebarkan setter individual dipusatkan pada callback parent seperti `closeFormDrawer`, sehingga child tidak mengatur lifecycle page secara langsung.
+- Konfigurasi tabel, mobile card, dan detail column yang murni presentational ditempatkan pada helper/list component domain existing untuk Production Order, BOM, Work Log, Sales, dan Purchase. Handler mutation tetap diinjeksi dari page; helper tidak mengakses service atau menulis data.
+- Page entry produksi yang sebelumnya di atas 1.000 baris sudah turun di bawah batas tersebut. `Purchases.jsx` tetap lebih besar karena menjadi orchestration boundary guarded untuk OCR, supplier catalog, stock-in, expense, dan commit atomic; pemecahan business flow ditunda sampai tersedia characterization test yang lebih lengkap.
+- Form hasil ekstraksi wajib memiliki behavioral test minimal untuk close guard, loading/disabled guard, atau callback submit yang relevan; source-string test tetap boleh dipakai sebagai architecture guard, tetapi bukan pengganti interaction contract.
 - Dashboard visual, quick action, dan checklist setup berada pada komponen/helper domain Dashboard; restore guard dan auth mutation tetap di page/service pemiliknya.
 - Cleanup CSS dilakukan scoped. `!important` tidak boleh dihapus massal tanpa visual regression light/dark, desktop/mobile, modal, table, dan Ant Design override.
+- Export XLSX/CSV menetralkan string yang dapat dieksekusi sebagai formula spreadsheet. Data sumber tidak diubah; sanitasi hanya berlaku pada file export.
 
 ## Source hygiene guard
 

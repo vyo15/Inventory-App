@@ -26,6 +26,7 @@ import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoad
 import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 import {
   getDefaultReportDateRange,
+  buildReportPeriodFilterLines,
   getReportDateRangeLabel,
   normalizeReportDateRange,
 } from "../../utils/reports/reportDateRange";
@@ -167,9 +168,7 @@ const PurchasesReport = () => {
       subtitle: "Ekspor mengikuti data expenses pembelian yang tampil di halaman ini.",
       sheetName: "Purchases Report",
       fileName: "Laporan-Pembelian",
-      filters: [
-        `Periode: ${getReportDateRangeLabel(dateRange)}`,
-      ],
+      filters: buildReportPeriodFilterLines(dateRange),
       columns: [
         { header: "ID Expense", key: "expenseId", width: 24 },
         { header: "Tanggal", key: "expenseDate", width: 18 },

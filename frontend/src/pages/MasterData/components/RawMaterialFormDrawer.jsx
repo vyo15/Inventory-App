@@ -28,25 +28,20 @@ import { buildFormValues, integerParser, unitOptions } from "../helpers/rawMater
 const { Option } = Select;
 
 const RawMaterialFormDrawer = ({
-  canActivateVariantsForEditing,
-  categorySelectOptions,
-  closeFormDrawer,
-  editingRecord,
-  form,
-  formVisible,
-  handleSubmit,
-  hasVariantModeSwitchLocked,
-  hasVariantsValue,
-  isEditingMaterial,
-  isGuardedVariantStock,
-  pricingModeValue,
-  pricingPreviewWarning,
-  pricingRules,
-  setPricingPreviewWarning,
-  stockEditHelpText,
-  submitting,
-  variantLabelValue,
-  variantStats,
+  formState: { form, formVisible, submitting },
+  entityState: { editingRecord, isEditingMaterial },
+  optionData: { categorySelectOptions, pricingRules },
+  variantState: {
+    canActivateVariantsForEditing,
+    hasVariantModeSwitchLocked,
+    hasVariantsValue,
+    isGuardedVariantStock,
+    variantLabelValue,
+    variantStats,
+  },
+  pricingState: { pricingModeValue, pricingPreviewWarning },
+  stockState: { stockEditHelpText },
+  actions: { closeFormDrawer, handleSubmit, setPricingPreviewWarning },
 }) => (
       <Drawer
         title={editingRecord ? 'Edit Bahan Baku' : 'Tambah Bahan Baku'}

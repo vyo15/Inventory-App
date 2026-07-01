@@ -19,24 +19,28 @@ import formatNumber from "../../../utils/formatters/numberId";
 import { formatStockWithUnit, getVariantDisplayLabel } from "../helpers/semiFinishedMaterialsPageHelpers";
 
 const SemiFinishedMaterialDetailDrawer = ({
-  detailVariantColumns,
-  detailVisible,
-  resolveComponentGroupLabel,
-  resolveFlowerTypeLabel,
-  selectedMaterial,
-  selectedMaterialAverageCost,
-  selectedMaterialCostSourceLabel,
-  selectedMaterialRecipeCost,
-  selectedMaterialRecipeMeta,
-  selectedMaterialStatusMeta,
-  selectedMaterialUnit,
-  selectedMaterialVariants,
-  setDetailVisible,
-}) => (
+  drawerState,
+  materialState,
+  helpers,
+  onClose,
+}) => {
+  const { detailVisible, selectedMaterial } = drawerState;
+  const {
+    selectedMaterialAverageCost,
+    selectedMaterialCostSourceLabel,
+    selectedMaterialRecipeCost,
+    selectedMaterialRecipeMeta,
+    selectedMaterialStatusMeta,
+    selectedMaterialUnit,
+    selectedMaterialVariants,
+  } = materialState;
+  const { detailVariantColumns, resolveComponentGroupLabel, resolveFlowerTypeLabel } = helpers;
+
+  return (
       <MobileDetailDrawer
         title="Detail Semi Finished Material"
         open={detailVisible}
-        onClose={() => setDetailVisible(false)}
+        onClose={onClose}
         width={900}
       >
         {!selectedMaterial ? (
@@ -226,6 +230,7 @@ Risiko:
           </Space>
         )}
       </MobileDetailDrawer>
-);
+  );
+};
 
 export default SemiFinishedMaterialDetailDrawer;

@@ -1,4 +1,5 @@
 import { Button, Space, Tag, Tooltip } from "antd";
+import { EyeOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { formatNumberId } from "../../../utils/formatters/numberId";
 import { formatCurrencyId as formatCurrencyIdr } from "../../../utils/formatters/currencyId";
@@ -157,3 +158,51 @@ export const createPurchaseTableColumns = ({ onOpenShopeeOcrDetail }) => [
     },
   },
 ];
+
+export const createPurchaseMobileCardConfig = ({ onOpenDetail } = {}) => ({
+  title: (record) => record.purchaseNumber || record.code || record.referenceNumber || "Kode otomatis",
+  subtitle: (record) => [
+    record.date?.toDate ? dayjs(record.date.toDate()).format("DD-MM-YYYY") : "-",
+    record.supplierName || "Supplier tidak tercatat",
+  ],
+  tags: (record) => [
+    <Tag key="purchase-type" color={record.purchaseType === "offline" ? "default" : "blue"}>
+      {record.purchaseType === "offline" ? "Offline" : "Online"}
+    </Tag>,
+    <Tag key="item-type" color={record.type === "product" ? "blue" : "gold"}>
+      {record.type === "product" ? "Produk" : "Bahan Baku"}
+    </Tag>,
+  ],
+  meta: [
+    { label: "Total", value: (record) => formatCurrencyIdr(record.totalActualPurchase || 0) },
+    {
+      label: "Modal",
+      value: (record) => `${formatCurrencyIdr(record.actualUnitCost || 0)}${record.stockUnit ? ` / ${record.stockUnit}` : ""}`,
+    },
+    {
+      label: "Stok Masuk",
+      value: (record) => {
+        const stockIn = record.type === "material" ? (record.totalStockIn || record.quantity) : record.quantity;
+        return `${formatNumberId(stockIn || 0)}${record.stockUnit ? ` ${record.stockUnit}` : ""}`;
+      },
+    },
+  ],
+  content: (record) => (
+    <div className="ims-cell-stack ims-cell-stack-tight">
+      <span className="ims-cell-title">{record.itemName || "-"}</span>
+      <span className="ims-cell-meta">
+        {record.variantLabel || record.variantKey ? `Varian: ${record.variantLabel || record.variantKey}` : "Master"}
+      </span>
+    </div>
+  ),
+  actions: (record) => (
+    <Button
+      className="ims-action-button"
+      icon={<EyeOutlined />}
+      size="small"
+      onClick={() => onOpenDetail?.(record)}
+    >
+      Lihat Detail
+    </Button>
+  ),
+});

@@ -6,19 +6,14 @@ import {
 } from "react";
 import {
   App as AntdApp,
-  Tag,
-  Button,
   Form,
   Input,
   Select,
   Tabs,
-  Popconfirm,
-  Tooltip,
   Empty,
-  Progress,
   Typography,
 } from "antd";
-import { PlusOutlined, EyeOutlined } from "@ant-design/icons";
+import { PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import PageHeader from "../../components/Layout/Page/PageHeader";
@@ -26,7 +21,6 @@ import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import DataTableView from "../../components/Layout/Table/DataTableView";
-import CompactCell, { CompactCellText } from "../../components/Layout/Table/CompactCell";
 import { SALES_CHANNEL_OPTIONS, buildSalesChannelSummary } from "../../constants/salesChannelOptions";
 import {
   getSalesCustomerReferences,
@@ -48,9 +42,15 @@ import SalesDetailDrawer from './components/SalesDetailDrawer';
 import SalesChannelDetailDrawer from './components/SalesChannelDetailDrawer';
 import SalesFormModal from "./components/SalesFormModal";
 import {
+  createSalesChannelMobileCardConfig,
+  createSalesChannelSummaryColumns,
+  createSalesMobileCardConfig,
+  createSalesTableColumns,
+  createSelectedSalesChannelTransactionColumns,
+  createSelectedSalesChannelTransactionMobileCardConfig,
   getSaleDisplayReference,
   getSaleExternalReference,
-  getSalesStatusColor,
+  SALES_TAB_ITEMS,
 } from './helpers/salesPageHelpers';
 
 
@@ -673,353 +673,21 @@ const Sales = () => {
     ];
   }, [filteredSalesRecords]);
 
-  // =========================
-  // SECTION: Kolom tabel utama
-  // IMS NOTE [AKTIF] - Urutan kolom Sales dibuat mengikuti alur baca transaksi.
-  // Fungsi blok: menampilkan tanggal lebih dulu, lalu pelanggan, item, channel, referensi, total, status, dan aksi.
-  // Hubungan flow: hanya mengubah presentasi tabel; filter tab, pending income, status transition, stok, income, dan alur Return tidak berubah.
-  // Alasan logic: owner lebih mudah membaca kronologi penjualan tanpa mengubah data transaksi atau payload layanan database.
-  // =========================
-  /* =====================================================
-     SECTION: Compact Sales Table Columns — AKTIF/GUARDED
-     Fungsi:
-     - Menampilkan ringkasan transaksi penjualan tanpa horizontal scroll besar.
-     Dipakai oleh:
-     - Sales main table.
-     Alasan perubahan:
-     - Action dan informasi keputusan cepat harus terlihat pada desktop/laptop normal.
-     Catatan cleanup:
-     - Item breakdown panjang bisa dibuat drawer khusus jika nanti owner butuh audit lebih nyaman.
-     Risiko:
-     - Jangan mengubah handler status/income/stock/return karena kolom ini hanya presentational.
-     ===================================================== */
-  const salesTableColumns = [
-    {
-      title: "Tanggal / Ref",
-      key: "dateReference",
-      width: 150,
-      render: (_, record) => {
-        const referenceText = record.saleNumber || record.code || record.referenceNumber || "Tanpa ref";
-        return (
-          <CompactCell>
-            <CompactCellText value={record.date || "-"} strong tooltip={false} />
-            <CompactCellText value={referenceText} secondary />
-          </CompactCell>
-        );
-      },
-    },
-    {
-      title: "Pelanggan / Channel",
-      key: "customerChannel",
-      width: 210,
-      render: (_, record) => {
-        const customerName = record.customerName || "-";
-        const channel = record.salesChannel || "-";
-        return (
-          <CompactCell>
-            <CompactCellText value={customerName} strong />
-            <Tag style={{ marginTop: 4 }}>{channel}</Tag>
-          </CompactCell>
-        );
-      },
-    },
-    {
-      title: "Item Ringkas",
-      dataIndex: "items",
-      key: "items",
-      width: 260,
-      render: (items) => {
-        const saleItems = Array.isArray(items) ? items : [];
-        const primaryItem = saleItems[0];
-
-        if (!primaryItem) return "-";
-
-        const primaryLabel = `${primaryItem.itemName || "Item"}${primaryItem.variantLabel ? ` - ${primaryItem.variantLabel}` : ""}`;
-        const tooltipContent = (
-          <div style={{ maxWidth: 360 }}>
-            {saleItems.map((item, index) => (
-              <div key={`${item.itemId || item.itemName || "item"}-${index}`} style={{ marginBottom: index === saleItems.length - 1 ? 0 : 8 }}>
-                <div className="ims-cell-title">
-                  {item.itemName || "Item"}{item.variantLabel ? ` - ${item.variantLabel}` : ""}
-                </div>
-                <div>
-                  {formatNumberId(item.quantity)} x {formatCurrencyId(item.pricePerUnit || 0)} = {formatCurrencyId(item.subtotal || 0)}
-                </div>
-              </div>
-            ))}
-          </div>
-        );
-
-        return (
-          <Tooltip title={tooltipContent}>
-            <CompactCell>
-              <CompactCellText value={primaryLabel} strong tooltip={false} />
-              <CompactCellText value={`${saleItems.length} item transaksi`} secondary tooltip={false} />
-            </CompactCell>
-          </Tooltip>
-        );
-      },
-    },
-    {
-      title: "Total",
-      dataIndex: "total",
-      key: "total",
-      width: 140,
-      align: "right",
-      render: (value) => (value != null ? <strong>{formatCurrencyId(value)}</strong> : "-"),
-    },
-    {
-      title: "Status",
-      dataIndex: "status",
-      key: "status",
-      width: 120,
-      render: (status) => {
-        return <Tag color={getSalesStatusColor(status)}>{status}</Tag>;
-      },
-    },
-    {
-      // =====================================================
-      // SECTION: Aksi status Sales — AKTIF / GUARDED
-      // Fungsi:
-      // - Menampilkan aksi status resmi tanpa cancel user-facing dan tanpa hard delete.
-      //
-      // Dipakai oleh:
-      // - Tabel Sales.
-      //
-      // Alasan perubahan:
-      // - Sales tidak menyediakan aksi batal dari tabel; barang kembali diarahkan ke Return.
-      //
-      // Catatan cleanup:
-      // - Tidak ada; tabel Sales tidak menyediakan aksi batal/hapus.
-      //
-      // Risiko:
-      // - Aksi batal di Sales bisa disalahgunakan untuk bypass Return dan membuat audit stok ambigu.
-      // =====================================================
-      title: "Aksi",
-      key: "action",
-      width: 150,
-      className: "app-table-action-column",
-      render: (_, record) => {
-        const canMoveToShipped = record.status === "Diproses" && !isOfflineChannel(record.salesChannel);
-        const canComplete = record.status === "Dikirim" && !isOfflineChannel(record.salesChannel);
-
-        if (!canMoveToShipped && !canComplete) {
-          return "-";
-        }
-
-        return (
-          <div className="ims-action-group ims-action-group--vertical">
-            {canMoveToShipped ? (
-              <Popconfirm
-                title="Yakin ubah status menjadi Dikirim?"
-                onConfirm={() => handleUpdateSaleStatus(record.id, "Dikirim")}
-                okText="Ya"
-                cancelText="Tidak"
-              >
-                <Button className="ims-action-button" size="small">
-                  Dikirim
-                </Button>
-              </Popconfirm>
-            ) : null}
-
-            {canComplete ? (
-              <Popconfirm
-                title="Yakin ubah status menjadi Selesai?"
-                onConfirm={() => handleUpdateSaleStatus(record.id, "Selesai")}
-                okText="Ya"
-                cancelText="Tidak"
-              >
-                <Button className="ims-action-button" size="small">
-                  Selesai
-                </Button>
-              </Popconfirm>
-            ) : null}
-
-          </div>
-        );
-      },
-    },
-  ];
-
-  const salesChannelSummaryColumns = [
-    {
-      title: "Channel",
-      key: "channel",
-      width: 220,
-      render: (_, record) => (
-        <div className="ims-cell-stack ims-cell-stack-tight">
-          <div className="ims-cell-title">{record.channel}</div>
-          <div className="ims-cell-meta">
-            {record.groupLabel} • {formatNumberId(record.transactionCount)} transaksi
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: "Omzet",
-      key: "totalAmount",
-      width: 150,
-      align: "right",
-      render: (_, record) => <strong>{formatCurrencyId(record.totalAmount)}</strong>,
-    },
-    {
-      title: "Selesai",
-      key: "completedAmount",
-      width: 145,
-      align: "right",
-      render: (_, record) => (
-        <div className="ims-cell-stack ims-cell-stack-tight" style={{ alignItems: "flex-end" }}>
-          <strong>{formatCurrencyId(record.completedAmount)}</strong>
-          <span className="ims-cell-meta">{formatNumberId(record.completedCount)} transaksi</span>
-        </div>
-      ),
-    },
-    {
-      title: "Pending",
-      key: "pendingAmount",
-      width: 145,
-      align: "right",
-      render: (_, record) => (
-        <div className="ims-cell-stack ims-cell-stack-tight" style={{ alignItems: "flex-end" }}>
-          <strong>{formatCurrencyId(record.pendingAmount)}</strong>
-          <span className="ims-cell-meta">{formatNumberId(record.pendingCount)} transaksi</span>
-        </div>
-      ),
-    },
-    {
-      title: "Kontribusi",
-      key: "contribution",
-      width: 160,
-      render: (_, record) => {
-        const percent = salesChannelTotalAmount
-          ? Math.round((Number(record.totalAmount || 0) / salesChannelTotalAmount) * 100)
-          : 0;
-
-        return (
-          <div className="ims-cell-stack ims-cell-stack-tight">
-            <Progress percent={percent} size="small" showInfo={false} />
-            <div className="ims-cell-meta">{formatNumberId(percent)}%</div>
-          </div>
-        );
-      },
-    },
-    {
-      title: "Detail",
-      key: "detail",
-      width: 105,
-      align: "right",
-      className: "app-table-action-column",
-      render: (_, record) => (
-        <Button
-          size="small"
-          icon={<EyeOutlined />}
-          disabled={record.transactionCount <= 0}
-          onClick={(event) => {
-            event.stopPropagation();
-            openSalesChannelDetail(record.key);
-          }}
-        >
-          Lihat
-        </Button>
-      ),
-    },
-  ];
-
-  const selectedSalesChannelTransactionColumns = [
-    {
-      title: "Tanggal / Ref",
-      key: "dateReference",
-      width: 170,
-      render: (_, record) => {
-        const referenceText = getSaleDisplayReference(record);
-        const externalReference = getSaleExternalReference(record);
-
-        return (
-          <div className="ims-cell-stack ims-cell-stack-tight">
-            <div className="ims-cell-title">{record.date || "-"}</div>
-            <Tooltip title={referenceText}>
-              <div className="ims-cell-meta" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {referenceText}
-              </div>
-            </Tooltip>
-            {externalReference !== "-" ? (
-              <Tooltip title={`No. marketplace: ${externalReference}`}>
-                <Tag style={{ marginTop: 2 }}>Order: {externalReference}</Tag>
-              </Tooltip>
-            ) : null}
-          </div>
-        );
-      },
-    },
-    {
-      title: "Pelanggan",
-      key: "customerName",
-      width: 160,
-      render: (_, record) => record.customerName || "-",
-    },
-    {
-      title: "Status",
-      dataIndex: "status",
-      key: "status",
-      width: 110,
-      render: (status) => <Tag color={getSalesStatusColor(status)}>{status}</Tag>,
-    },
-    {
-      title: "Total",
-      dataIndex: "total",
-      key: "total",
-      width: 140,
-      align: "right",
-      render: (value) => <strong>{formatCurrencyId(value || 0)}</strong>,
-    },
-  ];
-
-
-  const salesChannelMobileCardConfig = {
-    title: (record) => record.channel || "Channel penjualan",
-    subtitle: (record) => [record.groupLabel, `${formatNumberId(record.transactionCount)} transaksi`],
-    meta: [
-      { label: "Omzet", value: (record) => formatCurrencyId(record.totalAmount) },
-      { label: "Selesai", value: (record) => `${formatCurrencyId(record.completedAmount)} / ${formatNumberId(record.completedCount)} trx` },
-      { label: "Pending", value: (record) => `${formatCurrencyId(record.pendingAmount)} / ${formatNumberId(record.pendingCount)} trx` },
-      {
-        label: "Kontribusi",
-        value: (record) => {
-          const percent = salesChannelTotalAmount
-            ? Math.round((Number(record.totalAmount || 0) / salesChannelTotalAmount) * 100)
-            : 0;
-          return `${formatNumberId(percent)}%`;
-        },
-      },
-    ],
-    actions: (record) => (
-      <Button
-        size="small"
-        icon={<EyeOutlined />}
-        disabled={record.transactionCount <= 0}
-        onClick={() => openSalesChannelDetail(record.key)}
-      >
-        Lihat Detail
-      </Button>
-    ),
-  };
-
-  const selectedSalesChannelTransactionMobileCardConfig = {
-    title: (record) => getSaleDisplayReference(record),
-    subtitle: (record) => [record.date || "-", record.customerName || "Tanpa pelanggan"],
-    tags: (record) => <Tag color={getSalesStatusColor(record.status)}>{record.status || "-"}</Tag>,
-    meta: [
-      { label: "Total", value: (record) => formatCurrencyId(record.total || 0) },
-      { label: "Order/Resi", value: (record) => getSaleExternalReference(record) },
-    ],
-  };
-
-  const salesTabItems = [
-    { key: "all", label: "Semua Penjualan" },
-    { key: "Diproses", label: "Diproses" },
-    { key: "Dikirim", label: "Dikirim" },
-    { key: "Selesai", label: "Selesai" },
-  ];
+  const salesTableColumns = createSalesTableColumns({
+    isOfflineChannel,
+    onUpdateStatus: handleUpdateSaleStatus,
+  });
+  const salesChannelSummaryColumns = createSalesChannelSummaryColumns({
+    onOpenDetail: openSalesChannelDetail,
+    totalAmount: salesChannelTotalAmount,
+  });
+  const selectedSalesChannelTransactionColumns = createSelectedSalesChannelTransactionColumns();
+  const salesChannelMobileCardConfig = createSalesChannelMobileCardConfig({
+    onOpenDetail: openSalesChannelDetail,
+    totalAmount: salesChannelTotalAmount,
+  });
+  const selectedSalesChannelTransactionMobileCardConfig = createSelectedSalesChannelTransactionMobileCardConfig();
+  const salesTabItems = SALES_TAB_ITEMS;
 
   const handleSalesChannelChange = (channel) => {
     const nextValues = isOfflineChannel(channel)
@@ -1037,23 +705,9 @@ const Sales = () => {
     form.setFieldsValue(nextValues);
   };
 
-  const salesMobileCardConfig = {
-    density: 'compact',
-    title: (record) => getSaleDisplayReference(record),
-    subtitle: (record) => [
-      record.customerName || 'Customer tidak tercatat',
-      record.salesChannel || null,
-    ].filter(Boolean),
-    primary: (record) => formatCurrencyId(record.total || 0),
-    secondary: (record) => `${formatNumberId((record.items || []).length)} item${record.date ? ` · ${record.date}` : ''}`,
-    tags: (record) => [
-      <Tag key="status" color={getSalesStatusColor(record.status)}>{record.status || '-'}</Tag>,
-    ],
-    onCardClick: (record) => openSaleDetail(record),
-    primaryActions: [
-      { key: 'detail', label: 'Detail', icon: <EyeOutlined />, onClick: (record) => openSaleDetail(record) },
-    ],
-  };
+  const salesMobileCardConfig = createSalesMobileCardConfig({
+    onOpenDetail: openSaleDetail,
+  });
 
   /* =====================================================
      SECTION: Sales Render Panel — GUARDED
@@ -1204,23 +858,24 @@ const Sales = () => {
       />
 
 <SalesFormModal
-        customers={customers}
-        defaultSaleLineItemType={defaultSaleLineItemType}
-        findSellableItem={findSellableItem}
-        form={form}
-        getSellableItemsByType={getSellableItemsByType}
-        handleAddSale={handleAddSale}
-        handleSaleItemChange={handleSaleItemChange}
-        handleSaleItemTypeChange={handleSaleItemTypeChange}
-        handleSalesChannelChange={handleSalesChannelChange}
-        isModalOpen={isModalOpen}
-        isOfflineChannel={isOfflineChannel}
-        isReferenceNumberEnabledChannel={isReferenceNumberEnabledChannel}
-        isSubmittingSale={isSubmittingSale}
-        onlineStatuses={onlineStatuses}
-        salesChannels={salesChannels}
-        sellableItemTypeOptions={sellableItemTypeOptions}
-        setIsModalOpen={setIsModalOpen}
+        formState={{ form, isModalOpen, isSubmittingSale }}
+        referenceData={{
+          customers,
+          onlineStatuses,
+          salesChannels,
+          sellableItemTypeOptions,
+        }}
+        channelState={{ isOfflineChannel, isReferenceNumberEnabledChannel }}
+        defaults={{ defaultSaleLineItemType }}
+        actions={{
+          findSellableItem,
+          getSellableItemsByType,
+          handleAddSale,
+          handleSaleItemChange,
+          handleSaleItemTypeChange,
+          handleSalesChannelChange,
+          setIsModalOpen,
+        }}
       />
     </>
   );

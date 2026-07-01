@@ -21,63 +21,57 @@ import {
 } from "../helpers/productionOrdersPageHelpers";
 
 const ProductionOrderFormDrawer = ({
-  bomIdValue,
-  bomLoading,
-  form,
-  formVisible,
-  handleSelectProductionTarget,
-  handleSubmit,
-  isSemiFinishedProduction,
-  loadBomOptions,
-  loadGeneratedCode,
-  loadSemiFinishedReferences,
-  orderQtyValue,
-  recipeOptions,
-  requirementPreview,
-  requirementPreviewError,
-  requirementPreviewLoading,
-  selectedProductionTargetKey,
-  semiCategoryFilter,
-  semiCategoryOptions,
-  semiFamilyFilter,
-  semiFamilyOptions,
-  setFormVisible,
-  setSelectedProductionTargetKey,
-  setSemiCategoryFilter,
-  setSemiFamilyFilter,
-  setTargetVariantOptions,
-  shouldShowRecipeSelect,
-  submitting,
-  targetSelectLabel,
-  targetSelectPlaceholder,
-  targetTypeValue,
-  targetVariantKeyValue,
-  targetVariantOptions,
-  visibleProductionTargetGroups,
+  formState: { form, formVisible, submitting },
+  selectionState: {
+    bomIdValue,
+    orderQtyValue,
+    selectedProductionTargetKey,
+    semiCategoryFilter,
+    semiFamilyFilter,
+    targetTypeValue,
+    targetVariantKeyValue,
+    targetVariantOptions,
+  },
+  referenceData: {
+    recipeOptions,
+    semiCategoryOptions,
+    semiFamilyOptions,
+    visibleProductionTargetGroups,
+  },
+  previewState: {
+    requirementPreview,
+    requirementPreviewError,
+    requirementPreviewLoading,
+  },
+  uiState: {
+    bomLoading,
+    isSemiFinishedProduction,
+    shouldShowRecipeSelect,
+    targetSelectLabel,
+    targetSelectPlaceholder,
+  },
+  actions: {
+    closeFormDrawer,
+    handleSelectProductionTarget,
+    handleSubmit,
+    loadBomOptions,
+    loadGeneratedCode,
+    loadSemiFinishedReferences,
+    setSelectedProductionTargetKey,
+    setSemiCategoryFilter,
+    setSemiFamilyFilter,
+    setTargetVariantOptions,
+  },
 }) => (
       <Drawer
         title="Buat Production Order"
         open={formVisible}
-        onClose={() => {
-          setFormVisible(false);
-          form.resetFields();
-          setSelectedProductionTargetKey("");
-          setSemiFamilyFilter("");
-          setSemiCategoryFilter("all");
-          setTargetVariantOptions([]);
-        }}
+        onClose={closeFormDrawer}
         width={680}
         extra={
           <Space>
             <Button
-              onClick={() => {
-                setFormVisible(false);
-                form.resetFields();
-                setSelectedProductionTargetKey("");
-                setSemiFamilyFilter("");
-                setSemiCategoryFilter("all");
-                setTargetVariantOptions([]);
-              }}
+              onClick={closeFormDrawer}
             >
               Batal
             </Button>

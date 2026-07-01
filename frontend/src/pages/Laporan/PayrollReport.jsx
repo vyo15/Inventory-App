@@ -41,14 +41,19 @@ import {
   getAllProductionPayrolls,
   getProductionPayrollsByDateRange,
 } from "../../services/Produksi/productionPayrollsService";
-import { exportJsonToExcel } from "../../utils/export/exportExcel";
+import { exportJsonToExcel, sanitizeSpreadsheetCellValue } from "../../utils/export/exportExcel";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 import { normalizeReportDateRange } from "../../utils/reports/reportDateRange";
-import { tallyPayrollStatus } from "./helpers/payrollReportHelpers";
+import {
+  PAYROLL_DETAIL_CSV_HEADERS,
+  buildPayrollDetailCsvRow,
+  buildPayrollDetailExcelRow,
+  tallyPayrollStatus,
+} from "./helpers/payrollReportHelpers";
 
 const { RangePicker } = DatePicker;
 
@@ -72,9 +77,6 @@ const renderPayrollStatusTags = (record = {}) => (
 //
 // Alasan perubahan:
 // - Field audit tetap bisa dibaca penuh lewat tooltip tanpa membutuhkan horizontal scroll besar.
-//
-// Catatan cleanup:
-// - belum ada.
 //
 // Risiko:
 // - Jika style ellipsis/tooltip diubah sembarangan, nilai payroll penting bisa terpotong tanpa akses baca penuh.
@@ -134,7 +136,8 @@ const downloadCsv = (rows = [], fileName = "payroll-report") => {
   const csvRows = rows.map((row) =>
     row
       .map((value) => {
-        const normalized = String(value ?? "").replace(/"/g, '""');
+        const safeValue = sanitizeSpreadsheetCellValue(value);
+        const normalized = String(safeValue ?? "").replace(/"/g, '""');
         return `"${normalized}"`;
       })
       .join(","),
@@ -283,9 +286,6 @@ const PayrollReport = () => {
   // - Mengurangi kebutuhan horizontal scroll besar tanpa mengubah source payroll,
   //   filter, summary, export, mapper, service, schema, route, role, atau business logic.
   //
-  // Catatan cleanup:
-  // - belum ada.
-  //
   // Risiko:
   // - Jika render kolom diubah sembarangan, field audit payroll/expense bisa tidak
   //   terbaca di UI meskipun data export tetap lengkap.
@@ -398,9 +398,6 @@ const PayrollReport = () => {
           // - Mempertahankan audit trail Cash Out dalam tabel compact tanpa mengubah
           //   payroll source data atau export detail/rekap.
           //
-          // Catatan cleanup:
-          // - belum ada.
-          //
           // Risiko:
           // - Jika logic status ini diganti sembarangan, operator/admin bisa salah
           //   membaca apakah Cash Out sudah dibuat, nominal nol, atau belum dibuat.
@@ -464,82 +461,15 @@ const PayrollReport = () => {
         `Status: ${statusFilter === "all" ? "Semua" : PAYROLL_STATUS_MAP[statusFilter] || statusFilter}`,
         `Operator: ${operatorFilter === "all" ? "Semua" : operatorFilter}`,
       ],
-      data: filteredPayrolls.map((item) => ({
-        "No. Payroll": item.payrollNumber || "-",
-        "Tanggal Payroll": formatDateId(item.payrollDate, true),
-        "Work Log": item.workNumber || "-",
-        Operator: item.workerName || "-",
-        Step: item.stepName || "-",
-        Mode: PAYROLL_MODE_MAP[item.payrollMode] || item.payrollMode || "-",
-        "Worked Qty": formatNumberId(item.workedQty || 0),
-        "Output Qty": formatNumberId(item.outputQtyUsed || 0),
-        Nominal: formatCurrencyId(item.finalAmount || 0),
-        Status: PAYROLL_STATUS_MAP[item.status] || item.status || "-",
-        Klasifikasi: PAYROLL_CLASSIFICATION_MAP[item.payrollClassification] || item.payrollClassification || "-",
-        "Masuk HPP": item.includePayrollInHpp === false ? "Tidak" : "Ya",
-        "Confirmed At": formatDateId(item.confirmedAt, true),
-        "Paid At": formatDateId(item.paidAt, true),
-        "Cash Out Ref": resolveDisplayReference(
-          {
-            cashOutNumber: item.cashOutNumber,
-            referenceNumber: item.expenseReferenceNumber,
-            sourceRef: item.expenseSourceRef,
-            expenseId: item.expenseId,
-          },
-          { fallback: item.expenseId || "-", allowTechnicalId: true },
-        ),
-        "Expense Sync": item.expenseSyncStatus || "-",
-      })),
+      data: filteredPayrolls.map(buildPayrollDetailExcelRow),
     });
     message.success("Detail payroll berhasil diekspor ke Excel.");
   };
 
   const exportDetailCsv = () => {
     const rows = [
-      [
-        "No. Payroll",
-        "Tanggal Payroll",
-        "Work Log",
-        "Operator",
-        "Step",
-        "Mode",
-        "Worked Qty",
-        "Output Qty",
-        "Nominal",
-        "Status",
-        "Klasifikasi",
-        "Masuk HPP",
-        "Confirmed At",
-        "Paid At",
-        "Cash Out Ref",
-        "Expense Sync",
-      ],
-      ...filteredPayrolls.map((item) => [
-        item.payrollNumber || "-",
-        formatDateId(item.payrollDate, true),
-        item.workNumber || "-",
-        item.workerName || "-",
-        item.stepName || "-",
-        PAYROLL_MODE_MAP[item.payrollMode] || item.payrollMode || "-",
-        Number(item.workedQty || 0),
-        Number(item.outputQtyUsed || 0),
-        Number(item.finalAmount || 0),
-        PAYROLL_STATUS_MAP[item.status] || item.status || "-",
-        PAYROLL_CLASSIFICATION_MAP[item.payrollClassification] || item.payrollClassification || "-",
-        item.includePayrollInHpp === false ? "Tidak" : "Ya",
-        formatDateId(item.confirmedAt, true),
-        formatDateId(item.paidAt, true),
-        resolveDisplayReference(
-          {
-            cashOutNumber: item.cashOutNumber,
-            referenceNumber: item.expenseReferenceNumber,
-            sourceRef: item.expenseSourceRef,
-            expenseId: item.expenseId,
-          },
-          { fallback: item.expenseId || "-", allowTechnicalId: true },
-        ),
-        item.expenseSyncStatus || "-",
-      ]),
+      PAYROLL_DETAIL_CSV_HEADERS,
+      ...filteredPayrolls.map(buildPayrollDetailCsvRow),
     ];
 
     downloadCsv(rows, "Laporan-Payroll-Detail");

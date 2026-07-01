@@ -6,14 +6,11 @@ import {
 } from "react";
 import {
   App as AntdApp,
-  Button,
   Form,
-  Tag,
   Upload,
   Typography,
 } from "antd";
-import { EyeOutlined, PlusOutlined } from "@ant-design/icons";
-import dayjs from "dayjs";
+import { PlusOutlined } from "@ant-design/icons";
 import { useSearchParams } from "react-router-dom";
 import {
   calculateSupplierMaterialRestockMetrics,
@@ -26,8 +23,6 @@ import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import { DataRefreshIndicator } from "../../components/Layout/Feedback/DataLoadingState";
-import { formatCurrencyId } from "../../utils/formatters/currencyId";
-import { formatNumberId } from "../../utils/formatters/numberId";
 import {
   enrichRawMaterialWithVariantTotals,
 } from "../../utils/variants/rawMaterialVariantHelpers";
@@ -53,7 +48,7 @@ import {
 import PurchaseFormModal from "./components/PurchaseFormModal";
 import PurchaseDetailDrawer from "./components/PurchaseDetailDrawer";
 import PurchaseOcrReceiptModal from "./components/PurchaseOcrReceiptModal";
-import { createPurchaseTableColumns } from "./components/PurchaseTableColumns";
+import { createPurchaseMobileCardConfig, createPurchaseTableColumns } from "./components/PurchaseTableColumns";
 import { buildPurchaseStockPreviewSnapshot } from "./components/purchaseStockPreviewHelpers";
 import { SHOPEE_OCR_IDLE_STATE } from "./components/purchaseOcrUiConstants";
 import {
@@ -1202,47 +1197,9 @@ const Purchases = () => {
     onOpenShopeeOcrDetail: openShopeeOcrDetailModal,
   });
 
-  const purchaseMobileCardConfig = {
-    title: (record) => record.purchaseNumber || record.code || record.referenceNumber || 'Kode otomatis',
-    subtitle: (record) => [
-      record.date?.toDate ? dayjs(record.date.toDate()).format('DD-MM-YYYY') : '-',
-      record.supplierName || 'Supplier tidak tercatat',
-    ],
-    tags: (record) => [
-      <Tag key="purchase-type" color={record.purchaseType === 'offline' ? 'default' : 'blue'}>
-        {record.purchaseType === 'offline' ? 'Offline' : 'Online'}
-      </Tag>,
-      <Tag key="item-type" color={record.type === 'product' ? 'blue' : 'gold'}>
-        {record.type === 'product' ? 'Produk' : 'Bahan Baku'}
-      </Tag>,
-    ],
-    meta: [
-      { label: 'Total', value: (record) => formatCurrencyId(record.totalActualPurchase || 0) },
-      { label: 'Modal', value: (record) => `${formatCurrencyId(record.actualUnitCost || 0)}${record.stockUnit ? ` / ${record.stockUnit}` : ''}` },
-      { label: 'Stok Masuk', value: (record) => {
-        const stockIn = record.type === 'material' ? (record.totalStockIn || record.quantity) : record.quantity;
-        return `${formatNumberId(stockIn || 0)}${record.stockUnit ? ` ${record.stockUnit}` : ''}`;
-      } },
-    ],
-    content: (record) => (
-      <div className="ims-cell-stack ims-cell-stack-tight">
-        <span className="ims-cell-title">{record.itemName || '-'}</span>
-        <span className="ims-cell-meta">
-          {record.variantLabel || record.variantKey ? `Varian: ${record.variantLabel || record.variantKey}` : 'Master'}
-        </span>
-      </div>
-    ),
-    actions: (record) => (
-      <Button
-        className="ims-action-button"
-        icon={<EyeOutlined />}
-        size="small"
-        onClick={() => openPurchaseDetail(record)}
-      >
-        Lihat Detail
-      </Button>
-    ),
-  };
+  const purchaseMobileCardConfig = createPurchaseMobileCardConfig({
+    onOpenDetail: openPurchaseDetail,
+  });
 
   /* =====================================================
      SECTION: Purchases Render Panel — GUARDED
@@ -1322,35 +1279,42 @@ const Purchases = () => {
       />
 
       <PurchaseFormModal
-        form={form}
-        isModalOpen={isModalOpen}
-        isSubmittingPurchase={isSubmittingPurchase}
-        onCancel={handleClosePurchaseModal}
-        handleSubmitPurchase={handleSubmitPurchase}
-        itemType={itemType}
-        products={products}
-        materials={materials}
-        selectedMaterial={selectedMaterial}
-        materialVariantOptions={materialVariantOptions}
-        selectedProduct={selectedProduct}
-        selectedProductHasVariants={selectedProductHasVariants}
-        productVariantOptions={productVariantOptions}
-        selectedPurchaseStockPreview={selectedPurchaseStockPreview}
-        filteredSuppliers={filteredSuppliers}
-        itemId={itemId}
-        supplierId={supplierId}
-        selectedSupplierOffers={selectedSupplierOffers}
-        selectedCatalogOffer={selectedCatalogOffer}
-        priceVerified={priceVerified === true}
-        onVerifyPrice={handleVerifyPurchasePrice}
-        shopeeOcrState={shopeeOcrState}
-        shopeeOcrApplyFeedback={shopeeOcrApplyFeedback}
-        handleShopeeScreenshotUpload={handleShopeeScreenshotUpload}
-        applyShopeeOcrDraftToForm={applyShopeeOcrDraftToForm}
-        isOfflinePurchase={isOfflinePurchase}
-        conversionValue={conversionValue}
-        selectedSupplierCatalogCost={selectedSupplierCatalogCost}
-        subtotalManualOverrideRef={subtotalManualOverrideRef}
+        formState={{
+          form,
+          isModalOpen,
+          isSubmittingPurchase,
+          itemType,
+          itemId,
+          supplierId,
+          priceVerified: priceVerified === true,
+          isOfflinePurchase,
+          conversionValue,
+        }}
+        referenceData={{
+          products,
+          materials,
+          materialVariantOptions,
+          productVariantOptions,
+          filteredSuppliers,
+          selectedSupplierOffers,
+        }}
+        selectionState={{
+          selectedMaterial,
+          selectedProduct,
+          selectedProductHasVariants,
+          selectedPurchaseStockPreview,
+          selectedCatalogOffer,
+          selectedSupplierCatalogCost,
+        }}
+        ocrState={{ shopeeOcrState, shopeeOcrApplyFeedback }}
+        actions={{
+          onCancel: handleClosePurchaseModal,
+          handleSubmitPurchase,
+          onVerifyPrice: handleVerifyPurchasePrice,
+          handleShopeeScreenshotUpload,
+          applyShopeeOcrDraftToForm,
+        }}
+        refs={{ subtotalManualOverrideRef }}
       />
     </>
   );

@@ -18,18 +18,11 @@ import {
 } from "react";
 import {
   App as AntdApp,
-  Badge,
-  Button,
   Col,
   Form,
   Input,
   Select,
-  Space,
-  Tag,
-  Typography,
 } from "antd";
-import { EyeOutlined } from "@ant-design/icons";
-import StatusTag from "../../components/Layout/Feedback/StatusTag";
 import { toReferenceOptions } from "../../utils/produksi/productionReferenceHelpers";
 import {
   buildCountSummary,
@@ -57,18 +50,14 @@ import { getActiveBomReferenceData } from "../../services/Produksi/productionBom
 import useAuth from "../../hooks/useAuth";
 import ProductionOrderDetailDrawer from "./components/ProductionOrderDetailDrawer";
 import ProductionOrderFormDrawer from "./components/ProductionOrderFormDrawer";
-import { buildDisplayReferenceSearchText, resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
+import { buildDisplayReferenceSearchText } from "../../utils/references/displayReferenceResolver";
 import {
-  formatDateTimeLabel,
-  formatQtyWithUnit,
-  getPriorityMeta,
+  createProductionOrderColumns,
+  createProductionOrderDetailRequirementColumns,
+  createProductionOrderMobileCardConfig,
   getProductionTargetDisplayLabel,
   getRecipeDisplayLabel,
-  getRequirementStockSourceMeta,
-  ORDER_STATUS_MAP,
-  orderUiClassNames,
   PRODUCTION_ORDER_TARGET_TYPES,
-  renderOrderCellBlock,
   resolveSemiProductionGroupMeta,
 } from "./helpers/productionOrdersPageHelpers";
 
@@ -169,9 +158,6 @@ const ProductionOrders = () => {
 
   Alasan perubahan:
   - Stabilkan function dengan useCallback agar effect targetType tidak memakai closure lama dan tidak memicu warning dependency.
-
-  Catatan cleanup:
-  - Belum ada.
 
   Risiko:
   - Jangan ubah cache guard/data source di sini karena pilihan semi finished PO bergantung pada reference data BOM aktif.
@@ -587,8 +573,21 @@ const ProductionOrders = () => {
     });
   };
 
-  const handleAdd = async () => {
+  const resetFormState = () => {
     form.resetFields();
+    setSelectedProductionTargetKey("");
+    setSemiFamilyFilter("");
+    setSemiCategoryFilter("all");
+    setTargetVariantOptions([]);
+  };
+
+  const closeFormDrawer = () => {
+    setFormVisible(false);
+    resetFormState();
+  };
+
+  const handleAdd = async () => {
+    resetFormState();
 
     form.setFieldsValue({
       code: "",
@@ -601,10 +600,6 @@ const ProductionOrders = () => {
       notes: "",
     });
 
-    setSelectedProductionTargetKey("");
-    setSemiFamilyFilter("");
-    setSemiCategoryFilter("all");
-    setTargetVariantOptions([]);
     setFormVisible(true);
 
     await loadBomOptions("product");
@@ -640,11 +635,7 @@ const ProductionOrders = () => {
 
       message.success("Production order berhasil dibuat");
 
-      setFormVisible(false);
-      form.resetFields();
-      setSelectedProductionTargetKey("");
-      setSemiFamilyFilter("");
-      setSemiCategoryFilter("all");
+      closeFormDrawer();
       await loadData();
     } catch (error) {
       if (error?.errorFields) return;
@@ -665,7 +656,7 @@ const ProductionOrders = () => {
     }
   };
 
-  const handleRefreshRequirement = async (record) => {
+  const handleRefreshRequirement = useCallback(async (record) => {
     try {
       await refreshProductionOrderRequirements(record.id, null);
       message.success("Kebutuhan material berhasil diperbarui");
@@ -674,7 +665,7 @@ const ProductionOrders = () => {
       console.error(error);
       message.error(error?.message || "Gagal refresh kebutuhan order");
     }
-  };
+  }, [loadData, message]);
 
   // =====================================================
   // Mulai Produksi dari PO
@@ -683,7 +674,7 @@ const ProductionOrders = () => {
   // - Saat start, stok bahan dipotong sesuai requirement PO
   // - Work Log otomatis dibuat dari snapshot BOM/PO
   // =====================================================
-  const handleStartProduction = async (record) => {
+  const handleStartProduction = useCallback(async (record) => {
     try {
       await createProductionWorkLogFromOrder(record.id, {}, currentUser);
       message.success("Produksi dimulai. Work Log dibuat dan stok bahan dipotong.");
@@ -692,329 +683,27 @@ const ProductionOrders = () => {
       console.error(error);
       message.error(error?.message || "Gagal memulai produksi");
     }
-  };
+  }, [currentUser, loadData, message]);
 
-  // =====================================================
-  // Kolom list Production Order
-  // Fungsi blok:
-  // - menampilkan PO aktif dalam layout tabel yang compact;
-  // - menjaga tombol aksi tetap langsung terlihat tanpa scroll horizontal.
-  // Alasan perubahan:
-  // - regression UI sebelumnya memakai scroll x besar sehingga tombol aksi terdorong ke kanan.
-  // Status:
-  // - aktif dipakai; bukan kandidat cleanup karena ini tabel utama Production Orders.
-  // =====================================================
-  const columns = [
-    {
-      title: "Order",
-      key: "order",
-      width: 170,
-      render: (_, record) => (
-        renderOrderCellBlock(resolveDisplayReference(record, { fields: ["code", "productionOrderCode"], fallback: "-" }), [
-          `Dibuat: ${formatDateTimeLabel(record.createdAt)}`,
-        ])
-      ),
-    },
-    {
-      title: "Target",
-      key: "target",
-      width: 250,
-      render: (_, record) => (
-        <div className={orderUiClassNames.stack}>
-          <Space wrap size={[8, 4]} className="ims-cell-tag-list">
-            <Typography.Text strong>{record.targetName || "-"}</Typography.Text>
-            <Tag className="ims-status-tag" color={record.targetType === "product" ? "blue" : "purple"}>
-              {record.targetType === "product" ? "Product" : "Semi Finished"}
-            </Tag>
-          </Space>
-          <div className={orderUiClassNames.meta}>
-            BOM: {record.bomName || "-"}
-          </div>
-          {record.targetVariantLabel ? (
-            <div className={orderUiClassNames.meta}>Varian: {record.targetVariantLabel}</div>
-          ) : null}
-          {/* =====================================================
-              ACTIVE - referensi planning pada PO.
-              Fungsi:
-              - membantu user melihat PO ini berasal dari planning mana;
-              - hanya info monitoring dan tidak mengubah flow stok/BOM.
-          ===================================================== */}
-          {record.planningCode ? (
-            <div className={orderUiClassNames.meta}>
-              Planning: {record.planningCode}{record.planningTitle ? ` - ${record.planningTitle}` : ""}
-            </div>
-          ) : null}
-          <div className={orderUiClassNames.meta}>
-            Estimasi Output: {formatNumber(record.expectedOutputQty || 0)} {record.targetUnit || "pcs"}
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: "Priority",
-      dataIndex: "priority",
-      key: "priority",
-      width: 92,
-      render: (value) => {
-        const meta = getPriorityMeta(value);
-        return <Tag className="ims-status-tag" color={meta.color}>{meta.label}</Tag>;
-      },
-    },
-    {
-      title: "Qty Batch",
-      dataIndex: "batchCount",
-      key: "batchCount",
-      width: 90,
-      render: (_, record) => formatNumber(record.batchCount ?? record.orderQty),
-    },
-    {
-      title: "Requirement",
-      key: "requirement",
-      width: 120,
-      render: (_, record) => (
-        <div className={orderUiClassNames.stack}>
-          <Typography.Text>
-            Line: {formatNumber(record.reservationSummary?.totalLines || 0)}
-          </Typography.Text>
-          <Typography.Text type="secondary" className={orderUiClassNames.meta}>
-            Shortage: {formatNumber(record.reservationSummary?.shortageLines || 0)}
-          </Typography.Text>
-        </div>
-      ),
-    },
-    {
-      title: "Status",
-      dataIndex: "status",
-      key: "status",
-      width: 110,
-      render: (value) => {
-        const meta = ORDER_STATUS_MAP[value] || ORDER_STATUS_MAP.draft;
-        return <span className="ims-badge-inline"><Badge status={meta.status} text={meta.text} /></span>;
-      },
-    },
-    {
-      title: "Aksi",
-      key: "actions",
-      width: 170,
-      render: (_, record) => (
-        // Aktif dipakai: aksi dibuat vertical compact agar Detail/Refresh/Mulai tetap terlihat tanpa scroll kanan.
-        <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-          <Button
-            className="ims-action-button"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => {
-              setSelectedOrder(record);
-              setDetailVisible(true);
-            }}
-          >
-            Detail
-          </Button>
+  const handleOpenDetail = useCallback((record) => {
+    setSelectedOrder(record);
+    setDetailVisible(true);
+  }, []);
 
-          {(record.status === "shortage" || record.status === "ready") && (
-            <Button
-              className="ims-action-button"
-              size="small"
-              onClick={() => handleRefreshRequirement(record)}
-            >
-              Refresh Need
-            </Button>
-          )}
+  const columns = useMemo(() => createProductionOrderColumns({
+    onOpenDetail: handleOpenDetail,
+    onRefreshRequirement: handleRefreshRequirement,
+    onStartProduction: handleStartProduction,
+  }), [handleOpenDetail, handleRefreshRequirement, handleStartProduction]);
 
-          {record.status === "ready" && (
-            <Button
-              className="ims-action-button"
-              size="small"
-              type="primary"
-              onClick={() => handleStartProduction(record)}
-            >
-              Mulai Produksi
-            </Button>
-          )}
-        </Space>
-      ),
-    },
-  ];
+  const productionOrderMobileCardConfig = useMemo(() => createProductionOrderMobileCardConfig({
+    onOpenDetail: handleOpenDetail,
+    onRefreshRequirement: handleRefreshRequirement,
+    onStartProduction: handleStartProduction,
+  }), [handleOpenDetail, handleRefreshRequirement, handleStartProduction]);
 
-  // IMS NOTE [AKTIF/GUARDED UI] - Mobile card Production Order.
-  // Fungsi: menampilkan PO, target, readiness, dan aksi utama secara ringkas di HP.
-  // Guardrail: hanya presentasi; refresh requirement, mulai produksi, stok consume, dan lifecycle PO tetap memakai handler/service existing.
-  const productionOrderMobileCardConfig = {
-    title: (record) => resolveDisplayReference(record, { fields: ["code", "productionOrderCode"], fallback: "-" }),
-    subtitle: (record) => [
-      `Dibuat: ${formatDateTimeLabel(record.createdAt)}`,
-      record.targetName || "Target belum tercatat",
-      record.planningCode ? `Planning: ${record.planningCode}` : null,
-    ].filter(Boolean),
-    tags: (record) => {
-      const statusMeta = ORDER_STATUS_MAP[record.status] || ORDER_STATUS_MAP.draft;
-      const priorityMeta = getPriorityMeta(record.priority);
-
-      return [
-        <Tag key="target-type" color={record.targetType === "product" ? "blue" : "purple"}>
-          {record.targetType === "product" ? "Product" : "Semi Finished"}
-        </Tag>,
-        <Tag key="priority" color={priorityMeta.color}>{priorityMeta.label}</Tag>,
-        <Tag key="status" color={statusMeta.status === "success" ? "green" : statusMeta.status === "error" ? "red" : "blue"}>
-          {statusMeta.text}
-        </Tag>,
-      ];
-    },
-    meta: [
-      { label: "Qty Batch", value: (record) => formatNumber(record.batchCount ?? record.orderQty) },
-      {
-        label: "Output",
-        value: (record) => `${formatNumber(record.expectedOutputQty || 0)} ${record.targetUnit || "pcs"}`,
-      },
-      {
-        label: "Shortage",
-        value: (record) => formatNumber(record.reservationSummary?.shortageLines || 0),
-      },
-    ],
-    content: (record) => [
-      record.bomName ? `BOM: ${record.bomName}` : null,
-      record.targetVariantLabel ? `Varian: ${record.targetVariantLabel}` : null,
-      `Requirement line: ${formatNumber(record.reservationSummary?.totalLines || 0)}`,
-    ].filter(Boolean),
-    actions: (record) => (
-      <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-        <Button
-          className="ims-action-button ims-action-button--block"
-          size="small"
-          icon={<EyeOutlined />}
-          onClick={() => {
-            setSelectedOrder(record);
-            setDetailVisible(true);
-          }}
-        >
-          Detail
-        </Button>
-        {(record.status === "shortage" || record.status === "ready") ? (
-          <Button
-            className="ims-action-button ims-action-button--block"
-            size="small"
-            onClick={() => handleRefreshRequirement(record)}
-          >
-            Refresh Need
-          </Button>
-        ) : null}
-        {record.status === "ready" ? (
-          <Button
-            className="ims-action-button ims-action-button--block"
-            size="small"
-            type="primary"
-            onClick={() => handleStartProduction(record)}
-          >
-            Mulai Produksi
-          </Button>
-        ) : null}
-      </Space>
-    ),
-  };
-
-  // =====================================================
-  // SECTION: Detail requirement drawer compact columns — AKTIF
-  // Fungsi:
-  // - Menampilkan requirement material PO secara ringkas di drawer detail.
-  //
-  // Dipakai oleh:
-  // - Drawer Detail Production Order pada halaman ProductionOrders.
-  //
-  // Alasan perubahan:
-  // - Kolom tipe, stok, shortage, dan status dipadatkan agar drawer tidak perlu scroll horizontal besar.
-  //
-  // Catatan cleanup:
-  // - Bisa diekstrak menjadi komponen shared jika detail requirement dipakai di halaman lain.
-  //
-  // Risiko:
-  // - Jika field stok/shortage disembunyikan atau kalkulasi disentuh, audit kesiapan PO bisa salah.
-  // =====================================================
   const detailRequirementColumns = useMemo(
-    () => [
-      {
-        title: "Material",
-        key: "item",
-        width: 230,
-        render: (_, record) => (
-          <div className={orderUiClassNames.stack}>
-            <Typography.Text strong>{record.itemName || "-"}</Typography.Text>
-            <Tag
-              className="ims-status-tag"
-              color={record.itemType === "raw_material" ? "orange" : "blue"}
-            >
-              {record.itemType === "raw_material" ? "Raw Material" : "Semi Finished"}
-            </Tag>
-          </div>
-        ),
-      },
-      {
-        title: "Varian / Sumber",
-        key: "variantSource",
-        width: 170,
-        render: (_, record) => {
-          const sourceMeta = getRequirementStockSourceMeta(record);
-
-          return (
-            <div className={orderUiClassNames.stack}>
-              <Tag className="ims-status-tag" color={sourceMeta.color}>
-                {sourceMeta.label}
-              </Tag>
-              <Typography.Text type="secondary" className={orderUiClassNames.meta}>
-                {sourceMeta.variantLabel}
-              </Typography.Text>
-            </div>
-          );
-        },
-      },
-      {
-        title: "Kebutuhan / Stok",
-        key: "quantityStock",
-        width: 240,
-        render: (_, record) => (
-          <div className={orderUiClassNames.stack}>
-            <Typography.Text strong>
-              Need: {formatQtyWithUnit(record.qtyRequired, record.unit)}
-            </Typography.Text>
-            <Typography.Text type="secondary" className={orderUiClassNames.meta}>
-              Current: {formatQtyWithUnit(record.currentStockSnapshot, record.unit)}
-            </Typography.Text>
-            <Typography.Text type="secondary" className={orderUiClassNames.meta}>
-              Tersedia: {formatQtyWithUnit(record.availableStockSnapshot, record.unit)}
-            </Typography.Text>
-            {Number(record.reservedStockSnapshot || 0) > 0 ? (
-              <Typography.Text type="secondary" className={orderUiClassNames.meta}>
-                Reserved: {formatQtyWithUnit(record.reservedStockSnapshot, record.unit)}
-              </Typography.Text>
-            ) : null}
-          </div>
-        ),
-      },
-      {
-        title: "Status",
-        key: "lineStatus",
-        width: 140,
-        render: (_, record) => {
-          const shortageQty = Number(record.shortageQty || 0);
-
-          return (
-            <div className={orderUiClassNames.stack}>
-              {record.isSufficient ? (
-                <Badge status="success" text="Cukup" />
-              ) : (
-                <Badge status="error" text="Kurang" />
-              )}
-              {shortageQty > 0 ? (
-                <Tag className="ims-status-tag" color="red">
-                  Kurang {formatQtyWithUnit(shortageQty, record.unit)}
-                </Tag>
-              ) : (
-                <StatusTag tone="success">Shortage 0</StatusTag>
-              )}
-            </div>
-          );
-        },
-      },
-    ],
+    () => createProductionOrderDetailRequirementColumns(),
     [],
   );
 
@@ -1090,39 +779,47 @@ const ProductionOrders = () => {
       </PageContentCanvas>
 
 <ProductionOrderFormDrawer
-        bomIdValue={bomIdValue}
-        bomLoading={bomLoading}
-        form={form}
-        formVisible={formVisible}
-        handleSelectProductionTarget={handleSelectProductionTarget}
-        handleSubmit={handleSubmit}
-        isSemiFinishedProduction={isSemiFinishedProduction}
-        loadBomOptions={loadBomOptions}
-        loadGeneratedCode={loadGeneratedCode}
-        loadSemiFinishedReferences={loadSemiFinishedReferences}
-        orderQtyValue={orderQtyValue}
-        recipeOptions={recipeOptions}
-        requirementPreview={requirementPreview}
-        requirementPreviewError={requirementPreviewError}
-        requirementPreviewLoading={requirementPreviewLoading}
-        selectedProductionTargetKey={selectedProductionTargetKey}
-        semiCategoryFilter={semiCategoryFilter}
-        semiCategoryOptions={semiCategoryOptions}
-        semiFamilyFilter={semiFamilyFilter}
-        semiFamilyOptions={semiFamilyOptions}
-        setFormVisible={setFormVisible}
-        setSelectedProductionTargetKey={setSelectedProductionTargetKey}
-        setSemiCategoryFilter={setSemiCategoryFilter}
-        setSemiFamilyFilter={setSemiFamilyFilter}
-        setTargetVariantOptions={setTargetVariantOptions}
-        shouldShowRecipeSelect={shouldShowRecipeSelect}
-        submitting={submitting}
-        targetSelectLabel={targetSelectLabel}
-        targetSelectPlaceholder={targetSelectPlaceholder}
-        targetTypeValue={targetTypeValue}
-        targetVariantKeyValue={targetVariantKeyValue}
-        targetVariantOptions={targetVariantOptions}
-        visibleProductionTargetGroups={visibleProductionTargetGroups}
+        formState={{ form, formVisible, submitting }}
+        selectionState={{
+          bomIdValue,
+          orderQtyValue,
+          selectedProductionTargetKey,
+          semiCategoryFilter,
+          semiFamilyFilter,
+          targetTypeValue,
+          targetVariantKeyValue,
+          targetVariantOptions,
+        }}
+        referenceData={{
+          recipeOptions,
+          semiCategoryOptions,
+          semiFamilyOptions,
+          visibleProductionTargetGroups,
+        }}
+        previewState={{
+          requirementPreview,
+          requirementPreviewError,
+          requirementPreviewLoading,
+        }}
+        uiState={{
+          bomLoading,
+          isSemiFinishedProduction,
+          shouldShowRecipeSelect,
+          targetSelectLabel,
+          targetSelectPlaceholder,
+        }}
+        actions={{
+          closeFormDrawer,
+          handleSelectProductionTarget,
+          handleSubmit,
+          loadBomOptions,
+          loadGeneratedCode,
+          loadSemiFinishedReferences,
+          setSelectedProductionTargetKey,
+          setSemiCategoryFilter,
+          setSemiFamilyFilter,
+          setTargetVariantOptions,
+        }}
       />
 <ProductionOrderDetailDrawer
         detailRequirementColumns={detailRequirementColumns}

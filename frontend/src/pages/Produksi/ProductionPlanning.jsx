@@ -472,6 +472,12 @@ const ProductionPlanning = () => {
     setFormVisible(true);
   };
 
+
+  const closeFormDrawer = () => {
+    setFormVisible(false);
+    setEditingPlan(null);
+  };
+
   const handleEdit = (record) => {
     setEditingPlan(record);
     form.resetFields();
@@ -935,23 +941,30 @@ const ProductionPlanning = () => {
       </PageContentCanvas>
 
 <ProductionPlanningFormDrawer
-        PERIOD_OPTIONS={PERIOD_OPTIONS}
-        PRIORITY_OPTIONS={PRIORITY_OPTIONS}
-        TARGET_TYPE_OPTIONS={TARGET_TYPE_OPTIONS}
-        editingPlan={editingPlan}
-        form={form}
-        formVisible={formVisible}
-        getDefaultPeriodRange={getDefaultPeriodRange}
-        getTargetOptions={getTargetOptions}
-        handleSubmit={handleSubmit}
-        referenceData={referenceData}
-        selectedTargetItem={selectedTargetItem}
-        setEditingPlan={setEditingPlan}
-        setFormVisible={setFormVisible}
-        submitting={submitting}
-        targetTypeValue={targetTypeValue}
-        targetVariantOptions={targetVariantOptions}
-        toDatePickerValue={toDatePickerValue}
+        formState={{
+          editingPlan,
+          form,
+          formVisible,
+          submitting,
+          targetTypeValue,
+        }}
+        referenceState={{
+          referenceData,
+          selectedTargetItem,
+          targetVariantOptions,
+        }}
+        options={{
+          periodOptions: PERIOD_OPTIONS,
+          priorityOptions: PRIORITY_OPTIONS,
+          targetTypeOptions: TARGET_TYPE_OPTIONS,
+        }}
+        actions={{
+          closeFormDrawer,
+          getDefaultPeriodRange,
+          getTargetOptions,
+          handleSubmit,
+          toDatePickerValue,
+        }}
       />
 
 <ProductionPlanningDetailDrawer

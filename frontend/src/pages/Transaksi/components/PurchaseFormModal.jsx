@@ -21,6 +21,7 @@ import {
 import PurchaseOcrDraftPanel from "./PurchaseOcrDraftPanel";
 import PurchaseStockPreview from "./PurchaseStockPreview";
 import PurchaseCostSummaryCard from "./PurchaseCostSummaryCard";
+import PurchaseQuantityField from "./PurchaseQuantityField";
 import {
   formatShopeeOcrMoney,
   SHOPEE_OCR_REVIEW_ALERT_TYPE,
@@ -29,39 +30,66 @@ import {
 
 const { Option } = Select;
 
+const PurchaseCostInputField = ({ label, name }) => (
+  <Form.Item
+    name={name}
+    label={label}
+    style={{ flex: 1, minWidth: 180 }}
+  >
+    <RupiahInputNumber
+      min={0}
+      step={1}
+      precision={0}
+      inputClassName="ims-filter-control"
+      formatter={(value) => formatNumberId(value)}
+      parser={parseIntegerIdInput}
+    />
+  </Form.Item>
+);
+
 // IMS NOTE [AKTIF/GUARDED] - Modal Form Pembelian
 // Fungsi blok: memusatkan UI modal tambah pembelian agar Purchases.jsx tetap menjadi orchestrator data/effect.
 // Hubungan flow: presentational only; submit handler, OCR handler, kalkulasi form, stock-in, expense, inventory log, dan service transaction tetap dari parent/service.
 const PurchaseFormModal = ({
-  form,
-  isModalOpen,
-  isSubmittingPurchase,
-  onCancel,
-  handleSubmitPurchase,
-  itemType,
-  products,
-  materials,
-  selectedMaterial,
-  materialVariantOptions,
-  selectedProduct,
-  selectedProductHasVariants,
-  productVariantOptions,
-  selectedPurchaseStockPreview,
-  filteredSuppliers,
-  itemId,
-  supplierId,
-  selectedSupplierOffers,
-  selectedCatalogOffer,
-  priceVerified,
-  onVerifyPrice,
-  shopeeOcrState,
-  shopeeOcrApplyFeedback,
-  handleShopeeScreenshotUpload,
-  applyShopeeOcrDraftToForm,
-  isOfflinePurchase,
-  conversionValue,
-  selectedSupplierCatalogCost,
-  subtotalManualOverrideRef,
+  formState: {
+    form,
+    isModalOpen,
+    isSubmittingPurchase,
+    itemType,
+    itemId,
+    supplierId,
+    priceVerified,
+    isOfflinePurchase,
+    conversionValue,
+  },
+  referenceData: {
+    products,
+    materials,
+    materialVariantOptions,
+    productVariantOptions,
+    filteredSuppliers,
+    selectedSupplierOffers,
+  },
+  selectionState: {
+    selectedMaterial,
+    selectedProduct,
+    selectedProductHasVariants,
+    selectedPurchaseStockPreview,
+    selectedCatalogOffer,
+    selectedSupplierCatalogCost,
+  },
+  ocrState: {
+    shopeeOcrState,
+    shopeeOcrApplyFeedback,
+  },
+  actions: {
+    onCancel,
+    handleSubmitPurchase,
+    onVerifyPrice,
+    handleShopeeScreenshotUpload,
+    applyShopeeOcrDraftToForm,
+  },
+  refs: { subtotalManualOverrideRef },
 }) => (
       <Modal
         title="Tambah Pembelian"
@@ -494,67 +522,15 @@ const PurchaseFormModal = ({
           {!isOfflinePurchase ? (
             <>
               <Space style={{ display: "flex", width: "100%" }} size={12} wrap>
-                <Form.Item
-                  name="shippingCost"
-                  label="Ongkir"
-                  style={{ flex: 1, minWidth: 180 }}
-                >
-                  <RupiahInputNumber
-                    min={0}
-                    step={1}
-                    precision={0}
-                    inputClassName="ims-filter-control"
-                    formatter={(value) => formatNumberId(value)}
-                    parser={parseIntegerIdInput}
-                  />
-                </Form.Item>
+                <PurchaseCostInputField name="shippingCost" label="Ongkir" />
 
-                <Form.Item
-                  name="shippingDiscount"
-                  label="Diskon Ongkir"
-                  style={{ flex: 1, minWidth: 180 }}
-                >
-                  <RupiahInputNumber
-                    min={0}
-                    step={1}
-                    precision={0}
-                    inputClassName="ims-filter-control"
-                    formatter={(value) => formatNumberId(value)}
-                    parser={parseIntegerIdInput}
-                  />
-                </Form.Item>
+                <PurchaseCostInputField name="shippingDiscount" label="Diskon Ongkir" />
               </Space>
 
               <Space style={{ display: "flex", width: "100%" }} size={12} wrap>
-                <Form.Item
-                  name="voucherDiscount"
-                  label="Voucher / Koin / Potongan"
-                  style={{ flex: 1, minWidth: 180 }}
-                >
-                  <RupiahInputNumber
-                    min={0}
-                    step={1}
-                    precision={0}
-                    inputClassName="ims-filter-control"
-                    formatter={(value) => formatNumberId(value)}
-                    parser={parseIntegerIdInput}
-                  />
-                </Form.Item>
+                <PurchaseCostInputField name="voucherDiscount" label="Voucher / Koin / Potongan" />
 
-                <Form.Item
-                  name="serviceFee"
-                  label="Biaya Layanan"
-                  style={{ flex: 1, minWidth: 180 }}
-                >
-                  <RupiahInputNumber
-                    min={0}
-                    step={1}
-                    precision={0}
-                    inputClassName="ims-filter-control"
-                    formatter={(value) => formatNumberId(value)}
-                    parser={parseIntegerIdInput}
-                  />
-                </Form.Item>
+                <PurchaseCostInputField name="serviceFee" label="Biaya Layanan" />
               </Space>
             </>
           ) : null}
@@ -578,4 +554,3 @@ const PurchaseFormModal = ({
 );
 
 export default PurchaseFormModal;
-import PurchaseQuantityField from "./PurchaseQuantityField";

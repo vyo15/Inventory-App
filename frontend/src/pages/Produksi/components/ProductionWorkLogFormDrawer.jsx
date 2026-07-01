@@ -59,29 +59,31 @@ const buildWorkLogLineActionColumn = ({ deleteTitle, isLocked, onDelete, onEdit 
 });
 
 const ProductionWorkLogFormDrawer = ({
-  editingRecord,
-  employeeOptions,
-  form,
-  formVisible,
-  getProductionProfileOptions,
-  getTargetOptions,
-  handleApplyBomTemplate,
-  handleApplyProductionOrderTemplate,
-  handleRemoveMaterialUsage,
-  handleRemoveOutput,
-  handleSubmit,
-  monitoringPreview,
-  openMaterialModal,
-  openOutputModal,
-  productionOrderOptions,
-  referenceData,
-  resetFormState,
-  selectedProductionProfile,
-  setFormVisible,
-  stepOptions,
-  submitting,
-  targetIdValue,
-  targetTypeValue,
+  formState: { editingRecord, form, formVisible, submitting },
+  referenceData: {
+    employeeOptions,
+    productionOrderOptions,
+    referenceData,
+    stepOptions,
+  },
+  selectionState: {
+    monitoringPreview,
+    selectedProductionProfile,
+    targetIdValue,
+    targetTypeValue,
+  },
+  actions: {
+    closeFormDrawer,
+    getProductionProfileOptions,
+    getTargetOptions,
+    handleApplyBomTemplate,
+    handleApplyProductionOrderTemplate,
+    handleRemoveMaterialUsage,
+    handleRemoveOutput,
+    handleSubmit,
+    openMaterialModal,
+    openOutputModal,
+  },
 }) => (
       <Drawer
         title={
@@ -90,19 +92,13 @@ const ProductionWorkLogFormDrawer = ({
             : "Work Log dari Order Produksi"
         }
         open={formVisible}
-        onClose={() => {
-          setFormVisible(false);
-          resetFormState();
-        }}
+        onClose={closeFormDrawer}
         width={980}
         destroyOnClose
         extra={
           <Space>
             <Button
-              onClick={() => {
-                setFormVisible(false);
-                resetFormState();
-              }}
+              onClick={closeFormDrawer}
             >
               Batal
             </Button>

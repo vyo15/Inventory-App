@@ -383,6 +383,11 @@ const SemiFinishedMaterials = () => {
     form.setFieldsValue(buildFormValues(DEFAULT_SEMI_FINISHED_FORM));
   };
 
+  const closeFormDrawer = () => {
+    setFormVisible(false);
+    resetFormState();
+  };
+
   // ---------------------------------------------------------------------------
   // Handler drawer form.
   // Create dan edit memakai form yang sama agar maintenance lebih ringan.
@@ -455,8 +460,7 @@ const SemiFinishedMaterials = () => {
         message.success("Semi finished material berhasil ditambahkan");
       }
 
-      setFormVisible(false);
-      resetFormState();
+      closeFormDrawer();
       await loadData();
     } catch (error) {
       if (showFormValidationFeedback(error, { form })) return;
@@ -948,23 +952,18 @@ const SemiFinishedMaterials = () => {
       </PageContentCanvas>
 
 <SemiFinishedMaterialFormDrawer
-        calculatedTotals={calculatedTotals}
-        canActivateVariantsForEditing={canActivateVariantsForEditing}
-        componentGroupSelectOptions={componentGroupSelectOptions}
-        editingMaterial={editingMaterial}
-        flowerTypeSelectOptions={flowerTypeSelectOptions}
-        form={form}
-        formVisible={formVisible}
-        handleSubmit={handleSubmit}
-        hasVariantModeSwitchLocked={hasVariantModeSwitchLocked}
-        hasVariantsValue={hasVariantsValue}
-        isEditingMaterial={isEditingMaterial}
-        isGuardedVariantStock={isGuardedVariantStock}
-        resetFormState={resetFormState}
-        setFormVisible={setFormVisible}
-        stockEditHelpText={stockEditHelpText}
-        submitting={submitting}
-        variantLabelValue={variantLabelValue}
+        formState={{ form, formVisible, submitting }}
+        entityState={{ editingMaterial, isEditingMaterial }}
+        optionData={{ componentGroupSelectOptions, flowerTypeSelectOptions }}
+        variantState={{
+          canActivateVariantsForEditing,
+          hasVariantModeSwitchLocked,
+          hasVariantsValue,
+          isGuardedVariantStock,
+          variantLabelValue,
+        }}
+        summaryState={{ calculatedTotals, stockEditHelpText }}
+        actions={{ closeFormDrawer, handleSubmit }}
       />
 
       {/* ------------------------------------------------------------------ */}
@@ -972,19 +971,22 @@ const SemiFinishedMaterials = () => {
       {/* varian tanpa menambah kepadatan informasi pada list utama. */}
       {/* ------------------------------------------------------------------ */}
 <SemiFinishedMaterialDetailDrawer
-        detailVariantColumns={detailVariantColumns}
-        detailVisible={detailVisible}
-        resolveComponentGroupLabel={resolveComponentGroupLabel}
-        resolveFlowerTypeLabel={resolveFlowerTypeLabel}
-        selectedMaterial={selectedMaterial}
-        selectedMaterialAverageCost={selectedMaterialAverageCost}
-        selectedMaterialCostSourceLabel={selectedMaterialCostSourceLabel}
-        selectedMaterialRecipeCost={selectedMaterialRecipeCost}
-        selectedMaterialRecipeMeta={selectedMaterialRecipeMeta}
-        selectedMaterialStatusMeta={selectedMaterialStatusMeta}
-        selectedMaterialUnit={selectedMaterialUnit}
-        selectedMaterialVariants={selectedMaterialVariants}
-        setDetailVisible={setDetailVisible}
+        drawerState={{ detailVisible, selectedMaterial }}
+        materialState={{
+          selectedMaterialAverageCost,
+          selectedMaterialCostSourceLabel,
+          selectedMaterialRecipeCost,
+          selectedMaterialRecipeMeta,
+          selectedMaterialStatusMeta,
+          selectedMaterialUnit,
+          selectedMaterialVariants,
+        }}
+        helpers={{
+          detailVariantColumns,
+          resolveComponentGroupLabel,
+          resolveFlowerTypeLabel,
+        }}
+        onClose={() => setDetailVisible(false)}
       />
     </div>
   );

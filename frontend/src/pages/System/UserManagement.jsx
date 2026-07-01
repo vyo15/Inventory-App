@@ -737,25 +737,35 @@ const UserManagement = () => {
       </PageContentCanvas>
 
       <UserProfileFormModal
-        open={isModalOpen}
-        form={form}
-        isCreate={formMode === FORM_MODE.CREATE}
-        isEditingSelf={isEditingSelf}
-        isSaving={isSaving}
-        isProcessingAvatar={isProcessingAvatar}
-        avatarDraft={avatarDraft}
-        modalInitials={modalInitials}
-        assignableRoleOptions={assignableRoleOptions}
-        passwordPolicyHint={PASSWORD_POLICY_HINT}
-        avatarMimeTypes={AVATAR_MIME_TYPES}
-        normalizeUsername={normalizeUsernameValue}
-        validateUsernamePattern={validateUsernamePattern}
-        validateUniqueUsername={validateUniqueUsername}
-        validatePassword={validateLocalPasswordField}
-        onCancel={closeModal}
-        onFinish={handleSaveProfile}
-        onAvatarUpload={handleAvatarUpload}
-        onRemoveAvatar={handleRemoveAvatar}
+        formState={{
+          open: isModalOpen,
+          form,
+          isCreate: formMode === FORM_MODE.CREATE,
+          isEditingSelf,
+          isSaving,
+        }}
+        avatarState={{
+          isProcessingAvatar,
+          avatarDraft,
+          modalInitials,
+          avatarMimeTypes: AVATAR_MIME_TYPES,
+        }}
+        optionData={{
+          assignableRoleOptions,
+          passwordPolicyHint: PASSWORD_POLICY_HINT,
+        }}
+        validators={{
+          normalizeUsername: normalizeUsernameValue,
+          validateUsernamePattern,
+          validateUniqueUsername,
+          validatePassword: validateLocalPasswordField,
+        }}
+        actions={{
+          onCancel: closeModal,
+          onFinish: handleSaveProfile,
+          onAvatarUpload: handleAvatarUpload,
+          onRemoveAvatar: handleRemoveAvatar,
+        }}
       />
 
       <UserStatusChangeModal

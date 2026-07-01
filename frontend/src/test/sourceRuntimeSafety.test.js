@@ -96,6 +96,24 @@ describe("frontend runtime source safety", () => {
     expect(violations).toEqual([]);
   });
 
+
+  it("membatasi package xlsx pada adapter export-only tanpa API pembacaan workbook", () => {
+    const xlsxImporters = [];
+
+    sourceFiles.forEach((filePath) => {
+      const source = fs.readFileSync(filePath, "utf8");
+      if (readImports(source).includes("xlsx")) xlsxImporters.push(toRelative(filePath));
+    });
+
+    expect(xlsxImporters).toEqual([
+      "frontend/src/utils/export/sheetJsWriteAdapter.js",
+    ]);
+
+    const adapterPath = path.join(SOURCE_ROOT, "utils/export/sheetJsWriteAdapter.js");
+    const adapterSource = fs.readFileSync(adapterPath, "utf8");
+    expect(adapterSource).not.toMatch(/\b(?:read|readFile|sheet_to_json|sheet_to_csv)\s*\(/);
+  });
+
   it("import ke file dengan nama case-insensitive sama selalu menyebut ekstensi", () => {
     const collisions = new Set();
     const grouped = new Map();

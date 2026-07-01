@@ -727,25 +727,20 @@ const RawMaterials = () => {
       </PageContentCanvas>
 
 <RawMaterialFormDrawer
-        canActivateVariantsForEditing={canActivateVariantsForEditing}
-        categorySelectOptions={categorySelectOptions}
-        closeFormDrawer={closeFormDrawer}
-        editingRecord={editingRecord}
-        form={form}
-        formVisible={formVisible}
-        handleSubmit={handleSubmit}
-        hasVariantModeSwitchLocked={hasVariantModeSwitchLocked}
-        hasVariantsValue={hasVariantsValue}
-        isEditingMaterial={isEditingMaterial}
-        isGuardedVariantStock={isGuardedVariantStock}
-        pricingModeValue={pricingModeValue}
-        pricingPreviewWarning={pricingPreviewWarning}
-        pricingRules={pricingRules}
-        setPricingPreviewWarning={setPricingPreviewWarning}
-        stockEditHelpText={stockEditHelpText}
-        submitting={submitting}
-        variantLabelValue={variantLabelValue}
-        variantStats={variantStats}
+        formState={{ form, formVisible, submitting }}
+        entityState={{ editingRecord, isEditingMaterial }}
+        optionData={{ categorySelectOptions, pricingRules }}
+        variantState={{
+          canActivateVariantsForEditing,
+          hasVariantModeSwitchLocked,
+          hasVariantsValue,
+          isGuardedVariantStock,
+          variantLabelValue,
+          variantStats,
+        }}
+        pricingState={{ pricingModeValue, pricingPreviewWarning }}
+        stockState={{ stockEditHelpText }}
+        actions={{ closeFormDrawer, handleSubmit, setPricingPreviewWarning }}
       />
 
       <RawMaterialDetailDrawer

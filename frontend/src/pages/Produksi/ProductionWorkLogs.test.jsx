@@ -11,6 +11,10 @@ const modalSource = fs.readFileSync(
   path.resolve("src/pages/Produksi/components/WorkLogCompleteModal.jsx"),
   "utf8",
 );
+const listHelperSource = fs.readFileSync(
+  path.resolve("src/pages/Produksi/helpers/productionWorkLogsPageHelpers.jsx"),
+  "utf8",
+);
 
 describe("ProductionWorkLogs page contract", () => {
   it("tetap memakai service Work Log dan payroll read resmi", () => {
@@ -23,7 +27,7 @@ describe("ProductionWorkLogs page contract", () => {
   it("menjaga line PO terkunci dan action completion tetap tersedia", () => {
     expect(formSource).toContain("buildWorkLogLineActionColumn");
     expect(formSource).toContain("dari PO terkunci");
-    expect(source).toContain("Selesaikan");
+    expect(listHelperSource).toContain("Selesaikan");
     expect(source).not.toContain("Tambah Work Log");
   });
 

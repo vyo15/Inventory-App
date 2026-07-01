@@ -29,6 +29,7 @@ import {
 } from "../../constants/salesChannelOptions";
 import {
   getDefaultReportDateRange,
+  buildReportPeriodFilterLines,
   getReportDateRangeLabel,
   normalizeReportDateRange,
 } from "../../utils/reports/reportDateRange";
@@ -253,9 +254,7 @@ const SalesReport = () => {
       subtitle: "Ekspor mengikuti data penjualan yang sedang tampil di halaman ini.",
       sheetName: "Sales Report",
       fileName: "Laporan-Penjualan",
-      filters: [
-        `Periode: ${getReportDateRangeLabel(dateRange)}`,
-      ],
+      filters: buildReportPeriodFilterLines(dateRange),
       columns: [
         { header: "Ref Transaksi", key: "salesReference", width: 24 },
         { header: "Tanggal", key: "salesDate", width: 18 },

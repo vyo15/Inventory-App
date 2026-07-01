@@ -52,37 +52,30 @@ const buildBomLineActionColumn = ({ deleteTitle, onDelete, onEdit }) => ({
 });
 
 const ProductionBomFormDrawer = ({
-  editingBom,
-  form,
-  formErrorSummary,
-  formVisible,
-  getTargetOptions,
-  handleRemoveMaterialLine,
-  handleRemoveStepLine,
-  handleSubmit,
-  openMaterialModal,
-  openStepModal,
-  resetFormState,
-  setFormVisible,
-  submitting,
-}) => (
+  formState,
+  actions,
+}) => {
+  const { editingBom, form, formErrorSummary, formVisible, submitting } = formState;
+  const {
+    closeFormDrawer,
+    getTargetOptions,
+    handleRemoveMaterialLine,
+    handleRemoveStepLine,
+    handleSubmit,
+    openMaterialModal,
+    openStepModal,
+  } = actions;
+
+  return (
       <Drawer
         title={editingBom?.id ? "Edit BOM Produksi" : "Tambah BOM Produksi"}
         open={formVisible}
-        onClose={() => {
-          setFormVisible(false);
-          resetFormState();
-        }}
+        onClose={closeFormDrawer}
         width={980}
         destroyOnClose
         extra={
           <Space>
-            <Button
-              onClick={() => {
-                setFormVisible(false);
-                resetFormState();
-              }}
-            >
+            <Button onClick={closeFormDrawer}>
               Batal
             </Button>
             <Button type="primary" loading={submitting} onClick={handleSubmit}>
@@ -432,6 +425,7 @@ const ProductionBomFormDrawer = ({
 
         </Form>
       </Drawer>
-);
+  );
+};
 
 export default ProductionBomFormDrawer;

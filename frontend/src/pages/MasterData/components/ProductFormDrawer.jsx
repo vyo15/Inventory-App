@@ -27,29 +27,25 @@ import {
 const { TextArea } = Input;
 
 const ProductFormDrawer = ({
-  canActivateVariantsForEditing,
-  categorySelectOptions,
-  closeFormDrawer,
-  editingProduct,
-  flowerTypeSelectOptions,
-  form,
-  formVisible,
-  handleSubmit,
-  hasVariantModeSwitchLocked,
-  hasVariantsValue,
-  isEditingProduct,
-  isGuardedVariantStock,
-  pricingModeValue,
-  pricingPreviewWarning,
-  pricingRules,
-  setPricingPreviewWarning,
-  stockEditHelpText,
-  submitting,
-  variantLabelValue,
-  watchedCurrentStock,
-  watchedMinStockAlert,
-  watchedReservedStock,
-  watchedVariants,
+  formState: { form, formVisible, submitting },
+  entityState: { editingProduct, isEditingProduct },
+  optionData: { categorySelectOptions, flowerTypeSelectOptions, pricingRules },
+  variantState: {
+    canActivateVariantsForEditing,
+    hasVariantModeSwitchLocked,
+    hasVariantsValue,
+    isGuardedVariantStock,
+    variantLabelValue,
+    watchedVariants,
+  },
+  pricingState: { pricingModeValue, pricingPreviewWarning },
+  stockState: {
+    stockEditHelpText,
+    watchedCurrentStock,
+    watchedMinStockAlert,
+    watchedReservedStock,
+  },
+  actions: { closeFormDrawer, handleSubmit, setPricingPreviewWarning },
 }) => (
       <Drawer
         title={editingProduct ? 'Edit Produk' : 'Tambah Produk'}

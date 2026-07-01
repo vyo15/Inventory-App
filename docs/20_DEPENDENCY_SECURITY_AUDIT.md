@@ -1,6 +1,6 @@
 # IMS Dependency Security Audit
 
-Tanggal audit source: 2026-06-21
+Tanggal audit source: 2026-07-01
 
 ## Scope
 
@@ -42,14 +42,18 @@ Guard yang diterapkan:
 
 - Akses package dipusatkan di `sheetJsWriteAdapter.js`.
 - Adapter hanya memakai `utils.aoa_to_sheet`, `utils.book_new`, `utils.book_append_sheet`, dan `write`.
-- Automated test menjaga jalur tersebut tetap write-only.
+- Automated source-safety test memastikan hanya adapter tersebut yang boleh mengimpor `xlsx` dan menolak API read/parse workbook.
+- Export XLSX dan CSV menetralkan prefix formula spreadsheet (`=`, `+`, `-`, `@`) sebelum data ditulis ke file.
 - Import tetap dynamic agar package tidak masuk startup utama.
+- Source aktual tidak menerima upload spreadsheet dan tidak memakai `read`, `readFile`, `sheet_to_json`, atau `sheet_to_csv`.
+
+Hasil audit lockfile 2026-07-01 masih melaporkan advisory high pada `xlsx@0.18.5`; mitigasi di atas mengurangi reachability pada flow aktif, tetapi tidak boleh diklaim sebagai penghapusan vulnerability package.
 
 Migrasi ke distribusi SheetJS resmi yang lebih baru harus menjadi patch dependency terpisah setelah package tarball, lockfile, install Windows, export report, dan offline build teruji.
 
 ### `esbuild@0.27.7`
 
-Residual ini berasal dari toolchain Vite major 7 dan bersifat development/build-time. Upgrade paksa melalui override tidak dilakukan karena dapat melanggar dependency range Vite. Upgrade ke Vite major berikutnya harus melalui migration review dan full regression, bukan `audit fix --force`.
+Audit lockfile 2026-07-01 melaporkan advisory low pada development server Windows untuk rentang `>=0.27.3 <0.28.1`. Residual ini berasal dari toolchain Vite major 7 dan bersifat development/build-time. Upgrade paksa melalui override tidak dilakukan karena dapat melanggar dependency range Vite. Upgrade Vite/esbuild harus melalui migration review, dev-server Windows test, dan full regression, bukan `audit fix --force`.
 
 
 ## Coverage dan SBOM evidence

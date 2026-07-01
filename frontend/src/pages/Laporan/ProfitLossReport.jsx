@@ -25,6 +25,7 @@ import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoad
 import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 import {
   getDefaultReportDateRange,
+  buildReportPeriodFilterLines,
   getReportDateRangeLabel,
   normalizeReportDateRange,
 } from "../../utils/reports/reportDateRange";
@@ -134,9 +135,7 @@ const ProfitLossReport = () => {
       subtitle: "Ekspor mengikuti gabungan revenues, incomes, dan expenses pada halaman ini.",
       sheetName: "Profit Loss",
       fileName: "Laporan-Laba-Rugi",
-      filters: [
-        `Periode: ${getReportDateRangeLabel(dateRange)}`,
-      ],
+      filters: buildReportPeriodFilterLines(dateRange),
       columns: [
         { header: "Tanggal", key: "transactionDate", width: 18 },
         { header: "Aliran Kas", key: "cashFlowType", width: 16 },

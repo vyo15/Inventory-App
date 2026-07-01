@@ -18,6 +18,13 @@ const getColumnWidth = (value = "") => {
   return Math.min(Math.max(baseLength + 2, 12), 44);
 };
 
+const SPREADSHEET_FORMULA_PREFIX = /^[\t\r ]*[=+\-@]/;
+
+export const sanitizeSpreadsheetCellValue = (value) => {
+  if (typeof value !== "string") return value;
+  return SPREADSHEET_FORMULA_PREFIX.test(value) ? `'${value}` : value;
+};
+
 // =====================================================
 // ACTIVE / FINAL - Normalisasi definisi kolom export.
 // Fungsi:
@@ -48,9 +55,15 @@ const normalizeColumns = (data = [], columns = null) => {
 const toReadableCellValue = (value) => {
   if (value === null || value === undefined || value === "") return "-";
   if (value instanceof Date) return dayjs(value).format("DD/MM/YYYY HH:mm");
-  if (Array.isArray(value)) return value.map(toReadableCellValue).join("; ");
-  if (typeof value === "object") return value.name || value.label || value.title || value.code || "-";
-  return value;
+  if (Array.isArray(value)) {
+    return sanitizeSpreadsheetCellValue(value.map(toReadableCellValue).join("; "));
+  }
+  if (typeof value === "object") {
+    return sanitizeSpreadsheetCellValue(
+      value.name || value.label || value.title || value.code || "-",
+    );
+  }
+  return sanitizeSpreadsheetCellValue(value);
 };
 
 const normalizeTableRows = (rows = [], columns = []) =>

@@ -40,3 +40,6 @@ export const getReportDateRangeLabel = (range = {}) => {
   const { startDate, endDate } = normalizeReportDateRange(range);
   return `${startDate.toLocaleDateString('id-ID')} - ${endDate.toLocaleDateString('id-ID')}`;
 };
+export const buildReportPeriodFilterLines = (range = {}) => [
+  `Periode: ${getReportDateRangeLabel(range)}`,
+];

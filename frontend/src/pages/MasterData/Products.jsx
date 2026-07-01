@@ -386,9 +386,6 @@ const Products = () => {
       Alasan perubahan:
       - User perlu pesan validasi yang jelas saat klik Simpan.
 
-      Catatan cleanup:
-      - Belum ada.
-
       Risiko:
       - Jangan menelan error service non-validasi; helper mengembalikan false untuk error biasa.
       =====================================================
@@ -669,29 +666,25 @@ const Products = () => {
       </PageContentCanvas>
 
 <ProductFormDrawer
-        canActivateVariantsForEditing={canActivateVariantsForEditing}
-        categorySelectOptions={categorySelectOptions}
-        closeFormDrawer={closeFormDrawer}
-        editingProduct={editingProduct}
-        flowerTypeSelectOptions={flowerTypeSelectOptions}
-        form={form}
-        formVisible={formVisible}
-        handleSubmit={handleSubmit}
-        hasVariantModeSwitchLocked={hasVariantModeSwitchLocked}
-        hasVariantsValue={hasVariantsValue}
-        isEditingProduct={isEditingProduct}
-        isGuardedVariantStock={isGuardedVariantStock}
-        pricingModeValue={pricingModeValue}
-        pricingPreviewWarning={pricingPreviewWarning}
-        pricingRules={pricingRules}
-        setPricingPreviewWarning={setPricingPreviewWarning}
-        stockEditHelpText={stockEditHelpText}
-        submitting={submitting}
-        variantLabelValue={variantLabelValue}
-        watchedCurrentStock={watchedCurrentStock}
-        watchedMinStockAlert={watchedMinStockAlert}
-        watchedReservedStock={watchedReservedStock}
-        watchedVariants={watchedVariants}
+        formState={{ form, formVisible, submitting }}
+        entityState={{ editingProduct, isEditingProduct }}
+        optionData={{ categorySelectOptions, flowerTypeSelectOptions, pricingRules }}
+        variantState={{
+          canActivateVariantsForEditing,
+          hasVariantModeSwitchLocked,
+          hasVariantsValue,
+          isGuardedVariantStock,
+          variantLabelValue,
+          watchedVariants,
+        }}
+        pricingState={{ pricingModeValue, pricingPreviewWarning }}
+        stockState={{
+          stockEditHelpText,
+          watchedCurrentStock,
+          watchedMinStockAlert,
+          watchedReservedStock,
+        }}
+        actions={{ closeFormDrawer, handleSubmit, setPricingPreviewWarning }}
       />
 
       <ProductDetailDrawer

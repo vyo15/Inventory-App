@@ -15,23 +15,24 @@ import { showFormValidationFeedback } from "../../../utils/forms/formValidationF
 const { Option } = Select;
 
 const StockAdjustmentFormModal = ({
-  availableItems,
-  form,
-  formatQuantityId,
-  handleSubmitStockAdjustment,
-  isModalOpen,
-  isSubmitting,
-  needsUnitCostGuard,
-  quantityUnitLabel,
-  quantityUsesWholeNumber,
-  resetAdjustmentFormState,
-  selectedAdjustmentType,
-  selectedCurrentUnitCost,
-  selectedItem,
-  selectedItemHasVariants,
-  selectedStockSnapshot,
-  selectedVariant,
-  variantOptions,
+  formState: { form, isModalOpen, isSubmitting },
+  selectionState: {
+    availableItems,
+    selectedAdjustmentType,
+    selectedCurrentUnitCost,
+    selectedItem,
+    selectedItemHasVariants,
+    selectedStockSnapshot,
+    selectedVariant,
+    variantOptions,
+  },
+  quantityState: {
+    formatQuantityId,
+    needsUnitCostGuard,
+    quantityUnitLabel,
+    quantityUsesWholeNumber,
+  },
+  actions: { handleSubmitStockAdjustment, resetAdjustmentFormState },
 }) => (
       <Modal
         title="Penyesuaian Stok"

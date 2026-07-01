@@ -387,9 +387,6 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   Alasan perubahan:
   - Memoize availableItems agar dependency selectedItem tidak berubah pada setiap render saat itemType kosong/tidak dikenal.
 
-  Catatan cleanup:
-  - Belum ada.
-
   Risiko:
   - Jangan ubah mapping itemType/collection di sini karena payload stock_adjustments dan inventory_logs bergantung pada source item yang benar.
   ===================================================== */
@@ -757,23 +754,24 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
           - Jangan mengubah validasi available stock, variantKey, transaction, stock_adjustments, atau inventory_logs dari form ini.
       ===================================================== */}
 <StockAdjustmentFormModal
-        availableItems={availableItems}
-        form={form}
-        formatQuantityId={formatQuantityId}
-        handleSubmitStockAdjustment={handleSubmitStockAdjustment}
-        isModalOpen={isModalOpen}
-        isSubmitting={isSubmitting}
-        needsUnitCostGuard={needsUnitCostGuard}
-        quantityUnitLabel={quantityUnitLabel}
-        quantityUsesWholeNumber={quantityUsesWholeNumber}
-        resetAdjustmentFormState={resetAdjustmentFormState}
-        selectedAdjustmentType={selectedAdjustmentType}
-        selectedCurrentUnitCost={selectedCurrentUnitCost}
-        selectedItem={selectedItem}
-        selectedItemHasVariants={selectedItemHasVariants}
-        selectedStockSnapshot={selectedStockSnapshot}
-        selectedVariant={selectedVariant}
-        variantOptions={variantOptions}
+        formState={{ form, isModalOpen, isSubmitting }}
+        selectionState={{
+          availableItems,
+          selectedAdjustmentType,
+          selectedCurrentUnitCost,
+          selectedItem,
+          selectedItemHasVariants,
+          selectedStockSnapshot,
+          selectedVariant,
+          variantOptions,
+        }}
+        quantityState={{
+          formatQuantityId,
+          needsUnitCostGuard,
+          quantityUnitLabel,
+          quantityUsesWholeNumber,
+        }}
+        actions={{ handleSubmitStockAdjustment, resetAdjustmentFormState }}
       />
     </>
   );

@@ -26,25 +26,18 @@ import ProductionWorkLogDetailDrawer from './components/ProductionWorkLogDetailD
 import ProductionWorkLogFormDrawer from "./components/ProductionWorkLogFormDrawer";
 import {
   App as AntdApp,
-  Button,
   Card,
   Col,
   Form,
   Input,
   Select,
-  Space,
-  Tag,
-  Typography,
 } from "antd";
-import { EditOutlined, EyeOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import {
   DEFAULT_PRODUCTION_WORK_LOG_FORM,
   DEFAULT_WORK_LOG_MATERIAL_USAGE,
   DEFAULT_WORK_LOG_OUTPUT,
   PRODUCTION_WORK_LOG_STATUSES,
-  WORK_LOG_SOURCE_TYPE_MAP,
-  WORK_LOG_STATUS_MAP,
   calculateProductionMonitoring,
 } from "../../constants/productionWorkLogOptions";
 import {
@@ -59,23 +52,21 @@ import {
 import { getAllProductionPayrolls } from "../../services/Produksi/productionPayrollsService";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import formatNumber from "../../utils/formatters/numberId";
-import formatCurrency from "../../utils/formatters/currencyId";
 import { getFormArrayValue, removeArrayItemByIndex, upsertArrayItemByIndex } from "../../utils/forms/formArrayHelpers";
 import { buildWorkLogMaterialUsageFormLine, buildWorkLogOutputFormLine } from "../../utils/produksi/productionLineBuilders";
 import {
   buildProductionStepPayrollSnapshot,
 } from "../../utils/produksi/productionPayrollRuleHelpers";
-import { buildDisplayReferenceSearchText, resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
+import { buildDisplayReferenceSearchText } from "../../utils/references/displayReferenceResolver";
 import useAuth from "../../hooks/useAuth";
 import WorkLogMaterialUsageModal from "./components/WorkLogMaterialUsageModal";
 import WorkLogOutputModal from "./components/WorkLogOutputModal";
 import WorkLogCompleteModal from "./components/WorkLogCompleteModal";
 import {
-  getWorkLogSourceTagColor,
-  getWorkLogStatusTagColor,
+  createProductionWorkLogColumns,
+  createProductionWorkLogMobileCardConfig,
   isEditableProductionWorkLog,
   renderCompleteWorkLogEstimateInfo,
-  renderWorkLogCellBlock,
 } from './helpers/productionWorkLogsPageHelpers';
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
@@ -295,6 +286,11 @@ const ProductionWorkLogs = () => {
       productionOrderId: undefined,
       productionProfileId: undefined,
     });
+  };
+
+  const closeFormDrawer = () => {
+    setFormVisible(false);
+    resetFormState();
   };
 
   // =====================================================
@@ -682,8 +678,7 @@ const ProductionWorkLogs = () => {
         return;
       }
 
-      setFormVisible(false);
-      resetFormState();
+      closeFormDrawer();
       await loadData();
     } catch (error) {
       if (error?.errorFields) return;
@@ -781,201 +776,13 @@ const ProductionWorkLogs = () => {
   };
 
 
-  // =====================================================
-  // Helper presentasi daftar & form Work Log
-  // Catatan maintainability:
-  // - Helper di bawah hanya untuk kebutuhan tampilan / readability UI.
-  // - Jangan dipakai untuk mengubah logika transaksi, stok, atau status produksi.
-  // - Tujuannya agar tampilan work log tetap rapi, profesional, dan mudah diaudit.
-  // =====================================================
-  const formatDisplayDate = (value, format = "DD/MM/YYYY") => {
-    const rawValue = value?.toDate ? value.toDate() : value;
-    return rawValue ? dayjs(rawValue).format(format) : "-";
+  const workLogActions = {
+    onComplete: handleOpenComplete,
+    onEdit: handleEdit,
+    onViewDetail: handleViewDetail,
   };
-
-  // =====================================================
-  // Kolom list Work Log Produksi
-  // Fungsi blok:
-  // - menampilkan work log aktif dalam tabel utama yang ringkas;
-  // - menjaga tombol Detail/Edit/Selesaikan langsung terlihat tanpa scroll horizontal.
-  // Alasan perubahan:
-  // - regression UI sebelumnya memakai scroll x besar dan fixed action sehingga aksi terdorong ke kanan.
-  // Status:
-  // - aktif dipakai; handler aksi tetap sama dan tidak mengubah flow produksi.
-  // =====================================================
-  const columns = [
-    {
-      title: "No. Work Log",
-      dataIndex: "workNumber",
-      key: "workNumber",
-      width: 105,
-      render: (value) => (
-        <Typography.Text strong>{resolveDisplayReference({ workNumber: value }, { fields: ["workNumber"], fallback: "-" })}</Typography.Text>
-      ),
-    },
-    {
-      title: "Tanggal",
-      dataIndex: "workDate",
-      key: "workDate",
-      width: 130,
-      render: (value) => formatDisplayDate(value),
-    },
-    {
-      title: "Target / Tahapan",
-      key: "targetStep",
-      width: 240,
-      render: (_, record) => (
-        renderWorkLogCellBlock(record.targetName || "-", [
-          record.stepName || "-",
-          record.targetVariantLabel ? `Varian: ${record.targetVariantLabel}` : null,
-          `No. Order: ${record.productionOrderCode || "-"}`,
-        ])
-      ),
-    },
-    {
-      title: "Qty",
-      key: "qty",
-      width: 130,
-      render: (_, record) => (
-        <Space direction="vertical" size={0}>
-          <Typography.Text>Batch: {formatNumber(record.plannedQty)}</Typography.Text>
-          <Typography.Text type="secondary">Estimasi: {formatNumber(record.theoreticalOutputQty || 0)}</Typography.Text>
-          <Typography.Text type="secondary">Hasil baik: {formatNumber(record.goodQty)}</Typography.Text>
-        </Space>
-      ),
-    },
-    {
-      title: "Biaya Aktual",
-      dataIndex: "totalCostActual",
-      key: "totalCostActual",
-      width: 95,
-      render: (value) => formatCurrency(value),
-    },
-    {
-      title: "Sumber",
-      dataIndex: "sourceType",
-      key: "sourceType",
-      width: 105,
-      render: (value) => (
-        <Tag className="ims-status-tag" color={getWorkLogSourceTagColor(value)}>
-          {WORK_LOG_SOURCE_TYPE_MAP[value] || value || "-"}
-        </Tag>
-      ),
-    },
-    {
-      title: "Status",
-      dataIndex: "status",
-      key: "status",
-      width: 120,
-      render: (value) => (
-        <Tag className="ims-status-tag" color={getWorkLogStatusTagColor(value)}>
-          {WORK_LOG_STATUS_MAP[value] || "-"}
-        </Tag>
-      ),
-    },
-    {
-      title: "Aksi",
-      key: "actions",
-      width: 160,
-      render: (_, record) => (
-        // Aktif dipakai: tombol aksi disusun vertical compact agar tidak butuh scroll kanan.
-        <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-          <Button
-            className="ims-action-button"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleViewDetail(record)}
-          >
-            Detail
-          </Button>
-
-          {isEditableProductionWorkLog(record) && (
-            <Button
-              className="ims-action-button"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => handleEdit(record)}
-            >
-              Edit
-            </Button>
-          )}
-
-          {isEditableProductionWorkLog(record) && (
-            <Button
-              className="ims-action-button"
-              size="small"
-              type="primary"
-              onClick={() => handleOpenComplete(record)}
-            >
-              Selesaikan
-            </Button>
-          )}
-        </Space>
-      ),
-    },
-  ];
-
-  // IMS NOTE [AKTIF/GUARDED UI] - Mobile card Work Log Produksi.
-  // Fungsi: daftar work log terbaca di HP tanpa scroll tabel panjang.
-  // Guardrail: hanya presentasi; edit/complete, payroll generation, material usage, output, dan status flow tetap handler existing.
-  const productionWorkLogMobileCardConfig = {
-    title: (record) => resolveDisplayReference(record, { fields: ["workNumber"], fallback: "-" }),
-    subtitle: (record) => [
-      formatDisplayDate(record.workDate),
-      record.targetName || "Target belum tercatat",
-      record.stepName || null,
-    ].filter(Boolean),
-    tags: (record) => [
-      <Tag key="source" color={getWorkLogSourceTagColor(record.sourceType)}>
-        {WORK_LOG_SOURCE_TYPE_MAP[record.sourceType] || record.sourceType || "-"}
-      </Tag>,
-      <Tag key="status" color={getWorkLogStatusTagColor(record.status)}>
-        {WORK_LOG_STATUS_MAP[record.status] || "-"}
-      </Tag>,
-    ],
-    meta: [
-      { label: "Batch", value: (record) => formatNumber(record.plannedQty) },
-      { label: "Hasil Baik", value: (record) => formatNumber(record.goodQty) },
-      { label: "Biaya Aktual", value: (record) => formatCurrency(record.totalCostActual) },
-    ],
-    content: (record) => [
-      record.targetVariantLabel ? `Varian: ${record.targetVariantLabel}` : null,
-      `No. Order: ${record.productionOrderCode || "-"}`,
-      `Estimasi output: ${formatNumber(record.theoreticalOutputQty || 0)}`,
-    ].filter(Boolean),
-    actions: (record) => (
-      <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-        <Button
-          className="ims-action-button ims-action-button--block"
-          size="small"
-          icon={<EyeOutlined />}
-          onClick={() => handleViewDetail(record)}
-        >
-          Detail
-        </Button>
-        {isEditableProductionWorkLog(record) ? (
-          <Button
-            className="ims-action-button ims-action-button--block"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            Edit
-          </Button>
-        ) : null}
-        {isEditableProductionWorkLog(record) ? (
-          <Button
-            className="ims-action-button ims-action-button--block"
-            size="small"
-            type="primary"
-            onClick={() => handleOpenComplete(record)}
-          >
-            Selesaikan
-          </Button>
-        ) : null}
-      </Space>
-    ),
-  };
+  const columns = createProductionWorkLogColumns(workLogActions);
+  const productionWorkLogMobileCardConfig = createProductionWorkLogMobileCardConfig(workLogActions);
 
   return (
     <div className="ims-page">
@@ -1035,29 +842,31 @@ const ProductionWorkLogs = () => {
       </PageContentCanvas>
 
 <ProductionWorkLogFormDrawer
-        editingRecord={editingRecord}
-        employeeOptions={employeeOptions}
-        form={form}
-        formVisible={formVisible}
-        getProductionProfileOptions={getProductionProfileOptions}
-        getTargetOptions={getTargetOptions}
-        handleApplyBomTemplate={handleApplyBomTemplate}
-        handleApplyProductionOrderTemplate={handleApplyProductionOrderTemplate}
-        handleRemoveMaterialUsage={handleRemoveMaterialUsage}
-        handleRemoveOutput={handleRemoveOutput}
-        handleSubmit={handleSubmit}
-        monitoringPreview={monitoringPreview}
-        openMaterialModal={openMaterialModal}
-        openOutputModal={openOutputModal}
-        productionOrderOptions={productionOrderOptions}
-        referenceData={referenceData}
-        resetFormState={resetFormState}
-        selectedProductionProfile={selectedProductionProfile}
-        setFormVisible={setFormVisible}
-        stepOptions={stepOptions}
-        submitting={submitting}
-        targetIdValue={targetIdValue}
-        targetTypeValue={targetTypeValue}
+        formState={{ editingRecord, form, formVisible, submitting }}
+        referenceData={{
+          employeeOptions,
+          productionOrderOptions,
+          referenceData,
+          stepOptions,
+        }}
+        selectionState={{
+          monitoringPreview,
+          selectedProductionProfile,
+          targetIdValue,
+          targetTypeValue,
+        }}
+        actions={{
+          closeFormDrawer,
+          getProductionProfileOptions,
+          getTargetOptions,
+          handleApplyBomTemplate,
+          handleApplyProductionOrderTemplate,
+          handleRemoveMaterialUsage,
+          handleRemoveOutput,
+          handleSubmit,
+          openMaterialModal,
+          openOutputModal,
+        }}
       />
 
       <ProductionWorkLogDetailDrawer

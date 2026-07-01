@@ -27,23 +27,18 @@ import formatNumber, { parseIntegerIdInput } from "../../../utils/formatters/num
 import { buildFormValues, normalizeFormVariants } from "../helpers/semiFinishedMaterialsPageHelpers";
 
 const SemiFinishedMaterialFormDrawer = ({
-  calculatedTotals,
-  canActivateVariantsForEditing,
-  componentGroupSelectOptions,
-  editingMaterial,
-  flowerTypeSelectOptions,
-  form,
-  formVisible,
-  handleSubmit,
-  hasVariantModeSwitchLocked,
-  hasVariantsValue,
-  isEditingMaterial,
-  isGuardedVariantStock,
-  resetFormState,
-  setFormVisible,
-  stockEditHelpText,
-  submitting,
-  variantLabelValue,
+  formState: { form, formVisible, submitting },
+  entityState: { editingMaterial, isEditingMaterial },
+  optionData: { componentGroupSelectOptions, flowerTypeSelectOptions },
+  variantState: {
+    canActivateVariantsForEditing,
+    hasVariantModeSwitchLocked,
+    hasVariantsValue,
+    isGuardedVariantStock,
+    variantLabelValue,
+  },
+  summaryState: { calculatedTotals, stockEditHelpText },
+  actions: { closeFormDrawer, handleSubmit },
 }) => (
       <Drawer
         title={
@@ -52,19 +47,13 @@ const SemiFinishedMaterialFormDrawer = ({
             : "Tambah Semi Finished Material"
         }
         open={formVisible}
-        onClose={() => {
-          setFormVisible(false);
-          resetFormState();
-        }}
+        onClose={closeFormDrawer}
         width={860}
         destroyOnClose
         extra={
           <Space>
             <Button
-              onClick={() => {
-                setFormVisible(false);
-                resetFormState();
-              }}
+              onClick={closeFormDrawer}
             >
               Batal
             </Button>
@@ -406,9 +395,6 @@ const SemiFinishedMaterialFormDrawer = ({
 
           Alasan perubahan:
           - ringkasan lama menyebut Min Stock Alert sebagai akumulasi varian, padahal rule final memakai master `minStockAlert`.
-
-          Catatan cleanup:
-          - belum ada.
 
           Risiko:
           - wording/perhitungan yang kembali ke total varian akan membingungkan validasi low stock Semi Finished.

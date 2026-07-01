@@ -22,21 +22,14 @@ import ProductionPageHeader from '../../components/Produksi/shared/ProductionPag
 import PageContentCanvas from '../../components/Layout/Page/PageContentCanvas';
 import ProductionSummaryCards from '../../components/Produksi/shared/ProductionSummaryCards';
 import ProductionFilterCard from '../../components/Produksi/shared/ProductionFilterCard';
-import TableActionMenu from '../../components/Layout/Table/TableActionMenu';
 import InfoPopoverButton from "../../components/Layout/Feedback/InfoPopoverButton";
 import {
   App as AntdApp,
-  Badge,
   Col,
   Form,
   Input,
   Select,
-  Space,
-  Tag,
-  Tooltip,
-  Typography,
 } from "antd";
-import { EditOutlined, EyeOutlined } from "@ant-design/icons";
 import {
   BOM_TARGET_TYPE_MAP,
   DEFAULT_BOM_MATERIAL_LINE,
@@ -57,8 +50,6 @@ import ProductionBomFormDrawer from "./components/ProductionBomFormDrawer";
 import ProductionBomMaterialModal from "./components/ProductionBomMaterialModal";
 import ProductionBomStepModal from "./components/ProductionBomStepModal";
 import {
-  clampTwoLineStyle,
-  compactTagStyle,
   EMPTY_REFERENCE_DATA,
   hydrateBomRecordWithLiveCosts,
 } from "./helpers/productionBomsPageHelpers";
@@ -67,7 +58,6 @@ import {
 // SECTION: helper format angka Indonesia
 // =====================================================
 import formatNumber from "../../utils/formatters/numberId";
-import formatCurrency from "../../utils/formatters/currencyId";
 import { getFormArrayValue, getNextSequenceNumber, removeArrayItemByIndex, upsertArrayItemByIndex } from "../../utils/forms/formArrayHelpers";
 import { buildBomMaterialFormLine, buildBomStepFormLine } from "../../utils/produksi/productionLineBuilders";
 import { hydrateBomMaterialLineWithLiveCost } from "../../utils/produksi/productionBomCostHelpers";
@@ -672,6 +662,11 @@ const ProductionBoms = () => {
   // =====================================================
   // SECTION: toggle aktif BOM
   // =====================================================
+  const closeFormDrawer = () => {
+    setFormVisible(false);
+    resetFormState();
+  };
+
   const handleToggleActive = async (record) => {
     try {
       await toggleProductionBomActive(record.id, !record.isActive, null);
@@ -685,223 +680,6 @@ const ProductionBoms = () => {
     }
   };
 
-  // =====================================================
-  // SECTION: Main table compact BOM Produksi — AKTIF
-  // Fungsi:
-  // - Menampilkan ringkasan BOM, target, komposisi, output batch, estimasi, status, dan aksi pada main table.
-  //
-  // Dipakai oleh:
-  // - Halaman ProductionBoms sebagai daftar konfigurasi BOM produksi.
-  //
-  // Alasan perubahan:
-  // - Main table sebelumnya memakai horizontal scroll besar dan fixed-right column; informasi dipadatkan agar action tetap terlihat tanpa scroll besar.
-  //
-  // Catatan cleanup:
-  // - Detail materialLines dan stepLines tetap di drawer detail existing; belum ada cleanup logic data.
-  //
-  // Risiko:
-  // - Mengubah render ini sembarangan dapat membuat target, komposisi, estimasi, atau action BOM sulit diverifikasi oleh user.
-  // =====================================================
-  const columns = [
-    {
-      title: "BOM / Target",
-      key: "bomTarget",
-      width: "34%",
-      render: (_, record) => (
-        <Space direction="vertical" size={6} style={{ width: "100%" }}>
-          <div>
-            <Tooltip title={record.name || "-"}>
-              <Typography.Text strong style={{ ...clampTwoLineStyle }}>
-                {record.name || "-"}
-              </Typography.Text>
-            </Tooltip>
-          </div>
-
-          <Tooltip title={record.description || "Belum ada deskripsi"}>
-            <Typography.Text type="secondary" style={clampTwoLineStyle}>
-              {record.description || "Belum ada deskripsi"}
-            </Typography.Text>
-          </Tooltip>
-
-          <Space size={6} wrap>
-            <Tag color="blue" style={compactTagStyle}>
-              {BOM_TARGET_TYPE_MAP[record.targetType] || "-"}
-            </Tag>
-            <Tooltip title={record.targetName || "-"}>
-              <Typography.Text style={{ ...clampTwoLineStyle, maxWidth: 220 }}>
-                {record.targetName || "-"}
-              </Typography.Text>
-            </Tooltip>
-          </Space>
-        </Space>
-      ),
-    },
-    {
-      title: "Komposisi / Output",
-      key: "compositionOutput",
-      width: "22%",
-      render: (_, record) => (
-        <Space direction="vertical" size={4}>
-          <Space size={6} wrap>
-            <Tag style={compactTagStyle}>Material: {formatNumber(record.materialLines?.length || 0)}</Tag>
-            <Tag style={compactTagStyle}>Step: {formatNumber(record.stepLines?.length || 0)}</Tag>
-          </Space>
-          <Typography.Text type="secondary">
-            Output batch
-          </Typography.Text>
-          <Typography.Text strong>
-            {formatNumber(record.batchOutputQty || 0)} {record.targetUnit || "pcs"}
-          </Typography.Text>
-        </Space>
-      ),
-    },
-    {
-      title: "Estimasi",
-      key: "estimate",
-      width: "22%",
-      render: (_, record) => (
-        <Space direction="vertical" size={2}>
-          <Typography.Text>
-            Material: {formatCurrency(record.materialCostEstimate || 0)}
-          </Typography.Text>
-          <Typography.Text>
-            Upah step: {formatCurrency(record.laborCostEstimate || 0)}
-          </Typography.Text>
-          {Number(record.overheadCostEstimate || 0) > 0 ? (
-            <Typography.Text>
-              Overhead: {formatCurrency(record.overheadCostEstimate || 0)}
-            </Typography.Text>
-          ) : null}
-          <Typography.Text strong>
-            Total: {formatCurrency(record.totalCostEstimate || 0)}
-          </Typography.Text>
-        </Space>
-      ),
-    },
-    {
-      title: "Status",
-      key: "status",
-      width: 116,
-      align: "center",
-      className: "app-table-status-column",
-      render: (_, record) => (
-        <Space direction="vertical" size={0}>
-          {record.isActive ? (
-            <Badge status="success" text="Aktif" />
-          ) : (
-            <Badge status="default" text="Nonaktif" />
-          )}
-          {record.isDefault ? (
-            <Typography.Text type="secondary" className="ims-cell-meta">
-              Default
-            </Typography.Text>
-          ) : null}
-        </Space>
-      ),
-    },
-    {
-      title: "Aksi",
-      key: "actions",
-      width: 132,
-      className: "app-table-action-column",
-      render: (_, record) => (
-        <TableActionMenu
-          visibleActions={[
-            {
-              key: "detail",
-              label: "Detail",
-              icon: <EyeOutlined />,
-              onClick: () => handleViewDetail(record),
-            },
-          ]}
-          moreActions={[
-            {
-              key: "edit",
-              label: "Edit",
-              icon: <EditOutlined />,
-              onClick: () => handleEdit(record),
-            },
-            {
-              key: "toggle",
-              label: record.isActive ? "Nonaktifkan" : "Aktifkan",
-              danger: record.isActive,
-              confirm: {
-                title: record.isActive ? "Nonaktifkan BOM ini?" : "Aktifkan BOM ini?",
-                okText: "Ya",
-                cancelText: "Batal",
-              },
-              onClick: () => handleToggleActive(record),
-            },
-          ]}
-        />
-      ),
-    },
-  ];
-
-  // IMS NOTE [AKTIF/GUARDED UI] - Mobile card BOM Produksi.
-  // Fungsi: membuat daftar BOM dan grouped BOM tetap nyaman dibaca di HP.
-  // Guardrail: hanya presentasi; materialLines, stepLines, estimasi biaya, default BOM, dan toggle status tetap memakai handler existing.
-  const bomMobileCardConfig = {
-    title: (record) => record.name || "-",
-    subtitle: (record) => [
-      record.targetName || "Target belum tercatat",
-      record.description || null,
-    ].filter(Boolean),
-    tags: (record) => [
-      <Tag key="target-type" color="blue" style={compactTagStyle}>
-        {BOM_TARGET_TYPE_MAP[record.targetType] || "-"}
-      </Tag>,
-      record.isActive ? (
-        <StatusTag key="status" tone="success" style={compactTagStyle}>Aktif</StatusTag>
-      ) : (
-        <StatusTag key="status" tone="neutral" style={compactTagStyle}>Nonaktif</StatusTag>
-      ),
-      record.isDefault ? <Tag key="default" color="purple" style={compactTagStyle}>Default</Tag> : null,
-    ].filter(Boolean),
-    meta: [
-      { label: "Material", value: (record) => formatNumber(record.materialLines?.length || 0) },
-      { label: "Step", value: (record) => formatNumber(record.stepLines?.length || 0) },
-      {
-        label: "Output Batch",
-        value: (record) => `${formatNumber(record.batchOutputQty || 0)} ${record.targetUnit || "pcs"}`,
-      },
-      { label: "Estimasi", value: (record) => formatCurrency(record.totalCostEstimate || 0) },
-    ],
-    content: (record) => [
-      `Material: ${formatCurrency(record.materialCostEstimate || 0)}`,
-      `Upah step: ${formatCurrency(record.laborCostEstimate || 0)}`,
-      Number(record.overheadCostEstimate || 0) > 0
-        ? `Overhead: ${formatCurrency(record.overheadCostEstimate || 0)}`
-        : null,
-    ].filter(Boolean),
-    primaryActions: (record) => [
-      {
-        key: "detail",
-        label: "Detail",
-        icon: <EyeOutlined />,
-        onClick: () => handleViewDetail(record),
-      },
-    ],
-    moreActions: (record) => [
-      {
-        key: "edit",
-        label: "Edit",
-        icon: <EditOutlined />,
-        onClick: () => handleEdit(record),
-      },
-      {
-        key: "toggle",
-        label: record.isActive ? "Nonaktifkan" : "Aktifkan",
-        danger: record.isActive,
-        confirm: {
-          title: record.isActive ? "Nonaktifkan BOM ini?" : "Aktifkan BOM ini?",
-          okText: "Ya",
-          cancelText: "Batal",
-        },
-        onClick: () => handleToggleActive(record),
-      },
-    ],
-  };
 
   return (
     <div>
@@ -992,29 +770,33 @@ const ProductionBoms = () => {
         loading={loading}
         filteredData={filteredData}
         listViewMode={listViewMode}
-        columns={columns}
-        mobileCardConfig={bomMobileCardConfig}
         groupedFilteredData={groupedFilteredData}
         shouldAutoOpenBomGroups={shouldAutoOpenBomGroups}
+        onEdit={handleEdit}
+        onToggleActive={handleToggleActive}
+        onViewDetail={handleViewDetail}
       />
 
       {/* SECTION: drawer form tambah/edit BOM */}
       </PageContentCanvas>
 
 <ProductionBomFormDrawer
-        editingBom={editingBom}
-        form={form}
-        formErrorSummary={formErrorSummary}
-        formVisible={formVisible}
-        getTargetOptions={getTargetOptions}
-        handleRemoveMaterialLine={handleRemoveMaterialLine}
-        handleRemoveStepLine={handleRemoveStepLine}
-        handleSubmit={handleSubmit}
-        openMaterialModal={openMaterialModal}
-        openStepModal={openStepModal}
-        resetFormState={resetFormState}
-        setFormVisible={setFormVisible}
-        submitting={submitting}
+        formState={{
+          editingBom,
+          form,
+          formErrorSummary,
+          formVisible,
+          submitting,
+        }}
+        actions={{
+          closeFormDrawer,
+          getTargetOptions,
+          handleRemoveMaterialLine,
+          handleRemoveStepLine,
+          handleSubmit,
+          openMaterialModal,
+          openStepModal,
+        }}
       />
 
       {/* SECTION: drawer detail BOM */}

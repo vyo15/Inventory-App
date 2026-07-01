@@ -24,23 +24,24 @@ import { showFormValidationFeedback } from "../../../utils/forms/formValidationF
 const { Option } = Select;
 
 const SalesFormModal = ({
-  customers,
-  defaultSaleLineItemType,
-  findSellableItem,
-  form,
-  getSellableItemsByType,
-  handleAddSale,
-  handleSaleItemChange,
-  handleSaleItemTypeChange,
-  handleSalesChannelChange,
-  isModalOpen,
-  isOfflineChannel,
-  isReferenceNumberEnabledChannel,
-  isSubmittingSale,
-  onlineStatuses,
-  salesChannels,
-  sellableItemTypeOptions,
-  setIsModalOpen,
+  formState: { form, isModalOpen, isSubmittingSale },
+  referenceData: {
+    customers,
+    onlineStatuses,
+    salesChannels,
+    sellableItemTypeOptions,
+  },
+  channelState: { isOfflineChannel, isReferenceNumberEnabledChannel },
+  defaults: { defaultSaleLineItemType },
+  actions: {
+    findSellableItem,
+    getSellableItemsByType,
+    handleAddSale,
+    handleSaleItemChange,
+    handleSaleItemTypeChange,
+    handleSalesChannelChange,
+    setIsModalOpen,
+  },
 }) => (
       <Modal
         title="Tambah Penjualan"

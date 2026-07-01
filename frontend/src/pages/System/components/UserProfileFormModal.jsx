@@ -18,25 +18,21 @@ import {
 } from "../../../utils/auth/roleAccess";
 
 const UserProfileFormModal = ({
-  open,
-  form,
-  isCreate,
-  isEditingSelf,
-  isSaving,
-  isProcessingAvatar,
-  avatarDraft,
-  modalInitials,
-  assignableRoleOptions,
-  passwordPolicyHint,
-  avatarMimeTypes,
-  normalizeUsername,
-  validateUsernamePattern,
-  validateUniqueUsername,
-  validatePassword,
-  onCancel,
-  onFinish,
-  onAvatarUpload,
-  onRemoveAvatar,
+  formState: { open, form, isCreate, isEditingSelf, isSaving },
+  avatarState: {
+    isProcessingAvatar,
+    avatarDraft,
+    modalInitials,
+    avatarMimeTypes,
+  },
+  optionData: { assignableRoleOptions, passwordPolicyHint },
+  validators: {
+    normalizeUsername,
+    validateUsernamePattern,
+    validateUniqueUsername,
+    validatePassword,
+  },
+  actions: { onCancel, onFinish, onAvatarUpload, onRemoveAvatar },
 }) => (
   <PageFormModal
     title={isCreate

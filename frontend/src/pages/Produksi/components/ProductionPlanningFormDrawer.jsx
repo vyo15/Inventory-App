@@ -14,35 +14,27 @@ import ImsNotice from "../../../components/Layout/Feedback/ImsNotice";
 import { parseIntegerIdInput } from "../../../utils/formatters/numberId";
 
 const ProductionPlanningFormDrawer = ({
-  PERIOD_OPTIONS,
-  PRIORITY_OPTIONS,
-  TARGET_TYPE_OPTIONS,
-  editingPlan,
-  form,
-  formVisible,
-  getDefaultPeriodRange,
-  getTargetOptions,
-  handleSubmit,
-  referenceData,
-  selectedTargetItem,
-  setEditingPlan,
-  setFormVisible,
-  submitting,
-  targetTypeValue,
-  targetVariantOptions,
-  toDatePickerValue,
-}) => (
+  formState,
+  referenceState,
+  options,
+  actions,
+}) => {
+  const { editingPlan, form, formVisible, submitting, targetTypeValue } = formState;
+  const { referenceData, selectedTargetItem, targetVariantOptions } = referenceState;
+  const { periodOptions, priorityOptions, targetTypeOptions } = options;
+  const { closeFormDrawer, getDefaultPeriodRange, getTargetOptions, handleSubmit, toDatePickerValue } = actions;
+
+  return (
       <Drawer
         title={editingPlan ? "Edit Production Planning" : "Tambah Production Planning"}
         open={formVisible}
         onClose={() => {
-          setFormVisible(false);
-          setEditingPlan(null);
+          closeFormDrawer();
         }}
         width={720}
         extra={
           <Space>
-            <Button onClick={() => setFormVisible(false)}>Batal</Button>
+            <Button onClick={closeFormDrawer}>Batal</Button>
             <Button type="primary" loading={submitting} onClick={handleSubmit}>
               Simpan
             </Button>
@@ -71,7 +63,7 @@ const ProductionPlanningFormDrawer = ({
             <Col xs={24} md={8}>
               <Form.Item label="Tipe Periode" name="periodType" rules={[{ required: true, message: "Tipe periode wajib dipilih" }]}>
                 <Select
-                  options={PERIOD_OPTIONS}
+                  options={periodOptions}
                   onChange={(value) => {
                     const range = getDefaultPeriodRange(value);
                     form.setFieldsValue({
@@ -104,7 +96,7 @@ const ProductionPlanningFormDrawer = ({
             <Col xs={24} md={8}>
               <Form.Item label="Target Type" name="targetType" rules={[{ required: true, message: "Target type wajib dipilih" }]}>
                 <Select
-                  options={TARGET_TYPE_OPTIONS}
+                  options={targetTypeOptions}
                   onChange={() => {
                     form.setFieldsValue({
                       targetItemId: undefined,
@@ -116,7 +108,7 @@ const ProductionPlanningFormDrawer = ({
             </Col>
             <Col xs={24} md={8}>
               <Form.Item label="Prioritas" name="priority">
-                <Select options={PRIORITY_OPTIONS} />
+                <Select options={priorityOptions} />
               </Form.Item>
             </Col>
           </Row>
@@ -158,6 +150,7 @@ const ProductionPlanningFormDrawer = ({
           </Form.Item>
         </Form>
       </Drawer>
-);
+  );
+};
 
 export default ProductionPlanningFormDrawer;

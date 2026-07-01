@@ -30,6 +30,28 @@ import {
   renderEmployeeCompactInfo,
 } from "../helpers/productionEmployeesPageHelpers";
 
+const RecentEmployeeActivityColumn = ({
+  emptyDescription,
+  items = [],
+  renderItem,
+  title,
+}) => (
+  <Col xs={24} md={12}>
+    <Typography.Text strong>{title}</Typography.Text>
+    <Space direction="vertical" size={8} style={{ width: "100%", marginTop: 8 }}>
+      {items.length > 0 ? (
+        items.map(renderItem)
+      ) : (
+        <EmptyStateBlock
+          compact
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={emptyDescription}
+        />
+      )}
+    </Space>
+  </Col>
+);
+
 const ProductionEmployeeDetailDrawer = ({
   detailVisible,
   selectedEmployee,
@@ -181,59 +203,45 @@ const ProductionEmployeeDetailDrawer = ({
             ===================================================== */}
             <Card size="small" title="Histori Singkat" style={{ marginBottom: 16 }}>
               <Row gutter={[16, 16]}>
-                <Col xs={24} md={12}>
-                  <Typography.Text strong>Work Log Terakhir</Typography.Text>
-                  <Space direction="vertical" size={8} style={{ width: "100%", marginTop: 8 }}>
-                    {selectedEmployeeActivitySummary.recentWorkLogs.length > 0 ? (
-                      selectedEmployeeActivitySummary.recentWorkLogs.map((item) => (
-                        <Card key={item.id} size="small" bodyStyle={{ padding: 10 }}>
-                          <Space direction="vertical" size={2} style={{ width: "100%" }}>
-                            <Typography.Text strong>{item.workNumber || "-"}</Typography.Text>
-                            <Typography.Text type="secondary">
-                              {item.stepName || "-"} · {formatEmployeeShortDate(item.completedAt || item.workDate)}
-                            </Typography.Text>
-                            <Space size={[4, 4]} wrap>
-                              <Tag>{item.status || "-"}</Tag>
-                              <Tag>Good Qty: {formatNumber(item.goodQty || 0)}</Tag>
-                            </Space>
-                          </Space>
-                        </Card>
-                      ))
-                    ) : (
-                      <EmptyStateBlock compact
-                        image={Empty.PRESENTED_IMAGE_SIMPLE}
-                        description="Belum ada Work Log untuk operator ini."
-                      />
-                    )}
-                  </Space>
-                </Col>
+                <RecentEmployeeActivityColumn
+                  title="Work Log Terakhir"
+                  items={selectedEmployeeActivitySummary.recentWorkLogs}
+                  emptyDescription="Belum ada Work Log untuk operator ini."
+                  renderItem={(item) => (
+                    <Card key={item.id} size="small" bodyStyle={{ padding: 10 }}>
+                      <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                        <Typography.Text strong>{item.workNumber || "-"}</Typography.Text>
+                        <Typography.Text type="secondary">
+                          {item.stepName || "-"} · {formatEmployeeShortDate(item.completedAt || item.workDate)}
+                        </Typography.Text>
+                        <Space size={[4, 4]} wrap>
+                          <Tag>{item.status || "-"}</Tag>
+                          <Tag>Good Qty: {formatNumber(item.goodQty || 0)}</Tag>
+                        </Space>
+                      </Space>
+                    </Card>
+                  )}
+                />
 
-                <Col xs={24} md={12}>
-                  <Typography.Text strong>Payroll Terakhir</Typography.Text>
-                  <Space direction="vertical" size={8} style={{ width: "100%", marginTop: 8 }}>
-                    {selectedEmployeeActivitySummary.recentPayrolls.length > 0 ? (
-                      selectedEmployeeActivitySummary.recentPayrolls.map((item) => (
-                        <Card key={item.id} size="small" bodyStyle={{ padding: 10 }}>
-                          <Space direction="vertical" size={2} style={{ width: "100%" }}>
-                            <Typography.Text strong>{item.payrollNumber || "-"}</Typography.Text>
-                            <Typography.Text type="secondary">
-                              {item.stepName || "-"} · {formatEmployeeShortDate(item.payrollDate)}
-                            </Typography.Text>
-                            <Space size={[4, 4]} wrap>
-                              <Tag>{item.status || "-"}</Tag>
-                              <Tag>{formatCurrency(item.finalAmount || 0)}</Tag>
-                            </Space>
-                          </Space>
-                        </Card>
-                      ))
-                    ) : (
-                      <EmptyStateBlock compact
-                        image={Empty.PRESENTED_IMAGE_SIMPLE}
-                        description="Belum ada line payroll untuk operator ini."
-                      />
-                    )}
-                  </Space>
-                </Col>
+                <RecentEmployeeActivityColumn
+                  title="Payroll Terakhir"
+                  items={selectedEmployeeActivitySummary.recentPayrolls}
+                  emptyDescription="Belum ada line payroll untuk operator ini."
+                  renderItem={(item) => (
+                    <Card key={item.id} size="small" bodyStyle={{ padding: 10 }}>
+                      <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                        <Typography.Text strong>{item.payrollNumber || "-"}</Typography.Text>
+                        <Typography.Text type="secondary">
+                          {item.stepName || "-"} · {formatEmployeeShortDate(item.payrollDate)}
+                        </Typography.Text>
+                        <Space size={[4, 4]} wrap>
+                          <Tag>{item.status || "-"}</Tag>
+                          <Tag>{formatCurrency(item.finalAmount || 0)}</Tag>
+                        </Space>
+                      </Space>
+                    </Card>
+                  )}
+                />
               </Row>
 
               <Typography.Text type="secondary" style={{ display: "block", marginTop: 12 }}>
