@@ -1,4 +1,4 @@
-const safeTrim = (value) => String(value || '').trim();
+import { normalizeTruthyText as safeTrim } from "../text/textNormalization";
 
 export const buildReferenceLabel = (item = {}) => {
   /*

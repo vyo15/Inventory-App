@@ -1,3 +1,4 @@
+const { safeJsonParse } = require("../../utils/jsonUtils");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const env = require("../../config/env");
@@ -138,14 +139,6 @@ const SCENARIOS = Object.freeze({
   }),
 });
 
-const parseJson = (value, fallback = null) => {
-  if (!value) return fallback;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return fallback;
-  }
-};
 
 const sanitizeStoredJson = (value) => {
   const serialized = JSON.stringify(value);
@@ -208,7 +201,7 @@ const assertTestingLabAvailable = () => {
 
 const readSetting = async (db, key, fallback = null) => {
   const row = await db.get("SELECT value FROM app_settings WHERE key = ?", [key]);
-  return parseJson(row?.value, fallback);
+  return safeJsonParse(row?.value, fallback);
 };
 
 const writeSetting = async (db, key, value) => {
@@ -465,7 +458,7 @@ const listTestingSessionHistory = async (db) => {
     description: row.description || "",
     actor: row.actor,
     createdAt: row.created_at,
-    metadata: parseJson(row.metadata_json, null),
+    metadata: safeJsonParse(row.metadata_json, null),
   }));
 };
 

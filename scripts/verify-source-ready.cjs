@@ -40,13 +40,28 @@ function findTrackedRuntimeArtifacts(trackedFiles = []) {
   });
 }
 
-function getTrackedRuntimeArtifacts() {
-  const trackedFiles = capture("git", ["ls-files"])
+function findTrackedPatchArtifacts(trackedFiles = []) {
+  return trackedFiles.filter((file) => {
+    const normalized = normalizeArchiveEntry(file).trim();
+    return /^_PATCH_(?:MANIFEST\.md|DELETE_FILES\.txt)$/i.test(normalized)
+      || /^_IMS_(?:DELETE_FILES|PATCH_INFO)\.txt$/i.test(normalized)
+      || /(?:^|\/)[^/]*changed-files(?:\/|$)/i.test(normalized);
+  });
+}
+
+function getTrackedFiles() {
+  return capture("git", ["ls-files"])
     .split(/\r?\n/)
     .map((file) => file.trim())
     .filter(Boolean);
+}
 
-  return findTrackedRuntimeArtifacts(trackedFiles);
+function getTrackedRuntimeArtifacts() {
+  return findTrackedRuntimeArtifacts(getTrackedFiles());
+}
+
+function getTrackedPatchArtifacts() {
+  return findTrackedPatchArtifacts(getTrackedFiles());
 }
 
 function findZipEndOfCentralDirectory(buffer) {
@@ -176,7 +191,11 @@ function findUnsafeArchiveEntries(rawEntries = []) {
       return true;
     }
 
-    if (/^_IMS_(?:DELETE_FILES|PATCH_INFO)\.txt$/i.test(normalized)) {
+    if (
+      /^_IMS_(?:DELETE_FILES|PATCH_INFO)\.txt$/i.test(normalized)
+      || /^_PATCH_(?:MANIFEST\.md|DELETE_FILES\.txt)$/i.test(normalized)
+      || /(?:^|\/)[^/]*changed-files(?:\/|$)/i.test(normalized)
+    ) {
       return true;
     }
 
@@ -312,6 +331,14 @@ function verifyRepositoryReady({ allowDirty = false } = {}) {
   }
   console.log("[verify] Runtime data/backup tidak ter-track.");
 
+  const trackedPatchArtifacts = getTrackedPatchArtifacts();
+  if (trackedPatchArtifacts.length > 0) {
+    console.log("\n[verify] Metadata patch masih ter-track:");
+    trackedPatchArtifacts.forEach((file) => console.log(`  - ${file}`));
+    fail("Metadata patch hanya untuk distribusi sementara dan tidak boleh menjadi source permanen.");
+  }
+  console.log("[verify] Metadata patch tidak ter-track.");
+
   if (!upstream) {
     console.log("[verify] Catatan: upstream belum diset. Push pertama akan perlu -u origin <branch>.");
   }
@@ -339,9 +366,11 @@ if (require.main === module) {
 }
 
 module.exports = {
+  findTrackedPatchArtifacts,
   findTrackedRuntimeArtifacts,
   findUnsafeArchiveEntries,
   getArchiveRelativeEntries,
+  getTrackedPatchArtifacts,
   getTrackedRuntimeArtifacts,
   listZipEntries,
   normalizeArchiveEntry,

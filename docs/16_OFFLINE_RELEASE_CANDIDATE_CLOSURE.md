@@ -86,4 +86,3 @@ QA tambahan setelah Batch 53:
 - Pull `categories/customers` dari runtime arsip, edit record yang sama di runtime arsip/device lain, lalu sync offline update; hasil yang benar adalah `sync_conflicts`, bukan overwrite.
 - Restore/import snapshot lama yang tidak punya `readOnlySnapshot`; tab Health harus memberi warning.
 - Pastikan panel data historis tidak muncul sebagai UI utama dan Offline Database Center tetap normal.
-

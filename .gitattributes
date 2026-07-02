@@ -23,3 +23,14 @@
 *.cjs text eol=lf
 *.mjs text eol=lf
 *.css text eol=lf
+
+# Keep project metadata and documentation stable across Windows/Linux.
+*.json text eol=lf
+*.md text eol=lf
+
+# Keep extensionless Git/runtime metadata portable on Git Bash and Linux.
+.githooks/* text eol=lf
+.gitignore text eol=lf
+.nvmrc text eol=lf
+.node-version text eol=lf
+*.env.example text eol=lf

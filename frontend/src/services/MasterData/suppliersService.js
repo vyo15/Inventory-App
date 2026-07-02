@@ -1,8 +1,9 @@
+import { normalizeTruthyText as safeTrim } from "../../utils/text/textNormalization";
 import * as sqliteSuppliersAdapter from "../../data/adapters/sqlite/sqliteSuppliersAdapter";
 import { calculateSupplierCatalogMetrics } from "../../../../shared/supplierCatalogPricing.js";
 import businessCodeContract from "../../../../shared/businessCodeContract.json";
+import { formatBusinessCodeDateStamp } from "../../utils/references/businessCodeDate";
 
-const safeTrim = (value = "") => String(value || "").trim();
 const SUPPLIER_CODE_PATTERN = new RegExp(businessCodeContract.supplier.pattern);
 
 export const normalizeSupplierCode = (value = "") => safeTrim(value).toUpperCase();
@@ -10,13 +11,7 @@ export const isValidSupplierCodeFormat = (code = "") => SUPPLIER_CODE_PATTERN.te
   normalizeSupplierCode(code),
 );
 
-export const formatSupplierCodeDate = (date = new Date()) => {
-  const parsed = date instanceof Date ? date : new Date(date);
-  const safeDate = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
-  return `${String(safeDate.getDate()).padStart(2, "0")}${String(
-    safeDate.getMonth() + 1,
-  ).padStart(2, "0")}${safeDate.getFullYear()}`;
-};
+export const formatSupplierCodeDate = formatBusinessCodeDateStamp;
 
 export const generateSupplierCode = async () => sqliteSuppliersAdapter.generateSupplierCode();
 

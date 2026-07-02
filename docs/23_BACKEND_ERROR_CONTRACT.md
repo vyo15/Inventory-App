@@ -1,6 +1,6 @@
 # BACKEND ERROR CONTRACT — IMS Bunga Flanel
 
-Status: **AKTIF / SOURCE-VERIFIED / COMPATIBILITY-SAFE**  
+Status: **AKTIF / SOURCE-VERIFIED / COMPATIBILITY-SAFE**
 Tanggal validasi: **2026-06-29**
 
 ## Tujuan

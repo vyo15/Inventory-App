@@ -1,3 +1,4 @@
+import { normalizeTruthyText as safeTrim } from "../text/textNormalization";
 // =====================================================
 // Production BOM Cost Helpers
 // Shared resolver untuk estimasi biaya BOM.
@@ -8,7 +9,6 @@ const toNumber = (value) => {
   return Number.isFinite(numberValue) ? numberValue : 0;
 };
 
-const safeTrim = (value) => String(value || '').trim();
 
 const firstPositiveNumber = (item = {}, keys = []) => {
   for (const key of keys) {

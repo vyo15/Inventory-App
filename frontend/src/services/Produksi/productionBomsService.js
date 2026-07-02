@@ -1,3 +1,5 @@
+import { normalizeTruthyText as safeTrim } from "../../utils/text/textNormalization";
+import { getCurrentIsoTimestamp, getProductionActorName } from "./helpers/productionAuditMetadata";
 import {
   createProductionRecord,
   generateProductionCode,
@@ -10,13 +12,6 @@ import { listenRawMaterials } from "../MasterData/rawMaterialsService";
 import { getActiveSemiFinishedMaterials } from "./semiFinishedMaterialsService";
 import { getActiveProductionSteps } from "./productionStepsService";
 
-const safeTrim = (value) => String(value || "").trim();
-const nowIso = () => new Date().toISOString();
-const getActorName = (currentUser = null) => currentUser?.email
-  || currentUser?.displayName
-  || currentUser?.username
-  || currentUser?.uid
-  || "system";
 
 const onceFromListener = (listener) => new Promise((resolve, reject) => {
   let unsubscribe = null;
@@ -58,7 +53,7 @@ export const validateProductionBom = (values = {}) => {
 
 const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
   const code = safeTrim(values.code || values.bomCode || values.referenceNumber).toUpperCase();
-  const actorName = getActorName(currentUser);
+  const actorName = getProductionActorName(currentUser);
 
   return {
     ...values,
@@ -72,9 +67,9 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
     routingMode: "single_step",
     version: values.version || 1,
     isActive: values.isActive !== false,
-    updatedAt: nowIso(),
+    updatedAt: getCurrentIsoTimestamp(),
     updatedBy: actorName,
-    ...(!isEdit ? { createdAt: nowIso(), createdBy: actorName } : {}),
+    ...(!isEdit ? { createdAt: getCurrentIsoTimestamp(), createdBy: actorName } : {}),
   };
 };
 

@@ -7,38 +7,25 @@ import {
 import {
   App as AntdApp,
   Button,
-  Col,
   Form,
   Popconfirm,
-  Select,
   Space,
   Tag,
 } from "antd";
-import { StopOutlined, PlusOutlined } from "@ant-design/icons";
+import { StopOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
-import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
-import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import InfoPopoverButton from "../../components/Layout/Feedback/InfoPopoverButton";
-import FilterBar from "../../components/Layout/Filters/FilterBar";
-import PageFormModal from "../../components/Layout/Forms/PageFormModal";
-import PageHeader from "../../components/Layout/Page/PageHeader";
-import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
-import PageSection from "../../components/Layout/Page/PageSection";
-import DataTableView from "../../components/Layout/Table/DataTableView";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
-import { formatNumberId } from "../../utils/formatters/numberId";
 import { createCashOutTransaction, deleteCashOutTransaction, listenCashOutRecords } from "../../services/Finance/financeService";
 import { compareRecordsByDateDesc, removeRecordById, upsertRecordById } from "../../utils/state/recordCollectionState";
-import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
-import CashTransactionFormFields from "./components/CashTransactionFormFields";
-import FinancePeriodYearMonthFilter from "./components/FinancePeriodYearMonthFilter";
+import CashFlowPageShell from "./components/CashFlowPageShell";
 import {
   buildFinanceRecordYearOptions,
   filterFinanceRecordsByPeriod,
   getCurrentFinanceYear,
 } from "./helpers/financePeriodHelpers";
-
+import { getSavingMeta, resolveExpenseSourceMeta } from "./helpers/cashOutPageHelpers";
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
@@ -46,64 +33,7 @@ import {
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data historis decimal tidak dimigrasi otomatis.
 // Behavior: input baru no-decimal; business rules dan schema/alur data utama tetap sama.
 
-const { Option } = Select;
 
-
-// =========================
-// SECTION: Sumber expense
-// Fungsi:
-// - membedakan pengeluaran manual vs pengeluaran turunan dari modul lain
-// - membantu user memahami apakah row boleh dinonaktifkan atau hanya dibaca
-// Status:
-// - aktif dipakai di UI Cash Out
-// - kandidat cleanup hanya jika nanti ada source registry global untuk expenses
-// =========================
-const EXPENSE_SOURCE_META = {
-  cash_out_manual: { label: "Manual", color: "default", deletable: true },
-  purchases: { label: "Pembelian", color: "blue", deletable: false },
-  production_payroll: { label: "Payroll Produksi", color: "purple", deletable: false },
-};
-
-const resolveExpenseSourceMeta = (record = {}) => {
-  const key = String(record.sourceModule || "").trim();
-  return EXPENSE_SOURCE_META[key] || {
-    label: key ? key : "Manual",
-    color: "default",
-    deletable: key === "",
-  };
-};
-
-// =========================
-// SECTION: Helper meta saving pembelian
-// Fungsi:
-// - mempertahankan penjelasan saving pembelian sebagai info efisiensi
-// - tidak mengubah nilai kas keluar aktual yang menjadi source of truth
-// =========================
-const getSavingMeta = (value) => {
-  const amount = Math.round(Number(value || 0));
-
-  if (amount > 0) {
-    return {
-      status: "hemat",
-      label: `Hemat ${formatCurrencyId(amount)}`,
-      color: "green",
-    };
-  }
-
-  if (amount < 0) {
-    return {
-      status: "lebih_mahal",
-      label: `Lebih Mahal ${formatCurrencyId(Math.abs(amount))}`,
-      color: "red",
-    };
-  }
-
-  return {
-    status: "normal",
-    label: "Sesuai Referensi",
-    color: "default",
-  };
-};
 
 const renderCashOutActions = (record = {}, onDelete) => {
   const sourceMeta = resolveExpenseSourceMeta(record);
@@ -435,99 +365,62 @@ const CashOut = () => {
      - Jangan mengubah cash posting, paid payroll guard, purchase expense, report mapping, atau callback action dari section ini.
      ===================================================== */
   return (
-    <>
-      <PageHeader
-        title="Pengeluaran Kas"
-        subtitle="Pengeluaran manual dan otomatis."
-        actions={[
-          {
-            key: "add-cash-out",
-            type: "primary",
-            icon: <PlusOutlined />,
-            label: "Tambah Pengeluaran",
-            onClick: openCreateModal,
-          },
-        ]}
-      />
-
-      <PageContentCanvas>
-
-
-      <PageSection
-        title="Ringkasan Periode"
-        subtitle="KPI periode aktif."
-        extra={(
+    <CashFlowPageShell
+      header={{
+        title: "Pengeluaran Kas",
+        subtitle: "Pengeluaran manual dan otomatis.",
+        actionKey: "add-cash-out",
+        actionLabel: "Tambah Pengeluaran",
+        onAdd: openCreateModal,
+      }}
+      summary={{
+        items: summaryItems,
+        columns: { xs: 24, sm: 12, md: 12, lg: 6 },
+        highlightKey: "actual-expense",
+        extra: (
           <InfoPopoverButton
             label="Payroll Otomatis"
             title="Payroll paid masuk Cash Out"
             description="Payroll produksi yang sudah paid akan tercatat sebagai Cash Out otomatis. Jangan input manual lagi agar tidak dobel biaya."
             items={[
-              { label: 'Payroll paid', value: 'Masuk otomatis.' },
-              { label: 'Manual input', value: 'Untuk biaya non-payroll.' },
-              { label: 'Anti dobel', value: 'Cek referensi sebelum simpan.' },
+              { label: "Payroll paid", value: "Masuk otomatis." },
+              { label: "Manual input", value: "Untuk biaya non-payroll." },
+              { label: "Anti dobel", value: "Cek referensi sebelum simpan." },
             ]}
           />
-        )}
-      >
-        <SummaryStatGrid
-          items={summaryItems}
-          columns={{ xs: 24, sm: 12, md: 12, lg: 6 }}
-          variant="finance"
-          highlightKey="actual-expense"
-          className="cash-flow-summary"
-        />
-      </PageSection>
-
-      <PageSection
-        title="Filter Pengeluaran"
-        subtitle="Filter periode."
-      >
-        <FinancePeriodYearMonthFilter
-          selectedYear={selectedYear}
-          selectedMonth={selectedMonth}
-          yearOptions={yearOptions}
-          onYearChange={setSelectedYear}
-          onMonthChange={setSelectedMonth}
-        />
-      </PageSection>
-
-      <PageSection
-        title="Daftar Pengeluaran"
-        subtitle="Transaksi periode."
-        extra={<Tag color="red">{formatNumberId(filteredCashOuts.length)} baris</Tag>}
-      >
-        <DataRefreshIndicator loading={loading} dataSource={filteredCashOuts} />
-        <DataTableView
-          showRefreshIndicator={false}
-          className="app-data-table"
-          rowKey="id"
-          dataSource={filteredCashOuts}
-          columns={columns}
-          locale={{
-            emptyText: getDataTableEmptyText(loading, "Belum ada pengeluaran pada periode ini."),
-          }}
-          mobileCardConfig={cashOutMobileCardConfig}
-        />
-      </PageSection>
-
-      </PageContentCanvas>
-
-      <PageFormModal
-        title="Tambah Pengeluaran"
-        open={modalVisible}
-        onCancel={closeCreateModal}
-        form={form}
-        onFinish={handleAddTransaction}
-      >
-        <CashTransactionFormFields
-          typeLabel="Tipe Pengeluaran"
-          typeRequiredMessage="Harap pilih tipe pengeluaran!"
-          typeOptions={["Pembelian", "Gaji", "Biaya Operasional", "Biaya Lain-lain"]}
-          defaultType="Biaya Lain-lain"
-        />
-      </PageFormModal>
-    </>
+        ),
+      }}
+      filter={{
+        title: "Filter Pengeluaran",
+        selectedYear,
+        selectedMonth,
+        yearOptions,
+        onYearChange: setSelectedYear,
+        onMonthChange: setSelectedMonth,
+      }}
+      table={{
+        title: "Daftar Pengeluaran",
+        countTagColor: "red",
+        rows: filteredCashOuts,
+        loading,
+        columns,
+        mobileCardConfig: cashOutMobileCardConfig,
+        emptyText: "Belum ada pengeluaran pada periode ini.",
+      }}
+      formModal={{
+        title: "Tambah Pengeluaran",
+        open: modalVisible,
+        onCancel: closeCreateModal,
+        form,
+        onFinish: handleAddTransaction,
+        typeLabel: "Tipe Pengeluaran",
+        typeRequiredMessage: "Harap pilih tipe pengeluaran!",
+        typeOptions: ["Pembelian", "Gaji", "Biaya Operasional", "Biaya Lain-lain"],
+        defaultType: "Biaya Lain-lain",
+      }}
+    />
   );
+
 };
 
 export default CashOut;

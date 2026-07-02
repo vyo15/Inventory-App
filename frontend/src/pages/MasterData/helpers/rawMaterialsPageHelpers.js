@@ -1,3 +1,5 @@
+import { normalizeTruthyText as normalizeRecordId } from "../../../utils/text/textNormalization";
+export { normalizeRecordId };
 import { RAW_MATERIAL_DEFAULT_FORM } from '../../../services/MasterData/rawMaterialsService';
 import { getSupplierDisplayName, getSupplierLink, getSupplierOptionLabel } from '../../../services/MasterData/suppliersService';
 import { parseIntegerIdInput } from '../../../utils/formatters/numberId';
@@ -88,7 +90,6 @@ export const compactCellStyles = {
 // BATASAN: blok ini tidak menulis ke raw_materials, tidak mengubah supplier,
 // tidak mengubah stok, dan tidak membuat purchase otomatis.
 // -----------------------------------------------------------------------------
-export const normalizeRecordId = (value) => String(value || '').trim();
 
 export const doesSupplierProvideMaterial = (supplier = {}, materialId = null) => {
   const normalizedMaterialId = normalizeRecordId(materialId);
@@ -464,5 +465,3 @@ export const getRawMaterialStatusMeta = (record = {}) => {
 };
 
 export const getRawMaterialStockSummary = getMasterStockSummary;
-
-

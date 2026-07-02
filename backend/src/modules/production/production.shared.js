@@ -1,3 +1,4 @@
+const { normalizeLowerText, normalizeText } = require("../../utils/textNormalization");
 const { AppError } = require("../../utils/httpError");
 const { runInTransaction } = require("../../db/connection");
 const { safeJsonParse } = require("../../utils/jsonUtils");
@@ -11,10 +12,8 @@ const {
   toPositiveNumber,
 } = require("./production.calculations");
 
-const normalizeText = (value = "") => String(value ?? "").trim();
-const normalizeLower = (value = "") => normalizeText(value).toLowerCase();
+
 const normalizeUpper = (value = "") => normalizeText(value).toUpperCase();
-const nowIso = () => new Date().toISOString();
 
 class ProductionError extends AppError {
   constructor(publicMessage, errorCode = "PRODUCTION_VALIDATION_ERROR", statusCode = 400) {
@@ -84,7 +83,7 @@ const resolveProductionCode = async (db, tableName, prefix, requestedCode = "") 
 };
 
 const findVariant = (item = {}, variantKey = "") => {
-  const normalizedKey = normalizeLower(variantKey);
+  const normalizedKey = normalizeLowerText(variantKey);
   if (!normalizedKey) return null;
   const variants = resolveInventoryVariantCollection(item).variants;
   return variants.find((variant) => matchesVariantReference(variant, normalizedKey)) || null;

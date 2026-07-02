@@ -1,8 +1,17 @@
+const { normalizeTruthyText: normalizeText, normalizeUpperText } = require("../../utils/textNormalization");
 const { createServiceError } = require("../../utils/httpError");
 const { safeJsonParse } = require("../../utils/jsonUtils");
 const businessCodeContract = require("../../../../shared/businessCodeContract.json");
-const { calculateSupplierCatalogMetrics } = require("../../../../shared/supplierCatalogPricing.cjs");
-const { getBusinessCodePreview, resolveBusinessCode } = require("../../utils/businessCodeCounter");
+const {
+  calculateSupplierCatalogMetrics,
+  toNonNegativeInteger,
+  toPositiveInteger,
+} = require("../../../../shared/supplierCatalogPricing.cjs");
+const {
+  formatBusinessDateStamp,
+  getBusinessCodePreview,
+  resolveBusinessCode,
+} = require("../../utils/businessCodeCounter");
 
 
 const SUPPLIER_CODE_PREFIX = businessCodeContract.supplier.prefix;
@@ -22,16 +31,7 @@ const CATALOG_EVENT_TYPES = new Set([
   "link_unavailable",
 ]);
 
-const normalizeText = (value) => String(value || "").trim();
-const normalizeCode = (value) => normalizeText(value).toUpperCase();
-const toNonNegativeInteger = (value, fallback = 0) => {
-  const numeric = Math.round(Number(value));
-  return Number.isFinite(numeric) && numeric >= 0 ? numeric : fallback;
-};
-const toPositiveInteger = (value, fallback = 1) => {
-  const numeric = Math.round(Number(value));
-  return Number.isFinite(numeric) && numeric > 0 ? numeric : fallback;
-};
+
 const normalizeItemType = (value = "") => {
   const normalized = normalizeText(value).toLowerCase();
   if (["material", "raw", "raw_material", "raw_materials"].includes(normalized)) return "raw_material";
@@ -57,14 +57,8 @@ const assertSafeHttpUrl = (value, fieldLabel) => {
   return normalized;
 };
 
-const getDateStamp = (date = new Date()) => {
-  const day = String(date.getDate()).padStart(2, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const year = String(date.getFullYear());
-  return `${day}${month}${year}`;
-};
 
-const getSupplierCounterOptions = (dateStamp = getDateStamp()) => ({
+const getSupplierCounterOptions = (dateStamp = formatBusinessDateStamp()) => ({
   counterKey: `suppliers:${SUPPLIER_CODE_PREFIX}:${dateStamp}`,
   prefix: `${SUPPLIER_CODE_PREFIX}-${dateStamp}`,
   tableName: "suppliers",
@@ -89,7 +83,7 @@ const validateSupplierCode = (code) => {
 };
 
 const resolveSupplierCreateCode = async (db, requestedCode = "") => {
-  const normalizedCode = normalizeCode(requestedCode);
+  const normalizedCode = normalizeUpperText(requestedCode);
   if (!normalizedCode) {
     return resolveBusinessCode(db, "", getSupplierCounterOptions());
   }
@@ -232,7 +226,7 @@ const toSupplierRecord = (row = {}, offers = []) => {
 };
 
 const buildSupplierPayload = (body = {}) => ({
-  supplierCode: normalizeCode(body.code || body.supplierCode || body.supplier_code),
+  supplierCode: normalizeUpperText(body.code || body.supplierCode || body.supplier_code),
   name: normalizeText(body.name || body.storeName || body.supplierName),
   storeLink: assertSafeHttpUrl(body.storeLink || body.link || body.url || body.shopLink, "Link toko"),
   phone: normalizeText(body.contact || body.phone),
@@ -348,7 +342,7 @@ module.exports = {
   ensureSupplierCodeAvailable,
   generateNextSupplierCode,
   normalizeCatalogOfferInput,
-  normalizeCode,
+  normalizeCode: normalizeUpperText,
   normalizeItemType,
   normalizeText,
   resolveSupplierCreateCode,

@@ -1,3 +1,4 @@
+import { normalizeTruthyText as normalizeText } from "../../utils/text/textNormalization";
 import dayjs from "dayjs";
 import * as sqliteTransactionsAdapter from "../../data/adapters/sqlite/sqliteTransactionsAdapter";
 import { listenProducts } from "../MasterData/productsService";
@@ -8,7 +9,6 @@ export const listenReturnSales = (onNext, onError) => sqliteTransactionsAdapter.
 export const listenReturnProducts = (onNext, onError) => listenProducts(onNext, onError);
 export const listenReturnRawMaterials = (onNext, onError) => listenRawMaterials(onNext, onError);
 
-const normalizeText = (value = "") => String(value || "").trim();
 const normalizeSourceType = (item = {}) => {
   const sourceType = normalizeText(item.sourceType || item.itemType || item.type).toLowerCase();
   if (["raw_material", "raw_materials", "material"].includes(sourceType) || item.collectionName === "raw_materials") {

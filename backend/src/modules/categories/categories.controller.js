@@ -1,4 +1,5 @@
 const { respondIfServiceError } = require("../../utils/httpError");
+const { getRequestActor } = require("../../utils/requestActor");
 const { failure, success } = require("../../utils/response");
 const {
   createCategory,
@@ -8,7 +9,6 @@ const {
   updateCategory,
 } = require("./categories.service");
 
-const getActor = (req) => req.localAuth?.user?.username || "system";
 
 const handleCategoryError = (res, error) => respondIfServiceError(res, error, {
   duplicateMessage: "Kode kategori sudah ada di database lokal",
@@ -45,7 +45,7 @@ const getCategoryController = async (req, res, next) => {
 
 const createCategoryController = async (req, res, next) => {
   try {
-    const category = await createCategory(req.body, getActor(req));
+    const category = await createCategory(req.body, getRequestActor(req));
     return success(res, "Kategori berhasil ditambahkan ke database lokal", category, undefined, 201);
   } catch (error) {
     const handled = handleCategoryError(res, error);
@@ -56,7 +56,7 @@ const createCategoryController = async (req, res, next) => {
 
 const updateCategoryController = async (req, res, next) => {
   try {
-    const category = await updateCategory(req.params.id, req.body, getActor(req));
+    const category = await updateCategory(req.params.id, req.body, getRequestActor(req));
     return success(res, "Kategori database lokal berhasil diubah", category);
   } catch (error) {
     const handled = handleCategoryError(res, error);
@@ -67,7 +67,7 @@ const updateCategoryController = async (req, res, next) => {
 
 const deleteCategoryController = async (req, res, next) => {
   try {
-    const result = await softDeleteCategory(req.params.id, getActor(req));
+    const result = await softDeleteCategory(req.params.id, getRequestActor(req));
     return success(res, "Kategori database lokal berhasil dinonaktifkan", result);
   } catch (error) {
     const handled = handleCategoryError(res, error);

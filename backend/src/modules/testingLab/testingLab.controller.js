@@ -1,7 +1,7 @@
 const { success } = require("../../utils/response");
+const { getRequestActor } = require("../../utils/requestActor");
 const testingLabService = require("./testingLab.service");
 
-const getActor = (req) => req.localAuth?.user?.username || "system";
 const getRole = (req) => req.localAuth?.user?.role || "";
 
 
@@ -37,7 +37,7 @@ const cloneOperationalSourceController = async (req, res, next) => {
   try {
     const result = await testingLabService.cloneOperationalSourceToSandbox({
       confirmKeyword: req.body?.confirmKeyword,
-      actor: getActor(req),
+      actor: getRequestActor(req),
     });
     return success(res, "Data operasional berhasil disalin menjadi baseline sandbox", result);
   } catch (error) {
@@ -49,7 +49,7 @@ const createTestingBaselineController = async (req, res, next) => {
   try {
     const result = await testingLabService.createTestingBaseline({
       confirmKeyword: req.body?.confirmKeyword,
-      actor: getActor(req),
+      actor: getRequestActor(req),
     });
     return success(res, "Baseline testing berhasil dibuat dan diverifikasi", result);
   } catch (error) {
@@ -61,7 +61,7 @@ const setActiveTestingBaselineController = async (req, res, next) => {
   try {
     const result = await testingLabService.setActiveTestingBaseline({
       filename: req.body?.filename,
-      actor: getActor(req),
+      actor: getRequestActor(req),
     });
     return success(res, "Baseline testing aktif berhasil dipilih", result);
   } catch (error) {
@@ -73,7 +73,7 @@ const resetSandboxToBaselineController = async (req, res, next) => {
   try {
     const result = await testingLabService.resetSandboxToBaseline({
       confirmKeyword: req.body?.confirmKeyword,
-      actor: getActor(req),
+      actor: getRequestActor(req),
     });
     return success(res, "Sandbox berhasil dikembalikan ke baseline", result);
   } catch (error) {
@@ -85,7 +85,7 @@ const startTestingSessionController = async (req, res, next) => {
   try {
     const result = await testingLabService.startTestingSession({
       scenarioKey: req.body?.scenarioKey,
-      actor: getActor(req),
+      actor: getRequestActor(req),
     });
     return success(res, "Sesi pengujian berhasil dimulai", result);
   } catch (error) {
@@ -96,7 +96,7 @@ const startTestingSessionController = async (req, res, next) => {
 const completeTestingSessionController = async (req, res, next) => {
   try {
     const result = await testingLabService.completeTestingSession({
-      actor: getActor(req),
+      actor: getRequestActor(req),
       notes: req.body?.notes,
     });
     return success(res, "Sesi pengujian berhasil diselesaikan", result);
@@ -107,7 +107,7 @@ const completeTestingSessionController = async (req, res, next) => {
 
 const cancelTestingSessionController = async (req, res, next) => {
   try {
-    const result = await testingLabService.cancelTestingSession({ actor: getActor(req) });
+    const result = await testingLabService.cancelTestingSession({ actor: getRequestActor(req) });
     return success(res, "Sesi pengujian dibatalkan", result);
   } catch (error) {
     return next(error);

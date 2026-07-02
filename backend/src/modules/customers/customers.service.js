@@ -1,8 +1,10 @@
+const { normalizeTruthyText: normalizeText, normalizeUpperText } = require("../../utils/textNormalization");
 const { createServiceError } = require("../../utils/httpError");
 const { getDb, runInTransaction } = require("../../db/connection");
 const businessCodeContract = require("../../../../shared/businessCodeContract.json");
 const { createAuditLog } = require("../../utils/auditLog");
 const {
+  formatBusinessDateStamp,
   getBusinessCodePreview,
   resolveBusinessCode,
 } = require("../../utils/businessCodeCounter");
@@ -10,19 +12,12 @@ const {
 const CUSTOMER_CODE_PREFIX = businessCodeContract.customer.prefix;
 const CUSTOMER_CODE_PATTERN = new RegExp(businessCodeContract.customer.pattern);
 
-const normalizeText = (value) => (value || "").toString().trim();
-const normalizeCode = (value) => normalizeText(value).toUpperCase();
 
 
-const getDateStamp = (date = new Date()) => {
-  const day = String(date.getDate()).padStart(2, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const year = String(date.getFullYear());
-  return `${day}${month}${year}`;
-};
 
 
-const getCustomerCounterOptions = (dateStamp = getDateStamp()) => ({
+
+const getCustomerCounterOptions = (dateStamp = formatBusinessDateStamp()) => ({
   counterKey: `customers:${CUSTOMER_CODE_PREFIX}:${dateStamp}`,
   prefix: `${CUSTOMER_CODE_PREFIX}-${dateStamp}`,
   tableName: "customers",
@@ -37,7 +32,7 @@ const generateNextCustomerCode = (db) => getBusinessCodePreview(
 );
 
 const resolveCustomerCreateCode = async (db, requestedCode = "") => {
-  const normalizedCode = normalizeCode(requestedCode);
+  const normalizedCode = normalizeUpperText(requestedCode);
   if (!normalizedCode) {
     return resolveBusinessCode(db, "", getCustomerCounterOptions());
   }
@@ -67,7 +62,7 @@ const toCustomerRecord = (row = {}) => ({
 });
 
 const buildCustomerPayload = (body = {}) => {
-  const code = normalizeCode(body.code || body.customerCode || body.customer_code);
+  const code = normalizeUpperText(body.code || body.customerCode || body.customer_code);
 
   return {
     customerCode: code,
@@ -182,7 +177,7 @@ const updateCustomer = async (id, body = {}, actor = "system") => runInTransacti
   }
 
   const payload = buildCustomerPayload(body);
-  const immutableCode = normalizeCode(payload.customerCode || current.customer_code);
+  const immutableCode = normalizeUpperText(payload.customerCode || current.customer_code);
 
   validateCustomerPayload(payload);
   validateCustomerCode(immutableCode);

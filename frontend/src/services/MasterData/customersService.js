@@ -1,7 +1,7 @@
+import { normalizeTruthyText as safeTrim } from "../../utils/text/textNormalization";
 import * as sqliteCustomersAdapter from "../../data/adapters/sqlite/sqliteCustomersAdapter";
 
 export const CUSTOMERS_COLLECTION = "customers";
-const safeTrim = (value) => String(value || "").trim();
 export const getCustomers = async () => sqliteCustomersAdapter.listCustomers();
 export const generateCustomerCode = async () => sqliteCustomersAdapter.generateCustomerCode();
 export const assertCustomerCodeAvailable = async (code = "", editingId = null) => {

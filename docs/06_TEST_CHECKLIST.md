@@ -106,8 +106,8 @@ Guard anti-regression wajib:
 - [ ] `npm --prefix backend run lint` lulus tanpa unused variable/import atau duplicate import.
 - [ ] `npm --prefix backend run check` menjalankan syntax check lalu ESLint.
 - [ ] `npm --prefix frontend run lint` lulus dengan browser globals hanya untuk `frontend/src`.
-- [ ] File `*.js`, `*.jsx`, `*.cjs`, dan `*.mjs` memakai LF tanpa CRLF/mixed EOL.
-- [ ] `.gitattributes` dan `.editorconfig` tetap memiliki aturan LF untuk empat ekstensi JavaScript tersebut.
+- [ ] File `*.js`, `*.jsx`, `*.cjs`, `*.mjs`, `*.css`, `*.json`, dan `*.md` memakai LF tanpa CRLF/mixed EOL.
+- [ ] `.gitattributes` dan `.editorconfig` tetap memiliki aturan LF untuk JavaScript, CSS, JSON, Markdown, Git hooks, file runtime version, dan `*.env.example`.
 - [ ] Normalisasi EOL tidak membawa perubahan logic; verifikasi diff dengan mengabaikan whitespace sebelum merge.
 - [ ] `git ls-files --eol` menunjukkan index `i/lf` untuk file JavaScript yang ter-track.
 
@@ -452,3 +452,5 @@ Referensi detail: `docs/21_RESPONSIVE_UI_UX_STANDARD.md`.
 - [ ] Status Sales/Work Log/Backup konsisten antara table, report, drawer, dan mobile.
 - [ ] Toast/modal mengikuti light/dark mode melalui Ant Design App context.
 - [ ] Seluruh file CSS memakai LF dan lima component brand tidak menyalin literal warna pusat.
+
+- Verifikasi file extensionless Git/runtime (`.githooks/*`, `.gitignore`, `.nvmrc`, `.node-version`, dan `*.env.example`) memakai LF agar portable di Git Bash/Linux.

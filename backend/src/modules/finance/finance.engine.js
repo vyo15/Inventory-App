@@ -1,3 +1,8 @@
+const { getCurrentIsoTimestamp } = require("../../utils/dateTime");
+const {
+  normalizeText,
+  toRoundedInteger: toInteger,
+} = require("../../utils/textNormalization");
 const { createHttpError } = require("../../utils/httpError");
 const crypto = require("crypto");
 const { createAuditLog } = require("../../utils/auditLog");
@@ -7,13 +12,8 @@ const {
   reserveBusinessCode,
 } = require("../../utils/businessCodeCounter");
 
-const toInteger = (value = 0) => {
-  const parsed = Number(value ?? 0);
-  return Number.isFinite(parsed) ? Math.round(parsed) : 0;
-};
 
-const normalizeText = (value = "") => String(value ?? "").trim();
-const nowIso = () => new Date().toISOString();
+
 const MANUAL_FINANCE_SOURCE_MODULES = new Set(["cash_in_manual", "cash_out_manual"]);
 
 const createFinanceConflictError = (message) =>
@@ -21,11 +21,11 @@ const createFinanceConflictError = (message) =>
 
 
 const normalizeDate = (value) => {
-  if (!value) return nowIso();
+  if (!value) return getCurrentIsoTimestamp();
   if (value instanceof Date) return value.toISOString();
   if (typeof value?.toDate === "function") return value.toDate().toISOString();
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? nowIso() : parsed.toISOString();
+  return Number.isNaN(parsed.getTime()) ? getCurrentIsoTimestamp() : parsed.toISOString();
 };
 
 const buildFinanceCode = async (db, tableName, prefix, payload = {}) => {
@@ -83,7 +83,7 @@ const upsertFinanceJsonRecord = async (db, tableName, payload = {}) => {
     transactionDate,
     date: transactionDate,
     status,
-    updatedAt: nowIso(),
+    updatedAt: getCurrentIsoTimestamp(),
   };
 
   const existing = await db.get(`SELECT id FROM ${tableName} WHERE id = ?`, [id]);
@@ -98,7 +98,7 @@ const upsertFinanceJsonRecord = async (db, tableName, payload = {}) => {
     await db.run(
       `INSERT INTO ${tableName} (id, code, name, status, is_active, total_amount, transaction_date, source_type, source_id, payload_json, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-      [id, code, name, status, status === "deleted" ? 0 : 1, amount, transactionDate, sourceType || null, sourceId || null, JSON.stringify({ ...finalPayload, createdAt: finalPayload.createdAt || nowIso() })]
+      [id, code, name, status, status === "deleted" ? 0 : 1, amount, transactionDate, sourceType || null, sourceId || null, JSON.stringify({ ...finalPayload, createdAt: finalPayload.createdAt || getCurrentIsoTimestamp() })]
     );
   }
 
@@ -194,7 +194,7 @@ const markFinanceMovementDeleted = async (db, { tableName, id, actor = "system" 
   if (!id) throw createHttpError("ID kas yang akan dihapus tidak valid.", "FINANCE_ID_REQUIRED", 400);
   const row = await db.get(`SELECT * FROM ${tableName} WHERE id = ? AND status != 'deleted'`, [id]);
   if (!row) throw createHttpError("Data kas database lokal tidak ditemukan.", "FINANCE_RECORD_NOT_FOUND", 404);
-  const payload = { ...safeJsonParse(row.payload_json, {}), status: "deleted", isActive: false, deletedAt: nowIso(), updatedAt: nowIso() };
+  const payload = { ...safeJsonParse(row.payload_json, {}), status: "deleted", isActive: false, deletedAt: getCurrentIsoTimestamp(), updatedAt: getCurrentIsoTimestamp() };
 
   await db.run(
     `UPDATE ${tableName} SET status = 'deleted', is_active = 0, payload_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,

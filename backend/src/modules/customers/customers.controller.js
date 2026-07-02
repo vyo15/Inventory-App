@@ -1,4 +1,5 @@
 const { respondIfServiceError } = require("../../utils/httpError");
+const { getRequestActor } = require("../../utils/requestActor");
 const { failure, success } = require("../../utils/response");
 const {
   createCustomer,
@@ -9,7 +10,6 @@ const {
   updateCustomer,
 } = require("./customers.service");
 
-const getActor = (req) => req.localAuth?.user?.username || "system";
 
 const handleCustomerError = (res, error) => respondIfServiceError(res, error, {
   duplicateMessage: "Kode customer sudah ada di database lokal",
@@ -50,7 +50,7 @@ const getCustomerController = async (req, res, next) => {
 
 const createCustomerController = async (req, res, next) => {
   try {
-    const customer = await createCustomer(req.body, getActor(req));
+    const customer = await createCustomer(req.body, getRequestActor(req));
     return success(res, "Customer berhasil ditambahkan ke database lokal", customer, undefined, 201);
   } catch (error) {
     const handled = handleCustomerError(res, error);
@@ -61,7 +61,7 @@ const createCustomerController = async (req, res, next) => {
 
 const updateCustomerController = async (req, res, next) => {
   try {
-    const customer = await updateCustomer(req.params.id, req.body, getActor(req));
+    const customer = await updateCustomer(req.params.id, req.body, getRequestActor(req));
     return success(res, "Customer database lokal berhasil diubah", customer);
   } catch (error) {
     const handled = handleCustomerError(res, error);
@@ -72,7 +72,7 @@ const updateCustomerController = async (req, res, next) => {
 
 const deleteCustomerController = async (req, res, next) => {
   try {
-    const result = await softDeleteCustomer(req.params.id, getActor(req));
+    const result = await softDeleteCustomer(req.params.id, getRequestActor(req));
     return success(res, "Customer database lokal berhasil dinonaktifkan", result);
   } catch (error) {
     const handled = handleCustomerError(res, error);

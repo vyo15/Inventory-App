@@ -1,3 +1,4 @@
+import { normalizeTruthyText as safeText } from "../../../utils/text/textNormalization";
 import {
   useCallback,
   useMemo } from "react";
@@ -35,7 +36,6 @@ const safeNumber = (value, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-const safeText = (value) => String(value || "").trim();
 
 const formatDisplayDate = (value, format = "DD/MM/YYYY") => {
   const rawValue = value?.toDate ? value.toDate() : value;

@@ -1,4 +1,5 @@
 import businessCodeContract from "../../../../shared/businessCodeContract.json";
+import { formatBusinessCodeDateStamp } from "./businessCodeDate";
 
 const CUSTOMER_CODE_PREFIX = businessCodeContract.customer.prefix;
 const CUSTOMER_CODE_PATTERN = new RegExp(businessCodeContract.customer.pattern);
@@ -17,12 +18,7 @@ export const resolveCustomerDisplayCode = (record = {}) =>
 export const resolveCustomerFormCode = (record = {}) =>
   normalizeCustomerCode(record.code || record.customerCode);
 
-export const getCustomerCodeDateStamp = (date = new Date()) => {
-  const day = String(date.getDate()).padStart(2, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const year = String(date.getFullYear());
-  return `${day}${month}${year}`;
-};
+export const getCustomerCodeDateStamp = formatBusinessCodeDateStamp;
 
 export const buildCustomerCode = ({ date = new Date(), sequence = 1 } = {}) =>
   `${CUSTOMER_CODE_PREFIX}-${getCustomerCodeDateStamp(date)}-${String(sequence).padStart(3, "0")}`;

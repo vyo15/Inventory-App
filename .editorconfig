@@ -15,5 +15,23 @@ end_of_line = lf
 indent_style = space
 indent_size = 2
 
+[*.json]
+end_of_line = lf
+indent_style = space
+indent_size = 2
+
 [*.md]
+end_of_line = lf
 trim_trailing_whitespace = false
+
+[{.gitignore,.nvmrc,.node-version}]
+end_of_line = lf
+insert_final_newline = true
+
+[*.env.example]
+end_of_line = lf
+insert_final_newline = true
+
+[.githooks/*]
+end_of_line = lf
+insert_final_newline = true

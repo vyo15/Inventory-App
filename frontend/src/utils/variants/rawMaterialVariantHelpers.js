@@ -1,3 +1,4 @@
+import { normalizeTruthyText as safeTrim } from "../text/textNormalization";
 import { calculateAvailableStock, calculateWeightedAverage, toNumber } from '../stock/stockHelpers';
 import {
   calculateVariantStockTotals,
@@ -16,7 +17,6 @@ export const DEFAULT_RAW_MATERIAL_VARIANT = {
   isActive: true,
 };
 
-const safeTrim = (value) => String(value || '').trim();
 const toVariantKey = (value) => safeTrim(value).toLowerCase();
 
 // =====================================================

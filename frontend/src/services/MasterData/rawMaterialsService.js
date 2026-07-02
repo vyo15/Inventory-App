@@ -1,7 +1,7 @@
+import { normalizeTruthyText as safeTrim } from "../../utils/text/textNormalization";
 import * as sqliteRawMaterialsAdapter from "../../data/adapters/sqlite/sqliteRawMaterialsAdapter";
 import { stripGuardedInventoryUpdateFields } from "../../utils/variants/variantStockNormalizer";
 
-const safeTrim = (value) => String(value || "").trim();
 const toNonNegativeInteger = (value = 0) => {
   const numeric = Number(value ?? 0);
   return Number.isFinite(numeric) && numeric >= 0 ? Math.round(numeric) : 0;

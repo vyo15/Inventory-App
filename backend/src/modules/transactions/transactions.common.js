@@ -1,3 +1,4 @@
+const { normalizeText } = require("../../utils/textNormalization");
 const { createServiceError } = require("../../utils/httpError");
 const { toInteger } = require("../stock/engine");
 const { formatBusinessDateStamp, resolveBusinessCode } = require("../../utils/businessCodeCounter");
@@ -29,7 +30,6 @@ const normalizeTransactionItems = (body = {}) => {
   }));
 };
 
-const normalizeText = (value) => String(value ?? "").trim();
 
 const TRANSACTION_CODE_PREFIX = Object.freeze({
   purchase: "PUR",

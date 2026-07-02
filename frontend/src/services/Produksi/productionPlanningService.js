@@ -1,3 +1,5 @@
+import { normalizeTruthyText as safeTrim } from "../../utils/text/textNormalization";
+import { getCurrentIsoTimestamp, getProductionActorName } from "./helpers/productionAuditMetadata";
 import {
   commitProductionOrderFromPlan,
   commitProductionPlanCancel,
@@ -9,13 +11,6 @@ import {
 } from "../../data/adapters/sqlite/sqliteProductionAdapter";
 import { getActiveProductionBoms } from "./productionBomsService";
 
-const safeTrim = (value) => String(value || "").trim();
-const nowIso = () => new Date().toISOString();
-const getActorName = (currentUser = null) => currentUser?.email
-  || currentUser?.displayName
-  || currentUser?.username
-  || currentUser?.uid
-  || "system";
 
 export const normalizeProductionPlanStatus = (status = "") => safeTrim(status || "draft").toLowerCase();
 
@@ -46,7 +41,7 @@ export const getProductionPlanById = async (id) => getProductionRecordById("plan
 
 const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
   const code = safeTrim(values.code || values.planCode || values.referenceNumber).toUpperCase();
-  const actorName = getActorName(currentUser);
+  const actorName = getProductionActorName(currentUser);
 
   return {
     ...values,
@@ -55,12 +50,12 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
     referenceNumber: code,
     name: values.name || values.description || code,
     status: values.status || "draft",
-    planDate: values.planDate || values.date || nowIso(),
-    transactionDate: values.planDate || values.date || nowIso(),
+    planDate: values.planDate || values.date || getCurrentIsoTimestamp(),
+    transactionDate: values.planDate || values.date || getCurrentIsoTimestamp(),
     targetQty: Number(values.targetQty || values.quantity || 0),
-    updatedAt: nowIso(),
+    updatedAt: getCurrentIsoTimestamp(),
     updatedBy: actorName,
-    ...(!isEdit ? { createdAt: nowIso(), createdBy: actorName } : {}),
+    ...(!isEdit ? { createdAt: getCurrentIsoTimestamp(), createdBy: actorName } : {}),
   };
 };
 

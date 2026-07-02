@@ -1,5 +1,4 @@
-const normalizeText = (value = "") => String(value ?? "").trim();
-const normalizeLower = (value = "") => normalizeText(value).toLowerCase();
+const { normalizeLowerText } = require("../../utils/textNormalization");
 
 const toNumber = (value = 0) => {
   const parsed = Number(value ?? 0);
@@ -10,7 +9,7 @@ const toPositiveNumber = (value = 0) => Math.max(0, toNumber(value));
 const toPositiveInteger = (value = 0) => Math.max(0, Math.round(toNumber(value)));
 
 const normalizeSourceType = (value = "") => {
-  const normalized = normalizeLower(value);
+  const normalized = normalizeLowerText(value);
   if (["raw_material", "raw_materials", "material", "raw"].includes(normalized)) return "raw_material";
   if (["semi_finished", "semi_finished_material", "semi_finished_materials"].includes(normalized)) return "semi_finished";
   if (["product", "products"].includes(normalized)) return "product";
@@ -107,8 +106,8 @@ const getMaterialCostTotal = (workLog = {}) => (
 
 const getEffectiveLaborCost = (payrolls = []) => payrolls.reduce((sum, payroll) => {
   if (payroll.includePayrollInHpp === false) return sum;
-  const isFinal = ["confirmed", "paid"].includes(normalizeLower(payroll.status))
-    || normalizeLower(payroll.paymentStatus) === "paid";
+  const isFinal = ["confirmed", "paid"].includes(normalizeLowerText(payroll.status))
+    || normalizeLowerText(payroll.paymentStatus) === "paid";
   const amount = isFinal
     ? toPositiveNumber(payroll.finalAmount)
     : toPositiveNumber(payroll.amountCalculated ?? payroll.finalAmount);

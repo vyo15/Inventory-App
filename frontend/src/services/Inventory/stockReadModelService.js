@@ -1,9 +1,9 @@
+import { normalizeTruthyText as safeTrim } from "../../utils/text/textNormalization";
+import { toFiniteNumber } from "../../utils/number/numberNormalization";
 import * as sqliteStockReadModelsAdapter from "../../data/adapters/sqlite/sqliteStockReadModelsAdapter";
 import { getLowStockVariantEntries, resolveVariantMinimumStockTotal } from "../../utils/stock/stockHelpers";
 
 export const STOCK_ITEM_READ_MODELS_COLLECTION = "stock_read_models";
-const safeTrim = (value) => String(value || "").trim();
-const toNumber = (value) => Number(value || 0);
 
 export const buildStockItemReadModelDocumentId = ({
   sourceType = "",
@@ -29,8 +29,8 @@ export const resolveStockReadModelSourceCollection = (
 export const buildStockItemReadModelDocument = (record = {}, options = {}) => {
   const sourceType = options.sourceType || record.sourceType || "product";
   const sourceId = options.sourceId || record.sourceId || record.id || "";
-  const currentStock = toNumber(record.currentStock ?? record.stock ?? 0);
-  const reservedStock = toNumber(record.reservedStock ?? 0);
+  const currentStock = toFiniteNumber(record.currentStock ?? record.stock ?? 0);
+  const reservedStock = toFiniteNumber(record.reservedStock ?? 0);
 
   const usesVariantMinimumStock = sourceType === "raw_material"
     && record.hasVariants === true
@@ -38,7 +38,7 @@ export const buildStockItemReadModelDocument = (record = {}, options = {}) => {
     && record.variants.length > 0;
   const minStockAlert = usesVariantMinimumStock
     ? resolveVariantMinimumStockTotal(record, 0)
-    : toNumber(record.minStockAlert ?? record.minStock ?? 0);
+    : toFiniteNumber(record.minStockAlert ?? record.minStock ?? 0);
 
   return {
     ...record,
@@ -53,7 +53,7 @@ export const buildStockItemReadModelDocument = (record = {}, options = {}) => {
     currentStock,
     stock: currentStock,
     reservedStock,
-    availableStock: toNumber(record.availableStock ?? Math.max(currentStock - reservedStock, 0)),
+    availableStock: toFiniteNumber(record.availableStock ?? Math.max(currentStock - reservedStock, 0)),
     minStockAlert,
     minimumStockMode: usesVariantMinimumStock ? "variant" : "master",
     syncedAt: new Date().toISOString(),

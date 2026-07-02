@@ -1,6 +1,6 @@
 import { requestSqliteApi } from "./sqliteApiClient";
+import { normalizeTruthyText } from "../../../utils/text/textNormalization";
 
-const normalizeText = (value = "") => String(value || "").trim();
 const normalizeCatalogOffer = (offer = {}) => ({
   ...offer,
   id: offer.id || offer.catalogOfferId || "",
@@ -8,11 +8,11 @@ const normalizeCatalogOffer = (offer = {}) => ({
   supplierId: offer.supplierId || "",
   itemType: offer.itemType === "product" ? "product" : "raw_material",
   itemId: offer.itemId || offer.materialId || offer.rawMaterialId || "",
-  itemName: normalizeText(offer.itemName || offer.materialName),
+  itemName: normalizeTruthyText(offer.itemName || offer.materialName),
   variantKey: offer.variantKey || "",
   variantLabel: offer.variantLabel || "",
-  listingName: normalizeText(offer.listingName),
-  channel: normalizeText(offer.channel || offer.marketplace),
+  listingName: normalizeTruthyText(offer.listingName),
+  channel: normalizeTruthyText(offer.channel || offer.marketplace),
   productLink: offer.productLink || offer.link || "",
   purchaseType: offer.purchaseType === "offline" ? "offline" : "online",
   purchaseUnit: offer.purchaseUnit || "",
@@ -53,8 +53,8 @@ export const normalizeSupplierRecord = (supplier = {}) => {
     id: supplier.id || supplier.code || supplier.supplierCode || "",
     code: supplier.code || supplier.supplierCode || "",
     supplierCode: supplier.supplierCode || supplier.code || "",
-    name: normalizeText(supplier.name || supplier.storeName || supplier.supplierName),
-    storeName: normalizeText(supplier.storeName || supplier.name || supplier.supplierName),
+    name: normalizeTruthyText(supplier.name || supplier.storeName || supplier.supplierName),
+    storeName: normalizeTruthyText(supplier.storeName || supplier.name || supplier.supplierName),
     storeLink: supplier.storeLink || supplier.link || supplier.url || "",
     phone: supplier.phone || supplier.contact || "",
     contact: supplier.contact || supplier.phone || "",
@@ -78,8 +78,8 @@ export const normalizeSupplierRecord = (supplier = {}) => {
 };
 
 const normalizeSupplierPayload = (values = {}) => ({
-  name: normalizeText(values.name || values.storeName || values.supplierName),
-  storeName: normalizeText(values.storeName || values.name || values.supplierName),
+  name: normalizeTruthyText(values.name || values.storeName || values.supplierName),
+  storeName: normalizeTruthyText(values.storeName || values.name || values.supplierName),
   storeLink: values.storeLink || values.link || values.url || "",
   contact: values.contact || values.phone || "",
   phone: values.phone || values.contact || "",

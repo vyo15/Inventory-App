@@ -1,3 +1,4 @@
+const { normalizeTruthyText: normalizeText, normalizeUpperText } = require("../../utils/textNormalization");
 const { createServiceError } = require("../../utils/httpError");
 const { getDb, runInTransaction } = require("../../db/connection");
 const { createAuditLog } = require("../../utils/auditLog");
@@ -10,8 +11,7 @@ const CATEGORY_TYPE_ALIASES = Object.freeze({ ...categoryContract.aliases });
 
 const CATEGORY_CODE_PREFIX = Object.freeze({ ...categoryContract.codePrefixes });
 
-const normalizeText = (value) => (value || "").toString().trim();
-const normalizeCode = (value) => normalizeText(value).toUpperCase();
+
 const normalizeCategoryType = (value) => {
   const normalized = normalizeText(value).toLowerCase();
   return CATEGORY_TYPE_ALIASES[normalized] || normalized || categoryContract.defaultType;
@@ -51,7 +51,7 @@ const toCategoryRecord = (row = {}, meta = {}) => ({
 });
 
 const buildCategoryPayload = (body = {}, current = {}) => ({
-  code: normalizeCode(body.code || current.code),
+  code: normalizeUpperText(body.code || current.code),
   name: normalizeText(body.name ?? current.name),
   type: normalizeCategoryType(body.type || current.type),
   parentId: body.parentId === undefined && body.parent_id === undefined
@@ -405,7 +405,7 @@ const updateCategory = async (id, body = {}, actor = "system") => runInTransacti
     }
   }
 
-  const immutableCode = normalizeCode(current.code)
+  const immutableCode = normalizeUpperText(current.code)
     || payload.code
     || await generateAvailableCategoryCode(db, payload.type, payload.name);
   await ensureCategoryCodeAvailable(db, immutableCode, current.id);

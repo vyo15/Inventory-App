@@ -1,5 +1,6 @@
 import { requestSqliteApi } from "./sqliteApiClient";
 import { createSqliteJsonRecordAdapter } from "./sqliteJsonRecordAdapterFactory";
+import { toRoundedInteger } from "../../../utils/number/numberNormalization";
 
 const makeDateValue = (value) => {
   const date = value instanceof Date ? value : new Date(value || Date.now());
@@ -10,7 +11,7 @@ const makeDateValue = (value) => {
 };
 
 export const normalizeFinanceRecord = (record = {}, sourceCollection = record.sourceCollection || "") => {
-  const amount = Math.round(Number(record.amount ?? record.totalAmount ?? record.total ?? 0));
+  const amount = toRoundedInteger(record.amount ?? record.totalAmount ?? record.total);
   const dateValue = record.date || record.transactionDate || record.createdAt || new Date().toISOString();
   return {
     ...record,

@@ -1,3 +1,4 @@
+const { normalizeLowerText } = require("../../utils/textNormalization");
 const {
   getDb,
   getDatabaseGeneration,
@@ -324,8 +325,7 @@ const buildFinanceLedgerAudit = async (db) => {
   ];
   const movementById = new Map(movements.map((row) => [String(row.id), row]));
   const issues = [];
-  const normalizeStatus = (value = "") => String(value || "").trim().toLowerCase();
-  const isActive = (row) => normalizeStatus(row.status) !== "deleted";
+    const isActive = (row) => normalizeLowerText(row.status) !== "deleted";
   const toAmount = (row) => Number(row.total_amount || 0);
   const toPayload = (row) => safeJsonParse(row.payload_json, {});
   const getLedgerMatches = (movement) => ledgerRows.filter((ledger) => (

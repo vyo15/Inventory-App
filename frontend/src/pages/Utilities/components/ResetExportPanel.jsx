@@ -1,4 +1,4 @@
-import { Button, Space, Statistic, Tag, Typography } from "antd";
+import { Button, Space, Statistic, Typography } from "antd";
 import { DownloadOutlined, EyeOutlined } from "@ant-design/icons";
 
 const { Text } = Typography;

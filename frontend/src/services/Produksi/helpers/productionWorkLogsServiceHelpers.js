@@ -1,3 +1,5 @@
+import { normalizeTruthyText as safeTrim } from "../../../utils/text/textNormalization";
+export { safeTrim };
 import { createClientId } from "../../../utils/ids/createClientId";
 
 // =====================================================
@@ -29,7 +31,6 @@ export const filterActiveLike = (items = []) =>
 // =====================================================
 // Helper format aman
 // =====================================================
-export const safeTrim = (value) => String(value || "").trim();
 
 export const PRODUCTION_STEPS_COLLECTION_NAME = "production_steps";
 

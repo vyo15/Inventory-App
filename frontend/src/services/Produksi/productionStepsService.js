@@ -1,3 +1,5 @@
+import { normalizeTruthyText as safeTrim } from "../../utils/text/textNormalization";
+import { getCurrentIsoTimestamp, getProductionActorName } from "./helpers/productionAuditMetadata";
 import {
   getProductionStepPayrollClassification,
   shouldIncludeProductionStepPayrollInHpp,
@@ -10,13 +12,6 @@ import {
   updateProductionRecord,
 } from "../../data/adapters/sqlite/sqliteProductionAdapter";
 
-const safeTrim = (value) => String(value || "").trim();
-const nowIso = () => new Date().toISOString();
-const getActorName = (currentUser = null) => currentUser?.email
-  || currentUser?.displayName
-  || currentUser?.username
-  || currentUser?.uid
-  || "system";
 
 const isSupportedProcessType = (processType = "") => [
   "raw_to_semi",
@@ -47,7 +42,7 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
     : "none";
   const payrollClassification = getProductionStepPayrollClassification(processType);
   const code = safeTrim(values.code).toUpperCase();
-  const actorName = getActorName(currentUser);
+  const actorName = getProductionActorName(currentUser);
 
   return {
     ...values,
@@ -67,9 +62,9 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
     payrollClassification,
     includePayrollInHpp: shouldIncludeProductionStepPayrollInHpp(processType),
     isActive: values.isActive !== false,
-    updatedAt: nowIso(),
+    updatedAt: getCurrentIsoTimestamp(),
     updatedBy: actorName,
-    ...(!isEdit ? { createdAt: nowIso(), createdBy: actorName } : {}),
+    ...(!isEdit ? { createdAt: getCurrentIsoTimestamp(), createdBy: actorName } : {}),
   };
 };
 

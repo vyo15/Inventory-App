@@ -1,3 +1,4 @@
+import { normalizeTruthyText as safeTrim } from "../text/textNormalization";
 import { calculateAvailableStock, toNumber } from '../stock/stockHelpers';
 import {
   calculateVariantStockTotals,
@@ -12,7 +13,6 @@ import {
 // Dipakai supaya perbandingan key / label / nama varian konsisten
 // walaupun data historis masih campur null / undefined / string kosong.
 // =====================================================
-const safeTrim = (value) => String(value || '').trim();
 
 // =====================================================
 // Normalisasi token untuk kebutuhan pencocokan.

@@ -1,3 +1,5 @@
+import { toRoundedInteger } from "../number/numberNormalization";
+import { normalizeText as safeTrim } from "../text/textNormalization";
 /* =====================================================
 SECTION: Variant Archive/Restore Helpers — GUARDED
 Fungsi:
@@ -15,17 +17,13 @@ Catatan cleanup:
 Risiko:
 - Jika matching signature diubah sembarangan, varian lama bisa gagal direstore atau malah membuat duplicate variantKey.
 ===================================================== */
-const safeTrim = (value) => String(value ?? '').trim();
 
 const normalizeToken = (value) =>
   safeTrim(value)
     .toLowerCase()
     .replace(/\s+/g, ' ');
 
-export const toVariantArchiveStockNumber = (value = 0) => {
-  const number = Number(value ?? 0);
-  return Number.isFinite(number) ? Math.round(number) : 0;
-};
+export const toVariantArchiveStockNumber = (value = 0) => toRoundedInteger(value);
 
 export const getVariantStockSnapshot = (variant = {}) => {
   const currentStock = toVariantArchiveStockNumber(variant.currentStock ?? variant.stock ?? 0);

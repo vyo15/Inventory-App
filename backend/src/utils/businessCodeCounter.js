@@ -1,7 +1,7 @@
+const { normalizeText, normalizeUpperText } = require("./textNormalization");
 const { getDatabaseGeneration } = require("../db/connection");
 
-const normalizeText = (value) => String(value ?? "").trim();
-const normalizeCode = (value) => normalizeText(value).toUpperCase();
+
 const verifiedCounterBaselines = new Map();
 
 const formatBusinessDateStamp = (value = new Date()) => {
@@ -22,15 +22,15 @@ const assertSqlIdentifier = (value, label) => {
 };
 
 const getSequenceFromCode = (code, prefix) => {
-  const normalizedCode = normalizeCode(code);
-  const normalizedPrefix = normalizeCode(prefix);
+  const normalizedCode = normalizeUpperText(code);
+  const normalizedPrefix = normalizeUpperText(prefix);
   const escapedPrefix = normalizedPrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const match = normalizedCode.match(new RegExp(`^${escapedPrefix}-(\\d+)$`));
   return match ? Number(match[1]) : 0;
 };
 
 const buildBusinessCode = (prefix, sequence, minWidth = 3) =>
-  `${normalizeCode(prefix)}-${String(sequence).padStart(minWidth, "0")}`;
+  `${normalizeUpperText(prefix)}-${String(sequence).padStart(minWidth, "0")}`;
 
 const getExistingMaxSequence = async (db, {
   tableName,
@@ -39,7 +39,7 @@ const getExistingMaxSequence = async (db, {
 }) => {
   const safeTableName = assertSqlIdentifier(tableName, "Table");
   const safeColumnName = assertSqlIdentifier(columnName, "Column");
-  const normalizedPrefix = normalizeCode(prefix);
+  const normalizedPrefix = normalizeUpperText(prefix);
   const numericStart = normalizedPrefix.length + 2;
   const row = await db.get(
     `SELECT COALESCE(MAX(CAST(SUBSTR(${safeColumnName}, ?) AS INTEGER)), 0) AS max_sequence
@@ -63,13 +63,13 @@ const ensureCounterBaseline = async (db, {
   notes = "",
 }) => {
   const normalizedCounterKey = normalizeText(counterKey);
-  const normalizedPrefix = normalizeCode(prefix);
+  const normalizedPrefix = normalizeUpperText(prefix);
   if (!normalizedCounterKey || !normalizedPrefix) {
     throw new Error("Konfigurasi business code counter tidak lengkap.");
   }
 
   const currentCounter = await getCounterRow(db, normalizedCounterKey);
-  if (currentCounter && normalizeCode(currentCounter.prefix) !== normalizedPrefix) {
+  if (currentCounter && normalizeUpperText(currentCounter.prefix) !== normalizedPrefix) {
     throw new Error(`Prefix business code counter ${normalizedCounterKey} tidak konsisten.`);
   }
 
@@ -142,7 +142,7 @@ const syncBusinessCodeCounter = async (db, code, options = {}) => {
 };
 
 const resolveBusinessCode = async (db, requestedCode = "", options = {}) => {
-  const normalizedRequestedCode = normalizeCode(requestedCode);
+  const normalizedRequestedCode = normalizeUpperText(requestedCode);
   if (!normalizedRequestedCode) {
     return reserveBusinessCode(db, options);
   }

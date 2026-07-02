@@ -1,3 +1,7 @@
+const {
+  normalizeText,
+  toRoundedInteger: toInteger,
+} = require("../../../utils/textNormalization");
 const { createHttpError } = require("../../../utils/httpError");
 // Canonical inventory source registry and shared primitives.
 const SOURCE_TABLES = Object.freeze({
@@ -18,13 +22,8 @@ const SOURCE_TYPES = Object.freeze({
   semi_finished_materials: "semi_finished",
 });
 
-const toInteger = (value = 0) => {
-  const parsed = Number(value ?? 0);
-  return Number.isFinite(parsed) ? Math.round(parsed) : 0;
-};
 
-const normalizeText = (value) => String(value ?? "").trim();
-const nowIso = () => new Date().toISOString();
+
 
 const resolveInventoryVariantCollection = (payload = {}) => {
   const variants = Array.isArray(payload.variants) ? payload.variants : [];

@@ -1,7 +1,6 @@
+import { normalizeTruthyText as safeTrim } from "../../utils/text/textNormalization";
+import { getCurrentIsoTimestamp, getProductionActorName } from "./helpers/productionAuditMetadata";
 import { createProductionRecord, getProductionRecordById, listProductionRecords, updateProductionRecord } from "../../data/adapters/sqlite/sqliteProductionAdapter";
-
-const safeTrim = (value) => String(value || "").trim();
-const nowIso = () => new Date().toISOString();
 
 export const validateProductionProfile = async (values = {}, editingId = null) => {
   const errors = {};
@@ -22,9 +21,9 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => ({
   targetId: values.targetId || values.productId || values.semiFinishedMaterialId || "",
   targetType: values.targetType || (values.semiFinishedMaterialId ? "semi_finished_material" : "product"),
   isActive: values.isActive !== false,
-  updatedAt: nowIso(),
-  updatedBy: currentUser?.email || currentUser?.displayName || currentUser?.username || currentUser?.uid || "system",
-  ...(!isEdit ? { createdAt: nowIso(), createdBy: currentUser?.email || currentUser?.displayName || currentUser?.username || currentUser?.uid || "system" } : {}),
+  updatedAt: getCurrentIsoTimestamp(),
+  updatedBy: getProductionActorName(currentUser),
+  ...(!isEdit ? { createdAt: getCurrentIsoTimestamp(), createdBy: getProductionActorName(currentUser) } : {}),
 });
 
 export const getAllProductionProfiles = async () => listProductionRecords("profiles");

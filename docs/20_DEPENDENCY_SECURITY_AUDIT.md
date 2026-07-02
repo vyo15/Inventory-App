@@ -1,6 +1,6 @@
 # IMS Dependency Security Audit
 
-Tanggal audit source: 2026-07-01
+Tanggal audit source: 2026-07-02
 
 ## Scope
 
@@ -49,11 +49,11 @@ Guard yang diterapkan:
 
 Hasil audit lockfile 2026-07-01 masih melaporkan advisory high pada `xlsx@0.18.5`; mitigasi di atas mengurangi reachability pada flow aktif, tetapi tidak boleh diklaim sebagai penghapusan vulnerability package.
 
-Migrasi ke distribusi SheetJS resmi yang lebih baru harus menjadi patch dependency terpisah setelah package tarball, lockfile, install Windows, export report, dan offline build teruji.
+Migrasi ke distribusi SheetJS resmi yang lebih baru harus menjadi patch dependency terpisah setelah package tarball resmi, checksum/provenance, lockfile, install Windows, export report, dan offline build teruji. Audit 2026-07-02 tidak mengubah dependency karena sandbox tidak dapat menyelesaikan pengambilan tarball resmi dan lockfile tidak boleh direkayasa manual.
 
 ### `esbuild@0.27.7`
 
-Audit lockfile 2026-07-01 melaporkan advisory low pada development server Windows untuk rentang `>=0.27.3 <0.28.1`. Residual ini berasal dari toolchain Vite major 7 dan bersifat development/build-time. Upgrade paksa melalui override tidak dilakukan karena dapat melanggar dependency range Vite. Upgrade Vite/esbuild harus melalui migration review, dev-server Windows test, dan full regression, bukan `audit fix --force`.
+Audit lockfile 2026-07-02 tetap melaporkan advisory low pada development server untuk versi `esbuild@0.27.7`. Residual ini berasal dari toolchain Vite major 7 dan bersifat development/build-time. Upgrade paksa melalui override tidak dilakukan karena dapat melanggar dependency range Vite. Upgrade Vite/esbuild harus melalui migration review, dev-server Windows test, dan full regression, bukan `audit fix --force`.
 
 
 ## Coverage dan SBOM evidence

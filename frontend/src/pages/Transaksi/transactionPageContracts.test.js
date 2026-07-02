@@ -9,6 +9,18 @@ describe("transaction page-service contracts", () => {
     expect(source).toMatch(/saleItems,/);
   });
 
+  it("Purchases mempertahankan satu commit atomic melalui purchasesService", () => {
+    const source = fs.readFileSync(path.resolve("src/pages/Transaksi/Purchases.jsx"), "utf8");
+    expect(source).toMatch(/createPurchaseTransaction\(\{\s*values,\s*products,\s*materials,\s*suppliers,/);
+    expect(source).not.toContain("sqliteTransactionsAdapter");
+    expect(source).not.toContain("commitPurchase(");
+    expect(source).toContain("calculatePurchaseCostSummary");
+    expect(source).toContain("usePurchaseReferenceData");
+    expect(source).toContain("usePurchaseFormSnapshot");
+    expect(source).not.toContain("listenPurchaseRecords");
+    expect(source).not.toContain("listenSupplierCatalog");
+  });
+
   it("Returns memakai Sales, returnableItems, dan selectedSale tanpa item master bebas", () => {
     const source = fs.readFileSync(path.resolve("src/pages/Transaksi/Returns.jsx"), "utf8");
     expect(source).toMatch(/name="relatedSaleId"/);

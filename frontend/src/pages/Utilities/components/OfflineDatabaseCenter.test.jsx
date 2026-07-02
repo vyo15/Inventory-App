@@ -20,6 +20,10 @@ const presentationSource = fs.readFileSync(
   path.resolve("src/pages/Utilities/components/offlineDatabaseCenterPresentation.jsx"),
   "utf8",
 );
+const panelsSource = fs.readFileSync(
+  path.resolve("src/pages/Utilities/components/OfflineDatabaseCenterPanels.jsx"),
+  "utf8",
+);
 
 const buildCompleteTableCounts = (overrides = {}) => Object.fromEntries([
   ...DATA_COVERAGE_GROUPS.flatMap((group) => group.tables.map(([table]) => [table, 0])),
@@ -46,10 +50,10 @@ describe("OfflineDatabaseCenter restore account guard", () => {
   });
 
   it("menampilkan ringkasan akun, waktu backup asli, dan warning blocked yang konsisten", () => {
-    expect(source).toContain('title="Akun dalam Backup"');
-    expect(source).toContain('label="Administrator Aktif"');
-    expect(source).toContain('message="Restore normal diblokir"');
-    expect(source).toContain("Restore normal tidak dapat dijalankan");
+    expect(panelsSource).toContain('title="Akun dalam Backup"');
+    expect(panelsSource).toContain('label="Administrator Aktif"');
+    expect(panelsSource).toContain('message="Restore normal diblokir"');
+    expect(panelsSource).toContain("Restore normal tidak dapat dijalankan");
     expect(source).not.toContain("Akan masuk Setup Administrator");
     expect(source).toContain('disabled={!restorePlan?.safeForRestore}');
     expect(helperSource).toContain("backup?.manifest?.createdAt");
@@ -85,8 +89,8 @@ describe("OfflineDatabaseCenter restore account guard", () => {
 
     expect(groups.find((group) => group.key === "master_data")?.total).toBeNull();
     expect(groups.flatMap((group) => group.rows).every((row) => row.count === null)).toBe(true);
-    expect(source).toContain("Frontend dan backend belum satu versi");
-    expect(source).toContain("LIVE_STATUS_REFRESH_INTERVAL_MS");
+    expect(panelsSource).toContain("Frontend dan backend belum satu versi");
+    expect(panelsSource).toContain("LIVE_STATUS_REFRESH_INTERVAL_MS");
   });
 
   it("menyederhanakan navigasi menjadi backup, restore, cakupan data, dan detail teknis", () => {
@@ -109,10 +113,10 @@ describe("OfflineDatabaseCenter restore account guard", () => {
   });
 
   it("menampilkan status scheduler lifecycle aktual, bukan klaim kebijakan statis", () => {
-    expect(source).toContain('label="Lifecycle Otomatis"');
-    expect(source).toContain("backupLifecycle.schedulerActive");
-    expect(source).toContain('label="Lifecycle Terakhir"');
-    expect(source).toContain('label="Pemeriksaan Berikutnya"');
+    expect(panelsSource).toContain('label="Lifecycle Otomatis"');
+    expect(panelsSource).toContain("backupLifecycle.schedulerActive");
+    expect(panelsSource).toContain('label="Lifecycle Terakhir"');
+    expect(panelsSource).toContain('label="Pemeriksaan Berikutnya"');
   });
   it("membedakan data aktif, nonaktif, logical-deleted, dan total tersimpan", () => {
     const statusCounts = {

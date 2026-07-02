@@ -2,6 +2,7 @@
 
 // SECTION: database lokal pricing adapters
 import * as sqlitePricingRulesAdapter from "../../data/adapters/sqlite/sqlitePricingRulesAdapter";
+import { toFiniteNumber, toRoundedInteger } from "../../utils/number/numberNormalization";
 export const subscribePricingRulesFromRepository = (callback, onError) =>
   sqlitePricingRulesAdapter.subscribePricingRules(callback, onError);
 
@@ -34,20 +35,9 @@ export const deletePricingRuleFromRepository = async (ruleId) => {
   return sqlitePricingRulesAdapter.deletePricingRule(ruleId);
 };
 
-// SECTION: helper ubah value ke number aman
-const toNumber = (value) => {
-  const parsed = Number(value || 0);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-// SECTION: helper pembulatan ke integer karena project pakai angka tanpa .00
-const toInteger = (value) => {
-  return Math.round(toNumber(value));
-};
-
 // SECTION: helper batasi nilai minimal 0
 const clampMinZero = (value) => {
-  return Math.max(0, toNumber(value));
+  return Math.max(0, toFiniteNumber(value));
 };
 
 // SECTION: normalisasi rule agar service aman walau field ada yang kosong
@@ -73,7 +63,7 @@ export const normalizePricingRule = (rule = {}) => {
     marketplaceBufferValue: clampMinZero(rule?.marketplaceBufferValue),
 
     roundingType: rule?.roundingType || "up",
-    roundingUnit: toInteger(rule?.roundingUnit || 100),
+    roundingUnit: toRoundedInteger(rule?.roundingUnit || 100),
 
     updatedAt: rule?.updatedAt || null,
   };
@@ -82,11 +72,11 @@ export const normalizePricingRule = (rule = {}) => {
 // SECTION: ambil harga aktif item saat ini
 export const getCurrentPriceFromItem = (item = {}, targetType = "") => {
   if (targetType === "raw_materials") {
-    return toInteger(item?.sellingPrice);
+    return toRoundedInteger(item?.sellingPrice);
   }
 
   if (targetType === "products") {
-    return toInteger(item?.price);
+    return toRoundedInteger(item?.price);
   }
 
   return 0;
@@ -99,17 +89,17 @@ export const getBaseCostForItem = (item = {}, rule = {}) => {
   // SECTION: raw materials pakai averageActualUnitCost sebagai utama
   if (normalizedRule.targetType === "raw_materials") {
     if (normalizedRule.baseCostSource === "averageActualUnitCost") {
-      return toInteger(
+      return toRoundedInteger(
         item?.averageActualUnitCost || item?.restockReferencePrice || 0,
       );
     }
 
     if (normalizedRule.baseCostSource === "restockReferencePrice") {
-      return toInteger(item?.restockReferencePrice || 0);
+      return toRoundedInteger(item?.restockReferencePrice || 0);
     }
 
     // fallback aman
-    return toInteger(
+    return toRoundedInteger(
       item?.averageActualUnitCost || item?.restockReferencePrice || 0,
     );
   }
@@ -117,11 +107,11 @@ export const getBaseCostForItem = (item = {}, rule = {}) => {
   // SECTION: products pakai hppPerUnit sebagai utama
   if (normalizedRule.targetType === "products") {
     if (normalizedRule.baseCostSource === "hppPerUnit") {
-      return toInteger(item?.hppPerUnit || 0);
+      return toRoundedInteger(item?.hppPerUnit || 0);
     }
 
     // fallback aman
-    return toInteger(item?.hppPerUnit || 0);
+    return toRoundedInteger(item?.hppPerUnit || 0);
   }
 
   return 0;
@@ -132,11 +122,11 @@ export const calculateMarginAmount = (baseCost = 0, rule = {}) => {
   const normalizedRule = normalizePricingRule(rule);
 
   if (normalizedRule.marginType === "nominal") {
-    return toInteger(normalizedRule.marginValue);
+    return toRoundedInteger(normalizedRule.marginValue);
   }
 
-  return toInteger(
-    (toNumber(baseCost) * toNumber(normalizedRule.marginValue)) / 100,
+  return toRoundedInteger(
+    (toFiniteNumber(baseCost) * toFiniteNumber(normalizedRule.marginValue)) / 100,
   );
 };
 
@@ -153,27 +143,27 @@ export const calculateMarketplaceBuffer = (baseSellingPrice = 0, rule = {}) => {
     return {
       status: "ready",
       marketplaceBufferAmount: 0,
-      finalBeforeRounding: toInteger(baseSellingPrice),
+      finalBeforeRounding: toRoundedInteger(baseSellingPrice),
     };
   }
 
   // SECTION: jika buffer nominal
   if (normalizedRule.marketplaceBufferType === "nominal") {
-    const marketplaceBufferAmount = toInteger(
+    const marketplaceBufferAmount = toRoundedInteger(
       normalizedRule.marketplaceBufferValue,
     );
 
     return {
       status: "ready",
       marketplaceBufferAmount,
-      finalBeforeRounding: toInteger(
-        toNumber(baseSellingPrice) + marketplaceBufferAmount,
+      finalBeforeRounding: toRoundedInteger(
+        toFiniteNumber(baseSellingPrice) + marketplaceBufferAmount,
       ),
     };
   }
 
   // SECTION: jika buffer persen
-  const percent = toNumber(normalizedRule.marketplaceBufferValue);
+  const percent = toFiniteNumber(normalizedRule.marketplaceBufferValue);
 
   // NOTE:
   // percent 100 atau lebih tidak valid karena membuat pembagi nol/negatif
@@ -181,19 +171,19 @@ export const calculateMarketplaceBuffer = (baseSellingPrice = 0, rule = {}) => {
     return {
       status: "invalid_marketplace_buffer",
       marketplaceBufferAmount: 0,
-      finalBeforeRounding: toInteger(baseSellingPrice),
+      finalBeforeRounding: toRoundedInteger(baseSellingPrice),
     };
   }
 
-  const finalBeforeRounding = toNumber(baseSellingPrice) / (1 - percent / 100);
+  const finalBeforeRounding = toFiniteNumber(baseSellingPrice) / (1 - percent / 100);
 
   const marketplaceBufferAmount =
-    finalBeforeRounding - toNumber(baseSellingPrice);
+    finalBeforeRounding - toFiniteNumber(baseSellingPrice);
 
   return {
     status: "ready",
-    marketplaceBufferAmount: toInteger(marketplaceBufferAmount),
-    finalBeforeRounding: toInteger(finalBeforeRounding),
+    marketplaceBufferAmount: toRoundedInteger(marketplaceBufferAmount),
+    finalBeforeRounding: toRoundedInteger(finalBeforeRounding),
   };
 };
 
@@ -203,12 +193,12 @@ export const applyRounding = (
   roundingType = "up",
   roundingUnit = 100,
 ) => {
-  const numericValue = toNumber(value);
-  const unit = toInteger(roundingUnit || 100);
+  const numericValue = toFiniteNumber(value);
+  const unit = toRoundedInteger(roundingUnit || 100);
 
   // SECTION: jika unit tidak valid, fallback ke integer biasa
   if (unit <= 0) {
-    return toInteger(numericValue);
+    return toRoundedInteger(numericValue);
   }
 
   // SECTION: pembulatan ke bawah
@@ -262,8 +252,8 @@ export const calculateFinalSellingPrice = (item = {}, rule = {}) => {
   const marginAmount = calculateMarginAmount(baseCost, normalizedRule);
 
   // SECTION: harga sebelum buffer marketplace
-  const baseSellingPrice = toInteger(
-    toNumber(baseCost) + toNumber(marginAmount),
+  const baseSellingPrice = toRoundedInteger(
+    toFiniteNumber(baseCost) + toFiniteNumber(marginAmount),
   );
 
   // SECTION: hitung buffer marketplace
@@ -301,11 +291,11 @@ export const calculateFinalSellingPrice = (item = {}, rule = {}) => {
     baseCost,
     marginAmount,
     baseSellingPrice,
-    marketplaceBufferAmount: toInteger(
+    marketplaceBufferAmount: toRoundedInteger(
       marketplaceBufferResult.marketplaceBufferAmount,
     ),
-    finalBeforeRounding: toInteger(marketplaceBufferResult.finalBeforeRounding),
-    finalRoundedPrice: toInteger(finalRoundedPrice),
+    finalBeforeRounding: toRoundedInteger(marketplaceBufferResult.finalBeforeRounding),
+    finalRoundedPrice: toRoundedInteger(finalRoundedPrice),
   };
 };
 
@@ -352,7 +342,7 @@ export const buildSinglePricingPreview = (item = {}, rule = {}) => {
     status: result.status,
     willUpdate:
       result.status === "ready" &&
-      toInteger(currentPrice) !== toInteger(result.finalRoundedPrice),
+      toRoundedInteger(currentPrice) !== toRoundedInteger(result.finalRoundedPrice),
   };
 };
 
@@ -414,7 +404,7 @@ export const createPricingUpdatePayload = ({
 
   if (targetType === "raw_materials") {
     return {
-      sellingPrice: toInteger(newPrice),
+      sellingPrice: toRoundedInteger(newPrice),
       pricingMode: originalItem?.pricingMode || "rule",
       pricingRuleId: normalizedRule.id || null,
       lastPricingUpdatedAt: new Date().toISOString(),
@@ -423,7 +413,7 @@ export const createPricingUpdatePayload = ({
 
   if (targetType === "products") {
     return {
-      price: toInteger(newPrice),
+      price: toRoundedInteger(newPrice),
       pricingMode: originalItem?.pricingMode || "rule",
       pricingRuleId: normalizedRule.id || null,
       lastPricingUpdatedAt: new Date().toISOString(),
@@ -451,24 +441,24 @@ export const createPricingLogPayload = ({
     itemId: item?.id || "",
     itemType: targetType,
     itemName: item?.name || "",
-    oldPrice: toInteger(oldPrice),
-    newPrice: toInteger(newPrice),
+    oldPrice: toRoundedInteger(oldPrice),
+    newPrice: toRoundedInteger(newPrice),
 
     pricingMode,
     pricingRuleId: normalizedRule.id || null,
     pricingRuleName: normalizedRule.name || "",
 
-    baseCost: toInteger(baseCost),
+    baseCost: toRoundedInteger(baseCost),
 
     marginType: normalizedRule.marginType,
-    marginValue: toInteger(normalizedRule.marginValue),
+    marginValue: toRoundedInteger(normalizedRule.marginValue),
 
     includeMarketplaceBuffer: !!normalizedRule.includeMarketplaceBuffer,
     marketplaceBufferType: normalizedRule.marketplaceBufferType,
-    marketplaceBufferValue: toInteger(normalizedRule.marketplaceBufferValue),
+    marketplaceBufferValue: toRoundedInteger(normalizedRule.marketplaceBufferValue),
 
     roundingType: normalizedRule.roundingType,
-    roundingUnit: toInteger(normalizedRule.roundingUnit),
+    roundingUnit: toRoundedInteger(normalizedRule.roundingUnit),
 
     changeSource: changeSource || "pricing_rule_apply",
     notes: notes || "",
@@ -530,8 +520,8 @@ export const applyPricingRuleToItems = async ({
         continue;
       }
 
-      const oldPrice = toInteger(previewItem.currentPrice);
-      const newPrice = toInteger(previewItem.roundedPrice);
+      const oldPrice = toRoundedInteger(previewItem.currentPrice);
+      const newPrice = toRoundedInteger(previewItem.roundedPrice);
 
       if (oldPrice === newPrice) {
         unchangedCount += 1;

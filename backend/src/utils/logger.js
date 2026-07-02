@@ -1,16 +1,10 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { isPathAtOrInside } = require("./pathSafety");
 const env = require("../config/env");
 
 let lastCleanupDate = "";
-
-const isPathAtOrInside = (candidatePath, parentPath) => {
-  const relative = path.relative(path.resolve(parentPath), path.resolve(candidatePath));
-  return relative === "" || (!relative.startsWith(`..${path.sep}`)
-    && relative !== ".."
-    && !path.isAbsolute(relative));
-};
 
 const assertSafeFileLogRuntime = () => {
   const isTestRuntime = env.isTestRuntime ?? (process.env.NODE_ENV === "test" || Boolean(process.env.NODE_TEST_CONTEXT));

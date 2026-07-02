@@ -1,3 +1,5 @@
+import { normalizeTruthyText as safeTrim } from "../../utils/text/textNormalization";
+import { getCurrentIsoTimestamp, getProductionActorName } from "./helpers/productionAuditMetadata";
 import {
   createProductionRecord,
   generateProductionCode,
@@ -6,20 +8,13 @@ import {
   updateProductionRecord,
 } from "../../data/adapters/sqlite/sqliteProductionAdapter";
 
-const safeTrim = (value) => String(value || "").trim();
-const nowIso = () => new Date().toISOString();
-const getActorName = (currentUser = null) => currentUser?.email
-  || currentUser?.displayName
-  || currentUser?.username
-  || currentUser?.uid
-  || "system";
 
 export const formatProductionEmployeeCodePrefix = () => "EMP";
 export const getNextProductionEmployeeCodePreview = async () => generateProductionCode("employees");
 
 const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
   const code = safeTrim(values.code || values.employeeCode).toUpperCase();
-  const actorName = getActorName(currentUser);
+  const actorName = getProductionActorName(currentUser);
 
   return {
     ...values,
@@ -30,9 +25,9 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
     phone: safeTrim(values.phone),
     role: safeTrim(values.role || values.position),
     isActive: values.isActive !== false,
-    updatedAt: nowIso(),
+    updatedAt: getCurrentIsoTimestamp(),
     updatedBy: actorName,
-    ...(!isEdit ? { createdAt: nowIso(), createdBy: actorName } : {}),
+    ...(!isEdit ? { createdAt: getCurrentIsoTimestamp(), createdBy: actorName } : {}),
   };
 };
 

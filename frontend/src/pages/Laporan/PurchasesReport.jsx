@@ -6,20 +6,18 @@ import {
 import {
   App as AntdApp,
   Button,
-  Col,
-  DatePicker,
   Tag,
 } from "antd";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
-import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
-import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
+import ReportPeriodFilterSection from "./components/ReportPeriodFilterSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import { exportJsonToExcel } from "../../utils/export/exportExcel";
 import { fetchPurchasesReportData } from "../../services/Laporan/reportsService";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
+import { getSavingPresentation } from "../../utils/finance/savingPresentation";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
@@ -32,35 +30,6 @@ import {
 } from "../../utils/reports/reportDateRange";
 
 // =========================
-// SECTION: Helper saving pembelian
-// Catatan:
-// - saving tetap dibaca sebagai informasi efisiensi
-// - tidak mengubah fakta bahwa laporan pembelian membaca expenses
-// =========================
-const getSavingMeta = (value) => {
-  const amount = Math.round(Number(value || 0));
-
-  if (amount > 0) {
-    return {
-      label: `Hemat ${formatCurrencyId(amount)}`,
-      color: "green",
-    };
-  }
-
-  if (amount < 0) {
-    return {
-      label: `Lebih Mahal ${formatCurrencyId(Math.abs(amount))}`,
-      color: "red",
-    };
-  }
-
-  return {
-    label: "Sesuai Referensi",
-    color: "default",
-  };
-};
-
-// =========================
 // SECTION: Helper label varian laporan pembelian
 // Fungsi:
 // - menampilkan metadata varian/sumber stok dari expense purchase jika tersedia.
@@ -70,8 +39,6 @@ const getPurchaseVariantLabel = (record = {}) => {
   if (record.variantLabel || record.variantKey) return record.variantLabel || record.variantKey;
   return record.stockSourceType === "variant" ? "Varian" : "Master";
 };
-
-const { RangePicker } = DatePicker;
 
 const PurchasesReport = () => {
   const { message } = AntdApp.useApp();
@@ -208,7 +175,7 @@ const PurchasesReport = () => {
         getPurchaseVariantLabel(record),
       ],
       tags: (record) => {
-        const meta = getSavingMeta(record.savingAmount);
+        const meta = getSavingPresentation(record.savingAmount);
         return <Tag color={meta.color}>{meta.label}</Tag>;
       },
       meta: [
@@ -275,7 +242,7 @@ const PurchasesReport = () => {
         dataIndex: "savingAmount",
         key: "savingAmount",
         render: (value) => {
-          const meta = getSavingMeta(value);
+          const meta = getSavingPresentation(value);
           return <Tag color={meta.color}>{meta.label}</Tag>;
         },
       },
@@ -298,22 +265,11 @@ const PurchasesReport = () => {
 
       <PageContentCanvas>
 
-      <PageSection
-        title="Filter Periode"
+      <ReportPeriodFilterSection
+        value={dateRange}
+        onChange={setDateRange}
         subtitle="Report membaca expenses pembelian sesuai tanggal transaksi, bukan seluruh collection."
-      >
-        <FilterBar surface={false}>
-          <Col xs={24} md={10} lg={8}>
-            <RangePicker
-              style={{ width: "100%" }}
-              format="DD/MM/YYYY"
-              value={dateRange}
-              allowClear={false}
-              onChange={(value) => setDateRange(value || getDefaultReportDateRange())}
-            />
-          </Col>
-        </FilterBar>
-      </PageSection>
+      />
 
       <PageSection
         title="Ringkasan Pembelian"

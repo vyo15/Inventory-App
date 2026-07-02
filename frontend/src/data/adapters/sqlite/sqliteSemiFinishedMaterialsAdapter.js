@@ -1,17 +1,13 @@
+import { toRoundedInteger } from "../../../utils/number/numberNormalization";
 import {
   inferVariantMode,
   resolveVariantSourceList,
 } from "../../../utils/variants/variantStockNormalizer";
 import { createSqliteJsonRecordAdapter } from "./sqliteJsonRecordAdapterFactory";
 
-const toNumber = (value = 0) => {
-  const parsed = Number(value ?? 0);
-  return Number.isFinite(parsed) ? Math.round(parsed) : 0;
-};
-
 export const normalizeSemiFinishedMaterialRecord = (record = {}) => {
-  const currentStock = toNumber(record.currentStock ?? record.stock ?? 0);
-  const reservedStock = toNumber(record.reservedStock || 0);
+  const currentStock = toRoundedInteger(record.currentStock ?? record.stock ?? 0);
+  const reservedStock = toRoundedInteger(record.reservedStock || 0);
   const variants = resolveVariantSourceList(record);
   const hasVariants = inferVariantMode(record);
 
@@ -35,9 +31,9 @@ export const normalizeSemiFinishedMaterialRecord = (record = {}) => {
     currentStock,
     stock: currentStock,
     reservedStock,
-    availableStock: toNumber(record.availableStock ?? Math.max(currentStock - reservedStock, 0)),
-    minStockAlert: toNumber(record.minStockAlert || record.minStock || 0),
-    averageCostPerUnit: toNumber(record.averageCostPerUnit || 0),
+    availableStock: toRoundedInteger(record.availableStock ?? Math.max(currentStock - reservedStock, 0)),
+    minStockAlert: toRoundedInteger(record.minStockAlert || record.minStock || 0),
+    averageCostPerUnit: toRoundedInteger(record.averageCostPerUnit || 0),
     isActive: record.isActive !== false,
     isSellable: false,
   };

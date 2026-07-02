@@ -5,37 +5,23 @@ import {
 } from "react";
 import {
   App as AntdApp,
-  Col,
   Form,
-  Select,
   Tag,
   Typography,
 } from "antd";
-import { PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import StatusTag from "../../components/Layout/Feedback/StatusTag";
-import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
-import FilterBar from "../../components/Layout/Filters/FilterBar";
-import PageFormModal from "../../components/Layout/Forms/PageFormModal";
-import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
-import PageHeader from "../../components/Layout/Page/PageHeader";
-import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
-import PageSection from "../../components/Layout/Page/PageSection";
-import DataTableView from "../../components/Layout/Table/DataTableView";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { createCashInTransaction, listenCashInRecords } from "../../services/Finance/financeService";
 import { compareRecordsByDateDesc, upsertRecordById } from "../../utils/state/recordCollectionState";
-import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
-import CashTransactionFormFields from "./components/CashTransactionFormFields";
-import FinancePeriodYearMonthFilter from "./components/FinancePeriodYearMonthFilter";
+import CashFlowPageShell from "./components/CashFlowPageShell";
 import {
   buildFinanceRecordYearOptions,
   filterFinanceRecordsByPeriod,
   getCurrentFinanceYear,
 } from "./helpers/financePeriodHelpers";
-
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
@@ -43,7 +29,6 @@ import {
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data historis decimal tidak dimigrasi otomatis.
 // Behavior: input baru no-decimal; business rules dan schema/alur data utama tetap sama.
 
-const { Option } = Select;
 const { Text } = Typography;
 
 
@@ -310,88 +295,52 @@ const CashIn = () => {
      - Jangan mengubah cash posting, report source, payment mapping, atau callback dari section ini.
      ===================================================== */
   return (
-    <>
-      <PageHeader
-        title="Pemasukan Kas"
-        subtitle="Pemasukan manual dan sales."
-        actions={[
-          {
-            key: "add-cash-in",
-            type: "primary",
-            icon: <PlusOutlined />,
-            label: "Tambah Pemasukan",
-            onClick: openCreateModal,
-          },
-        ]}
-      />
-
-      <PageContentCanvas>
-
-      <PageSection
-        title="Ringkasan Periode"
-        subtitle="KPI periode aktif."
-      >
-        <SummaryStatGrid
-          items={summaryItems}
-          columns={{ xs: 24, md: 8 }}
-          variant="finance"
-          highlightKey="total-cash-in"
-          className="cash-flow-summary"
-        />
-      </PageSection>
-
-      <PageSection
-        title="Filter Pemasukan"
-        subtitle="Filter periode."
-      >
-        <FinancePeriodYearMonthFilter
-          selectedYear={selectedYear}
-          selectedMonth={selectedMonth}
-          yearOptions={yearOptions}
-          onYearChange={setSelectedYear}
-          onMonthChange={setSelectedMonth}
-        />
-      </PageSection>
-
-      <PageSection
-        title="Daftar Pemasukan"
-        subtitle="Transaksi periode."
-        extra={<Tag color="blue">{formatNumberId(filteredCashIns.length)} baris</Tag>}
-      >
-        <DataRefreshIndicator loading={loading} dataSource={filteredCashIns} />
-        <DataTableView
-          showRefreshIndicator={false}
-          className="app-data-table"
-          rowKey="id"
-          dataSource={filteredCashIns}
-          columns={columns}
-          // IMS NOTE [AKTIF] - table fixed tanpa scroll horizontal; ledger tetap tanpa kolom aksi destructive.
-          tableLayout="fixed"
-          locale={{
-            emptyText: getDataTableEmptyText(loading, "Belum ada pemasukan pada periode ini."),
-          }}
-          mobileCardConfig={cashInMobileCardConfig}
-        />
-      </PageSection>
-
-      </PageContentCanvas>
-
-      <PageFormModal
-        title="Tambah Pemasukan"
-        open={modalVisible}
-        onCancel={closeCreateModal}
-        form={form}
-        onFinish={handleAddTransaction}
-      >
-        <CashTransactionFormFields
-          typeLabel="Tipe Pemasukan"
-          typeRequiredMessage="Harap pilih tipe pemasukan!"
-          typeOptions={["Penjualan", "Pendapatan Lain-lain"]}
-          defaultType="Pendapatan Lain-lain"
-        />
-      </PageFormModal>
-    </>
+    <CashFlowPageShell
+      header={{
+        title: "Pemasukan Kas",
+        subtitle: "Pemasukan manual dan sales.",
+        actionKey: "add-cash-in",
+        actionLabel: "Tambah Pemasukan",
+        onAdd: openCreateModal,
+      }}
+      summary={{
+        items: summaryItems,
+        columns: { xs: 24, md: 8 },
+        highlightKey: "total-cash-in",
+        extra: null,
+      }}
+      filter={{
+        title: "Filter Pemasukan",
+        selectedYear,
+        selectedMonth,
+        yearOptions,
+        onYearChange: setSelectedYear,
+        onMonthChange: setSelectedMonth,
+      }}
+      table={{
+        title: "Daftar Pemasukan",
+        countTagColor: "blue",
+        rows: filteredCashIns,
+        loading,
+        columns,
+        tableLayout: "fixed",
+        mobileCardConfig: cashInMobileCardConfig,
+        emptyText: "Belum ada pemasukan pada periode ini.",
+      }}
+      formModal={{
+        title: "Tambah Pemasukan",
+        open: modalVisible,
+        onCancel: closeCreateModal,
+        form,
+        onFinish: handleAddTransaction,
+        typeLabel: "Tipe Pemasukan",
+        typeRequiredMessage: "Harap pilih tipe pemasukan!",
+        typeOptions: ["Penjualan", "Pendapatan Lain-lain"],
+        defaultType: "Pendapatan Lain-lain",
+      }}
+    />
   );
+
 };
 
 export default CashIn;

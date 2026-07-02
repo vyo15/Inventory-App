@@ -1,13 +1,7 @@
 const { safeJsonParse } = require("../../utils/jsonUtils");
+const { normalizeText, toRoundedInteger } = require("../../utils/textNormalization");
 
-const toFiniteInteger = (value = 0) => {
-  const numericValue = Number(value ?? 0);
-  return Number.isFinite(numericValue) ? Math.round(numericValue) : 0;
-};
-
-const normalizeAuditText = (value = "") => String(value ?? "").trim();
-
-const getVariantAuditKey = (variant = {}, index = 0) => normalizeAuditText(
+const getVariantAuditKey = (variant = {}, index = 0) => normalizeText(
   variant.variantKey
   || variant.key
   || variant.id
@@ -28,11 +22,11 @@ const getCanonicalVariantSnapshot = (payload = {}) => {
 
   return variants.map((variant, index) => ({
     key: getVariantAuditKey(variant, index),
-    currentStock: toFiniteInteger(variant.currentStock ?? variant.stock ?? 0),
-    reservedStock: toFiniteInteger(variant.reservedStock ?? 0),
-    availableStock: toFiniteInteger(
+    currentStock: toRoundedInteger(variant.currentStock ?? variant.stock ?? 0),
+    reservedStock: toRoundedInteger(variant.reservedStock ?? 0),
+    availableStock: toRoundedInteger(
       variant.availableStock
-      ?? (toFiniteInteger(variant.currentStock ?? variant.stock ?? 0) - toFiniteInteger(variant.reservedStock ?? 0)),
+      ?? (toRoundedInteger(variant.currentStock ?? variant.stock ?? 0) - toRoundedInteger(variant.reservedStock ?? 0)),
     ),
     isActive: variant.isActive !== false,
     isArchived: variant.isArchived === true,
@@ -46,44 +40,44 @@ const toInventoryMasterPayload = (row = {}) => ({
   name: row.name || "",
   status: row.status || "active",
   isActive: row.is_active === 0 ? false : true,
-  currentStock: toFiniteInteger(row.current_stock),
-  stock: toFiniteInteger(row.current_stock),
-  reservedStock: toFiniteInteger(row.reserved_stock),
-  availableStock: toFiniteInteger(row.available_stock),
-  minStockAlert: toFiniteInteger(row.min_stock_alert),
+  currentStock: toRoundedInteger(row.current_stock),
+  stock: toRoundedInteger(row.current_stock),
+  reservedStock: toRoundedInteger(row.reserved_stock),
+  availableStock: toRoundedInteger(row.available_stock),
+  minStockAlert: toRoundedInteger(row.min_stock_alert),
 });
 
 const getStockReadModelExpectedSnapshot = (payload = {}, sourceConfig = {}) => ({
-  id: `${sourceConfig.sourceType}__${normalizeAuditText(payload.id)}`,
+  id: `${sourceConfig.sourceType}__${normalizeText(payload.id)}`,
   sourceType: sourceConfig.sourceType,
   sourceCollection: sourceConfig.sourceCollection,
-  sourceId: normalizeAuditText(payload.id),
-  code: normalizeAuditText(payload.code).toUpperCase(),
-  name: normalizeAuditText(payload.name),
-  status: normalizeAuditText(payload.status || "active") || "active",
+  sourceId: normalizeText(payload.id),
+  code: normalizeText(payload.code).toUpperCase(),
+  name: normalizeText(payload.name),
+  status: normalizeText(payload.status || "active") || "active",
   isActive: payload.isActive !== false,
-  currentStock: toFiniteInteger(payload.currentStock ?? payload.stock),
-  reservedStock: toFiniteInteger(payload.reservedStock),
-  availableStock: toFiniteInteger(payload.availableStock),
-  minStockAlert: toFiniteInteger(payload.minStockAlert),
+  currentStock: toRoundedInteger(payload.currentStock ?? payload.stock),
+  reservedStock: toRoundedInteger(payload.reservedStock),
+  availableStock: toRoundedInteger(payload.availableStock),
+  minStockAlert: toRoundedInteger(payload.minStockAlert),
   variants: getCanonicalVariantSnapshot(payload),
 });
 
 const getStockReadModelActualSnapshot = (row = {}) => {
   const payload = safeJsonParse(row.payload_json, {}) || {};
   return {
-    id: normalizeAuditText(row.id),
-    sourceType: normalizeAuditText(payload.sourceType || row.source_type),
-    sourceCollection: normalizeAuditText(payload.sourceCollection),
-    sourceId: normalizeAuditText(payload.sourceId || row.source_id),
-    code: normalizeAuditText(row.code || payload.code).toUpperCase(),
-    name: normalizeAuditText(row.name || payload.name),
-    status: normalizeAuditText(row.status || payload.status || "active") || "active",
+    id: normalizeText(row.id),
+    sourceType: normalizeText(payload.sourceType || row.source_type),
+    sourceCollection: normalizeText(payload.sourceCollection),
+    sourceId: normalizeText(payload.sourceId || row.source_id),
+    code: normalizeText(row.code || payload.code).toUpperCase(),
+    name: normalizeText(row.name || payload.name),
+    status: normalizeText(row.status || payload.status || "active") || "active",
     isActive: row.is_active === 0 ? false : payload.isActive !== false,
-    currentStock: toFiniteInteger(row.current_stock ?? payload.currentStock ?? payload.stock),
-    reservedStock: toFiniteInteger(row.reserved_stock ?? payload.reservedStock),
-    availableStock: toFiniteInteger(row.available_stock ?? payload.availableStock),
-    minStockAlert: toFiniteInteger(row.min_stock_alert ?? payload.minStockAlert),
+    currentStock: toRoundedInteger(row.current_stock ?? payload.currentStock ?? payload.stock),
+    reservedStock: toRoundedInteger(row.reserved_stock ?? payload.reservedStock),
+    availableStock: toRoundedInteger(row.available_stock ?? payload.availableStock),
+    minStockAlert: toRoundedInteger(row.min_stock_alert ?? payload.minStockAlert),
     variants: getCanonicalVariantSnapshot(payload),
   };
 };
@@ -132,7 +126,7 @@ module.exports = {
   getSnapshotIssues,
   getStockReadModelActualSnapshot,
   getStockReadModelExpectedSnapshot,
-  normalizeAuditText,
-  toFiniteInteger,
+  normalizeAuditText: normalizeText,
+  toFiniteInteger: toRoundedInteger,
   toInventoryMasterPayload,
 };

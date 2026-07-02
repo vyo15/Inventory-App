@@ -75,20 +75,22 @@ Backend tetap enforcement utama. Shared contract tidak boleh digunakan untuk mel
 ## Frontend shared UI dan orchestration
 
 - `CompactCell` dan `CompactCellText` menjadi primitive resmi untuk cell tabel bertingkat, ellipsis, tooltip, dan fallback.
-- Cash In dan Cash Out berbagi filter periode, tetapi business page tetap terpisah.
+- Cash In dan Cash Out berbagi `CashFlowPageShell` untuk struktur presentational (header, summary, filter, table, dan modal), tetapi service call, source classification, delete guard, serta business page tetap terpisah.
 - Purchase memakai satu default builder, satu quantity field, dan helper mutation-result bersama Return.
 - Detail drawer Produk, Bahan Baku, Supplier, Penjualan, dan channel Penjualan dipisahkan dari page orchestration.
 - Page tetap memanggil service existing; business mutation tidak dipindahkan ke komponen presentasi.
 - Repository-mode switcher frontend yang hanya memiliki satu mode SQLite sudah dihapus; repository domain tipis tetap dipertahankan agar page tidak mengikat langsung ke transport.
 - Form/detail/modal anak dipisahkan dari page Produksi, Sales, Purchases, Products, Raw Materials, Supplier Purchase, Pricing Rules, Stock Adjustment, Stock Management, Dashboard, Database Center, dan User Management.
+- `OfflineDatabaseCenter.jsx` mempertahankan handler guarded backup/restore, sementara coverage, technical/runtime status, dan restore preview berada pada komponen presentational terpisah.
 - Komponen form besar menerima contract props terkelompok (`formState`, `referenceData`, `selectionState`, `actions`, dan kelompok domain terkait), bukan puluhan prop datar. Grouping hanya mengurangi coupling presentational; mutation dan derived business state tetap dimiliki page/service.
 - Close/reset drawer yang sebelumnya menyebarkan setter individual dipusatkan pada callback parent seperti `closeFormDrawer`, sehingga child tidak mengatur lifecycle page secara langsung.
 - Konfigurasi tabel, mobile card, dan detail column yang murni presentational ditempatkan pada helper/list component domain existing untuk Production Order, BOM, Work Log, Sales, dan Purchase. Handler mutation tetap diinjeksi dari page; helper tidak mengakses service atau menulis data.
-- Page entry produksi yang sebelumnya di atas 1.000 baris sudah turun di bawah batas tersebut. `Purchases.jsx` tetap lebih besar karena menjadi orchestration boundary guarded untuk OCR, supplier catalog, stock-in, expense, dan commit atomic; pemecahan business flow ditunda sampai tersedia characterization test yang lebih lengkap.
+- Seluruh page entry produksi dan transaksi utama kini berada di bawah 1.000 baris. `Purchases.jsx` tetap menjadi orchestration boundary guarded untuk OCR, supplier catalog, stock-in, expense, dan commit atomic; subscription reference data dan form snapshot berada pada hook lokal read-only, sementara authority write tetap di page/service resmi.
 - Form hasil ekstraksi wajib memiliki behavioral test minimal untuk close guard, loading/disabled guard, atau callback submit yang relevan; source-string test tetap boleh dipakai sebagai architecture guard, tetapi bukan pengganti interaction contract.
 - Dashboard visual, quick action, dan checklist setup berada pada komponen/helper domain Dashboard; restore guard dan auth mutation tetap di page/service pemiliknya.
 - Cleanup CSS dilakukan scoped. `!important` tidak boleh dihapus massal tanpa visual regression light/dark, desktop/mobile, modal, table, dan Ant Design override.
 - Export XLSX/CSV menetralkan string yang dapat dieksekusi sebagai formula spreadsheet. Data sumber tidak diubah; sanitasi hanya berlaku pada file export.
+- Sales, Purchases, dan Profit/Loss Report berbagi `ReportPeriodFilterSection` untuk layout/filter tanggal; query, mapping, summary, dan export tetap domain-specific.
 
 ## Source hygiene guard
 
@@ -99,7 +101,31 @@ Automated test wajib menjaga:
 - password dan formula Supplier tidak kembali di-copy-paste;
 - frontend tidak mengambil authority HPP;
 - runtime database, backup, log, build output, dan generated artifact tidak masuk source ZIP;
-- line ending JavaScript tetap LF.
+- line ending JavaScript, CSS, JSON, dan Markdown tetap LF.
+- normalizer text/integer tetap memakai utility canonical dan tidak kembali didefinisikan per module.
+- source-runtime test menolak unused PascalCase import yang dapat terlewat oleh konfigurasi ESLint legacy.
+
+### Shared safety dan audit metadata
+
+- Path containment, realpath ancestor, dan perbandingan path Windows case-insensitive memakai `backend/src/utils/pathSafety.js`. Maintenance backup, environment sandbox, logger, dan test database tidak boleh mendefinisikan ulang guard path.
+- Actor audit request memakai `backend/src/utils/requestActor.js`; fallback tetap `system` dan controller domain tetap menentukan kapan audit ditulis.
+- Metadata actor/timestamp frontend Produksi memakai `productionAuditMetadata.js`; helper tidak memiliki authority mutation, Payroll, atau HPP.
+- `scripts/verify-source-ready.cjs` menolak runtime artifacts sekaligus metadata paket patch (`_PATCH_*`, `_IMS_*`, dan folder `*changed-files*`).
+
+### Normalisasi text dan integer
+
+- Frontend memakai `frontend/src/utils/text/textNormalization.js`. `normalizeText` mempertahankan primitive falsy valid, sedangkan `normalizeTruthyText` hanya dipakai untuk compatibility caller lama yang memang menganggap `0`/`false` sebagai kosong.
+- Backend memakai `backend/src/utils/textNormalization.js`; integer legacy yang sebelumnya bernama `toInteger` dipusatkan sebagai `toRoundedInteger` agar perilaku `Math.round` terlihat eksplisit.
+- Migrasi tidak boleh mengganti semantics `??` menjadi `||` atau sebaliknya tanpa test matrix `undefined`, `null`, string, `0`, `false`, decimal, `Infinity`, dan `NaN`.
+- `suppliers.shared.js` memakai integer helper canonical dari `shared/supplierCatalogPricing` dan tidak mendefinisikan ulang helper yang sama.
+- Frontend numeric conversion memakai `frontend/src/utils/number/numberNormalization.js`; utility dibedakan menjadi finite number dan rounded integer. Clamp minimum/positive tetap menjadi keputusan domain caller.
+- Adapter read-only Stock/Finance/Pricing menetralkan nilai legacy non-finite, tetapi mutation authority, stock formula, ledger, dan pricing calculation tetap di service/backend resmi.
+- Presentasi saving lintas Cash Out dan Purchases Report memakai `frontend/src/utils/finance/savingPresentation.js`; helper hanya menghasilkan label/status/color dan tidak memengaruhi ledger atau expense.
+
+### Residual guarded yang belum dipecah
+
+- `productionWorkLogsServiceHelpers.js` tetap menjadi cleanup candidate karena mencakup draft builder, payload normalization, compatibility, Payroll, dan HPP explanation. File ini tidak boleh dipecah dalam cleanup umum sebelum characterization test Work Log/Payroll/HPP lengkap.
+- `xlsx` dan `esbuild` tetap residual dependency. Jangan mengubah package/lockfile tanpa tarball resmi, install Windows, export regression, dan build offline yang terverifikasi.
 
 ## Area yang sengaja tidak berubah
 
@@ -141,7 +167,7 @@ Automated test wajib menjaga:
 
 ### CSS dan source hygiene
 
-- JavaScript serta CSS wajib LF melalui `.editorconfig`, `.gitattributes`, dan `sourceHygiene.test.js`.
+- JavaScript, CSS, JSON, serta Markdown wajib LF melalui `.editorconfig`, `.gitattributes`, dan `sourceHygiene.test.js`.
 - Warna brand pada component memakai semantic CSS token, bukan menyalin literal hex dari `index.css`.
 - Normalisasi EOL tidak boleh dicampur dengan perubahan business rule guarded.
 

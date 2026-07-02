@@ -1,10 +1,11 @@
+import { normalizeTruthyText as safeTrim } from "../text/textNormalization";
+export { safeTrim };
 import { buildReferenceOptions } from '../options/referenceOptionBuilders';
 import {
   inferVariantMode,
   resolveVariantSourceList,
 } from '../variants/variantStockNormalizer';
 
-export const safeTrim = (value) => String(value || '').trim();
 export const toVariantKey = (value) => safeTrim(value).toLowerCase();
 
 export const hasVariantSupport = (item = {}) => inferVariantMode(item);

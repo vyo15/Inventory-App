@@ -57,9 +57,9 @@ Batasan aman:
 }
 
 .summary-stat-card[data-accent="success"] {
-  --summary-card-tone: #2f8f5b;
-  --summary-card-tone-soft: rgba(47, 143, 91, 0.10);
-  --summary-card-tone-muted: rgba(47, 143, 91, 0.22);
+  --summary-card-tone: var(--ims-color-success);
+  --summary-card-tone-soft: var(--ims-color-success-soft);
+  --summary-card-tone-muted: var(--ims-color-success-muted);
 }
 
 .summary-stat-card[data-accent="warning"] {
@@ -70,9 +70,9 @@ Batasan aman:
 
 .summary-stat-card[data-accent="danger"],
 .summary-stat-card[data-accent="error"] {
-  --summary-card-tone: #c84c4c;
-  --summary-card-tone-soft: rgba(200, 76, 76, 0.10);
-  --summary-card-tone-muted: rgba(200, 76, 76, 0.22);
+  --summary-card-tone: var(--ims-color-danger);
+  --summary-card-tone-soft: var(--ims-color-danger-soft);
+  --summary-card-tone-muted: var(--ims-color-danger-muted);
 }
 
 .summary-stat-card[data-accent="default"],
@@ -203,9 +203,9 @@ Batasan aman:
 }
 
 .summary-finance-main[data-tone="success"] {
-  --summary-finance-tone: #2f8f5b;
-  --summary-finance-tone-soft: rgba(47, 143, 91, 0.10);
-  --summary-finance-tone-muted: rgba(47, 143, 91, 0.22);
+  --summary-finance-tone: var(--ims-color-success);
+  --summary-finance-tone-soft: var(--ims-color-success-soft);
+  --summary-finance-tone-muted: var(--ims-color-success-muted);
 }
 
 .summary-finance-main[data-tone="warning"] {
@@ -215,9 +215,9 @@ Batasan aman:
 }
 
 .summary-finance-main[data-tone="danger"] {
-  --summary-finance-tone: #c84c4c;
-  --summary-finance-tone-soft: rgba(200, 76, 76, 0.10);
-  --summary-finance-tone-muted: rgba(200, 76, 76, 0.22);
+  --summary-finance-tone: var(--ims-color-danger);
+  --summary-finance-tone-soft: var(--ims-color-danger-soft);
+  --summary-finance-tone-muted: var(--ims-color-danger-muted);
 }
 
 .summary-finance-main[data-tone="neutral"] {

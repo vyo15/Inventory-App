@@ -1,7 +1,7 @@
+import { normalizeTruthyText as safeTrim } from "../../utils/text/textNormalization";
 import * as sqliteProductsAdapter from "../../data/adapters/sqlite/sqliteProductsAdapter";
 import { stripGuardedInventoryUpdateFields } from "../../utils/variants/variantStockNormalizer";
 
-const safeTrim = (value) => String(value || "").trim();
 const PRODUCT_PROTECTED_FIELDS = ["hppPerUnit", "averageCostPerUnit", "costPerUnit"];
 
 export const PRODUCT_DEFAULT_FORM = {

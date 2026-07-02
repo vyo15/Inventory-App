@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { isPathAtOrInside, resolveThroughExistingAncestor } = require("../../src/utils/pathSafety");
 
 const REPOSITORY_ROOT = path.resolve(__dirname, "../../..");
 const TEST_RUNTIME_MODULES = [
@@ -50,28 +51,6 @@ const createIsolationError = (code, message, details = {}) => {
   error.code = code;
   Object.assign(error, details);
   return error;
-};
-
-const isPathAtOrInside = (candidatePath, parentPath) => {
-  const candidate = path.resolve(candidatePath);
-  const parent = path.resolve(parentPath);
-  const relative = path.relative(parent, candidate);
-  return relative === "" || (!relative.startsWith(`..${path.sep}`)
-    && relative !== ".."
-    && !path.isAbsolute(relative));
-};
-
-const resolveThroughExistingAncestor = (candidatePath) => {
-  const resolvedCandidate = path.resolve(candidatePath);
-  let existingAncestor = resolvedCandidate;
-  while (!fs.existsSync(existingAncestor)) {
-    const parent = path.dirname(existingAncestor);
-    if (parent === existingAncestor) break;
-    existingAncestor = parent;
-  }
-
-  const realAncestor = fs.realpathSync(existingAncestor);
-  return path.resolve(realAncestor, path.relative(existingAncestor, resolvedCandidate));
 };
 
 const assertSafeTestRuntimePath = (

@@ -1,3 +1,5 @@
+import { normalizeTruthyText as safeWorkLogText } from "../../../utils/text/textNormalization";
+export { safeWorkLogText };
 import { Button, Card, Space, Tag, Typography } from 'antd';
 import { EditOutlined, EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -10,7 +12,6 @@ import { isProductionWorkLogCompleted } from '../../../utils/produksi/production
 // IMS NOTE [AKTIF/GUARDED] - Helper UI Work Log Produksi.
 // Fungsi: menampung formatter/tag/render read-only agar halaman utama tidak menumpuk helper presentasi.
 // Batasan: helper ini tidak menulis stok, HPP, payroll, inventory log, data stok turunan, atau status Production Order.
-export const safeWorkLogText = (value) => String(value || '').trim();
 
 export const isEditableProductionWorkLog = (record = {}) =>
   safeWorkLogText(record.status).toLowerCase() === 'in_progress' && !isProductionWorkLogCompleted(record);

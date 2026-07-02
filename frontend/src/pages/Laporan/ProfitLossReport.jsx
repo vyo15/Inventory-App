@@ -6,16 +6,13 @@ import {
 import {
   App as AntdApp,
   Button,
-  Col,
-  DatePicker,
   Tag,
 } from "antd";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
-import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
-import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
+import ReportPeriodFilterSection from "./components/ReportPeriodFilterSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import { exportJsonToExcel } from "../../utils/export/exportExcel";
 import { fetchProfitLossReportData } from "../../services/Laporan/reportsService";
@@ -43,8 +40,6 @@ const resolveFinancialSourceLabel = (item = {}) => {
   if (item.sourceModule === "sales") return "Penjualan";
   return item.sourceModule || item.sourceCollection || "-";
 };
-
-const { RangePicker } = DatePicker;
 
 const ProfitLossReport = () => {
   const { message } = AntdApp.useApp();
@@ -251,22 +246,11 @@ const ProfitLossReport = () => {
 
       <PageContentCanvas>
 
-      <PageSection
-        title="Filter Periode"
+      <ReportPeriodFilterSection
+        value={dateRange}
+        onChange={setDateRange}
         subtitle="Report membaca revenues, incomes, dan expenses sesuai tanggal transaksi, bukan seluruh collection."
-      >
-        <FilterBar surface={false}>
-          <Col xs={24} md={10} lg={8}>
-            <RangePicker
-              style={{ width: "100%" }}
-              format="DD/MM/YYYY"
-              value={dateRange}
-              allowClear={false}
-              onChange={(value) => setDateRange(value || getDefaultReportDateRange())}
-            />
-          </Col>
-        </FilterBar>
-      </PageSection>
+      />
 
       <PageSection
         title="Ringkasan Keuangan"

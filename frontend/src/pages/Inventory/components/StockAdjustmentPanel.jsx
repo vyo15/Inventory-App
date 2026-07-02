@@ -1,3 +1,4 @@
+import { normalizeTruthyText as normalizeCompactText } from "../../../utils/text/textNormalization";
 import {
   useEffect,
   useMemo,
@@ -195,7 +196,6 @@ const STOCK_ADJUSTMENT_REASON_LABELS = {
   lainnya: "Lainnya",
 };
 
-const normalizeCompactText = (value = "") => String(value || "").trim();
 
 const getStockAdjustmentReasonLabel = (reason = "") => {
   const normalizedReason = normalizeCompactText(reason);

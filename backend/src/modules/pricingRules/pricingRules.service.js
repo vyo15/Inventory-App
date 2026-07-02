@@ -1,3 +1,4 @@
+const { normalizeText, toRoundedInteger } = require("../../utils/textNormalization");
 const { createServiceError } = require("../../utils/httpError");
 const crypto = require("crypto");
 const { getDb, runInTransaction } = require("../../db/connection");
@@ -15,14 +16,10 @@ const {
 const { PRODUCT_VALUATION_FIELDS } = require("../products/products.service");
 const { RAW_MATERIAL_VALUATION_FIELDS } = require("../rawMaterials/rawMaterials.service");
 
-const normalizeText = (value) => String(value ?? "").trim();
+
 const normalizeBool = (value, fallback = true) => {
   if (value === undefined || value === null || value === "") return fallback;
   return value === true || value === 1 || value === "1" || value === "true" || value === "active";
-};
-const toNumber = (value = 0) => {
-  const parsed = Number(value ?? 0);
-  return Number.isFinite(parsed) ? Math.round(parsed) : 0;
 };
 
 
@@ -71,7 +68,7 @@ const normalizeRulePayload = (body = {}, current = {}) => {
     marginType: normalizeText(body.marginType || current.marginType || "percent") === "nominal"
       ? "nominal"
       : "percent",
-    marginValue: Math.max(0, toNumber(body.marginValue ?? current.marginValue)),
+    marginValue: Math.max(0, toRoundedInteger(body.marginValue ?? current.marginValue)),
     includeMarketplaceBuffer: normalizeBool(
       body.includeMarketplaceBuffer,
       current.includeMarketplaceBuffer === true
@@ -83,14 +80,14 @@ const normalizeRulePayload = (body = {}, current = {}) => {
       : "percent",
     marketplaceBufferValue: Math.max(
       0,
-      toNumber(body.marketplaceBufferValue ?? current.marketplaceBufferValue)
+      toRoundedInteger(body.marketplaceBufferValue ?? current.marketplaceBufferValue)
     ),
     roundingType: ["up", "down", "nearest"].includes(
       normalizeText(body.roundingType || current.roundingType)
     )
       ? normalizeText(body.roundingType || current.roundingType)
       : "up",
-    roundingUnit: Math.max(1, toNumber(body.roundingUnit ?? current.roundingUnit ?? 100)),
+    roundingUnit: Math.max(1, toRoundedInteger(body.roundingUnit ?? current.roundingUnit ?? 100)),
     status,
     createdAt: current.createdAt || body.createdAt || now,
     updatedAt: now,
@@ -434,7 +431,7 @@ const applyPricingRuleBatch = async (id, body = {}, actor = "system") => {
         protectedVariantFields: config.protectedFields,
       });
 
-      const oldPrice = toNumber(currentPayload[config.priceField]);
+      const oldPrice = toRoundedInteger(currentPayload[config.priceField]);
       const saved = await upsertJsonRecord(db, config.tableName, sanitizedPayload);
       await upsertStockReadModel(db, saved, {
         sourceType: config.sourceType,

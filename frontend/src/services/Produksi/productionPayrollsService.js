@@ -1,3 +1,6 @@
+import { normalizeTruthyText as safeTrim } from "../../utils/text/textNormalization";
+import { toFiniteNumber } from "../../utils/number/numberNormalization";
+import { getCurrentIsoTimestamp, getProductionActorName } from "./helpers/productionAuditMetadata";
 import { calculatePayrollAmounts } from "../../constants/productionPayrollOptions";
 import {
   commitProductionPayrollFinalize,
@@ -13,21 +16,21 @@ import { getActiveProductionEmployees } from "./productionEmployeesService";
 import { getActiveProductionSteps } from "./productionStepsService";
 import { getCompletedProductionWorkLogs } from "./productionWorkLogsService";
 
-const safeTrim = (value) => String(value || "").trim();
-const nowIso = () => new Date().toISOString();
-const toNumber = (value) => Number(value || 0);
-const getActorName = (currentUser = null) => currentUser?.email
-  || currentUser?.displayName
-  || currentUser?.username
-  || currentUser?.uid
-  || "system";
 
 export const validateProductionPayroll = (values = {}) => {
   const errors = {};
   if (!values.payrollDate) errors.payrollDate = "Tanggal payroll wajib diisi";
   if (!values.workLogId) errors.workLogId = "Work log wajib dipilih";
   if (!values.workerName && !values.workerId) errors.workerId = "Karyawan wajib dipilih";
-  if (toNumber(values.finalAmount || 0) < 0) errors.finalAmount = "Total payroll tidak boleh negatif";
+  const hasFinalAmount = values.finalAmount !== undefined
+    && values.finalAmount !== null
+    && values.finalAmount !== "";
+  const finalAmount = toFiniteNumber(values.finalAmount, Number.NaN);
+  if (hasFinalAmount && !Number.isFinite(finalAmount)) {
+    errors.finalAmount = "Total payroll tidak valid";
+  } else if (finalAmount < 0) {
+    errors.finalAmount = "Total payroll tidak boleh negatif";
+  }
   return errors;
 };
 
@@ -39,20 +42,20 @@ export const getPayrollReferenceData = async () => ({
 
 export const buildPayrollDraftFromWorkLog = (workLog = {}, employee = null, productionStep = null) => {
   const payrollMode = workLog.stepPayrollMode || workLog.payrollMode || productionStep?.payrollMode || "per_qty";
-  const payrollRate = toNumber(workLog.stepPayrollRate ?? workLog.payrollRate ?? productionStep?.payrollRate ?? 0);
-  const payrollQtyBase = Math.max(1, toNumber(
+  const payrollRate = toFiniteNumber(workLog.stepPayrollRate ?? workLog.payrollRate ?? productionStep?.payrollRate ?? 0);
+  const payrollQtyBase = Math.max(1, toFiniteNumber(
     workLog.stepPayrollQtyBase ?? workLog.payrollQtyBase ?? productionStep?.payrollQtyBase ?? 1,
   ));
   const payrollOutputBasis = workLog.stepPayrollOutputBasis
     || workLog.payrollOutputBasis
     || productionStep?.payrollOutputBasis
     || "good_qty";
-  const outputQtyUsed = toNumber(
+  const outputQtyUsed = toFiniteNumber(
     payrollOutputBasis === "actual_output_qty"
       ? workLog.actualOutputQty || workLog.goodQty || 0
       : workLog.goodQty || workLog.actualOutputQty || 0,
   );
-  const workedQty = toNumber(workLog.plannedQty || outputQtyUsed || 1);
+  const workedQty = toFiniteNumber(workLog.plannedQty || outputQtyUsed || 1);
   const totals = calculatePayrollAmounts({
     payrollMode,
     payrollRate,
@@ -128,7 +131,7 @@ export const isPayrollNumberExists = async (payrollNumber, excludeId = null) => 
 const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
   const totals = calculatePayrollAmounts(values);
   const code = safeTrim(values.payrollNumber || values.code || values.referenceNumber).toUpperCase();
-  const actorName = getActorName(currentUser);
+  const actorName = getProductionActorName(currentUser);
 
   return {
     ...values,
@@ -141,10 +144,10 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
     totalAmount: totals.finalAmount,
     status: values.status || "draft",
     paymentStatus: values.paymentStatus || "unpaid",
-    transactionDate: values.payrollDate || values.date || nowIso(),
-    updatedAt: nowIso(),
+    transactionDate: values.payrollDate || values.date || getCurrentIsoTimestamp(),
+    updatedAt: getCurrentIsoTimestamp(),
     updatedBy: actorName,
-    ...(!isEdit ? { createdAt: nowIso(), createdBy: actorName } : {}),
+    ...(!isEdit ? { createdAt: getCurrentIsoTimestamp(), createdBy: actorName } : {}),
   };
 };
 

@@ -1,4 +1,5 @@
 const { success } = require("../../utils/response");
+const { getRequestActor } = require("../../utils/requestActor");
 const { requireLocalAdministrator } = require("../../middlewares/localAuth");
 const { createSqliteJsonRecordRouter } = require("../../infrastructure/http/sqliteJsonRecordRouter");
 const {
@@ -8,7 +9,6 @@ const {
   getFinanceRecordRouterDefinitions,
 } = require("./finance.service");
 
-const getActor = (req) => req.localAuth?.user?.username || "system";
 
 
 const attachFinanceRecordRouters = (router) => {
@@ -24,7 +24,7 @@ const commitCashInController = async (req, res, next) => {
   try {
     const result = await commitCashIn({
       payload: req.body || {},
-      actor: getActor(req),
+      actor: getRequestActor(req),
     });
     return success(res, "Kas masuk database lokal berhasil disimpan dan ledger dibuat", result, undefined, 201);
   } catch (error) {
@@ -36,7 +36,7 @@ const commitCashOutController = async (req, res, next) => {
   try {
     const result = await commitCashOut({
       payload: req.body || {},
-      actor: getActor(req),
+      actor: getRequestActor(req),
     });
     return success(res, "Kas keluar database lokal berhasil disimpan dan ledger dibuat", result, undefined, 201);
   } catch (error) {
@@ -48,7 +48,7 @@ const deleteCashOutController = async (req, res, next) => {
   try {
     const result = await deleteCashOut({
       id: req.params.id,
-      actor: getActor(req),
+      actor: getRequestActor(req),
     });
     return success(res, "Kas keluar database lokal berhasil dinonaktifkan", result);
   } catch (error) {

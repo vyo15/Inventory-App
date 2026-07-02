@@ -1,7 +1,7 @@
+import { normalizeTruthyText as safeTrim } from "../../utils/text/textNormalization";
 import * as sqliteSemiFinishedAdapter from "../../data/adapters/sqlite/sqliteSemiFinishedMaterialsAdapter";
 import { stripGuardedInventoryUpdateFields } from "../../utils/variants/variantStockNormalizer";
 
-const safeTrim = (value) => String(value || "").trim();
 const SEMI_FINISHED_PROTECTED_FIELDS = [
   "averageCostPerUnit",
   "lastProductionCostPerUnit",

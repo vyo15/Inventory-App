@@ -1,3 +1,4 @@
+import { normalizeText as toSafeString } from "../text/textNormalization";
 import { formatNumberId } from '../formatters/numberId';
 import { resolveDisplayReference } from '../references/displayReferenceResolver';
 import { APP_ROUTES } from '../../config/appRoutes';
@@ -439,7 +440,6 @@ export const buildStockReadModelRow = (
   };
 };
 
-const toSafeString = (value = '') => String(value ?? '').trim();
 
 const resolveStockReadModelSourceCollection = (sourceType = '', sourceCollection = '') => {
   const resolvedSourceType = normalizeStockReadModelSourceType(sourceType);
@@ -605,4 +605,3 @@ export const buildStockItemReadModelPayload = (
     lastSyncedFrom,
   };
 };
-

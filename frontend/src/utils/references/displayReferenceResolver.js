@@ -1,4 +1,4 @@
-const safeTrim = (value) => String(value ?? "").trim();
+import { normalizeText as safeTrim } from "../text/textNormalization";
 
 const OLD_CODE_FIELD = ["leg", "acyCode"].join("");
 

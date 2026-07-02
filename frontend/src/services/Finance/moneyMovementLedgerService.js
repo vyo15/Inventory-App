@@ -1,14 +1,10 @@
+import { toFiniteNumber } from "../../utils/number/numberNormalization";
+import { normalizeTruthyText as toSafeString } from "../../utils/text/textNormalization";
 import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 import { listFinanceLedgerRows } from "./financeService";
 
 const DEFAULT_LEDGER_LIMIT = 500;
 
-const toFiniteNumber = (value, fallback = 0) => {
-  const numericValue = Number(value);
-  return Number.isFinite(numericValue) ? numericValue : fallback;
-};
-
-const toSafeString = (value) => String(value || "").trim();
 
 const getTimestampMillis = (value) => {
   if (!value) return 0;

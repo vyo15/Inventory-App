@@ -1,4 +1,5 @@
 import { createSqliteJsonRecordAdapter } from "./sqliteJsonRecordAdapterFactory";
+import { toRoundedInteger } from "../../../utils/number/numberNormalization";
 import {
   inferVariantMode,
   resolveVariantSourceList,
@@ -12,10 +13,16 @@ export const normalizeStockReadModelRecord = (record = {}) => {
     sourceType: record.sourceType || "product",
     sourceId: record.sourceId || record.id || "",
     name: record.name || record.itemName || "",
-    currentStock: Math.round(Number(record.currentStock ?? record.stock ?? 0)),
-    stock: Math.round(Number(record.currentStock ?? record.stock ?? 0)),
-    reservedStock: Math.round(Number(record.reservedStock ?? 0)),
-    availableStock: Math.round(Number(record.availableStock ?? Math.max(Number(record.currentStock ?? record.stock ?? 0) - Number(record.reservedStock ?? 0), 0))),
+    currentStock: toRoundedInteger(record.currentStock ?? record.stock),
+    stock: toRoundedInteger(record.currentStock ?? record.stock),
+    reservedStock: toRoundedInteger(record.reservedStock),
+    availableStock: toRoundedInteger(
+      record.availableStock
+      ?? Math.max(
+        toRoundedInteger(record.currentStock ?? record.stock) - toRoundedInteger(record.reservedStock),
+        0,
+      ),
+    ),
     hasVariants: inferVariantMode(record),
     variants,
   };

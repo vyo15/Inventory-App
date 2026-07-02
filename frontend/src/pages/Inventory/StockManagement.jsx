@@ -1,3 +1,4 @@
+import { normalizeText as normalizeReferenceText } from "../../utils/text/textNormalization";
 import {
   useCallback,
   useEffect,
@@ -17,7 +18,6 @@ import {
 } from "antd";
 import dayjs from "dayjs";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
-import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
@@ -248,7 +248,6 @@ const REFERENCE_TYPE_LABELS = {
   work_log: "Produksi / Work Log",
 };
 
-const normalizeReferenceText = (value = "") => String(value ?? "").trim();
 
 const isLikelyTechnicalReferenceId = (value = "") => {
   const normalizedValue = normalizeReferenceText(value);

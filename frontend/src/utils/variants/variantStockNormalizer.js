@@ -1,3 +1,5 @@
+import { normalizeTruthyText as trimVariantText } from "../text/textNormalization";
+export { trimVariantText };
 import { calculateAvailableStock, normalizeStockSnapshot, toNumber } from '../stock/stockHelpers';
 
 // =====================================================
@@ -18,7 +20,6 @@ export const normalizeNumberStock = (value = 0) => {
 // Helper trim/compare ringan untuk key dan label varian.
 // ACTIVE: dipakai oleh semua normalizer agar data historis null/undefined tetap aman.
 // =====================================================
-export const trimVariantText = (value) => String(value || '').trim();
 
 const normalizeVariantToken = (value) =>
   trimVariantText(value).toLowerCase();

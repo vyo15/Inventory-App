@@ -367,7 +367,7 @@ Catatan lock:
 
 ## Update SQLite Local Runtime Pilot
 
-Status terbaru: source aktual sudah SQLite-first untuk runtime utama. `frontend/.env.example` mengaktifkan `VITE_AUTH_MODE=sqlite` dan repository mode aktif hanya `sqlite_sidecar`. Konstanta mode lama `offline_local` dan `hybrid_sync` sudah dihapus agar tidak terlihat sebagai opsi runtime. Database browser arsip tidak lagi dipakai sebagai runtime aktif Offline Database Center. Supplier, Product, Raw Material, Semi Finished, Stock, Transactions, Finance, Production, dan Reports harus melalui backend SQLite sesuai service/endpoint aktual.
+Status terbaru: source aktual sudah SQLite-first untuk runtime utama. `frontend/.env.example` mengaktifkan `VITE_AUTH_MODE=sqlite`. Seluruh repository frontend permanen memakai backend SQLite sidecar tanpa runtime mode selection; konstanta mode lama `offline_local`, `hybrid_sync`, dan switcher `repositoryMode` sudah dihapus. Database browser arsip tidak lagi dipakai sebagai runtime aktif Offline Database Center. Supplier, Product, Raw Material, Semi Finished, Stock, Transactions, Finance, Production, dan Reports harus melalui backend SQLite sesuai service/endpoint aktual.
 
 ## Mobile UI Standard v1.0 — Keputusan Aktif
 

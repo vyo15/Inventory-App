@@ -1,3 +1,4 @@
+const { normalizeLowerText, normalizeText } = require("../../utils/textNormalization");
 const { createServiceError } = require("../../utils/httpError");
 const {
   createInventoryMasterRouteGuards,
@@ -34,8 +35,7 @@ const ACTIVE_PRODUCTION_STATUSES = new Set([
   "open",
 ]);
 
-const normalizeText = (value) => String(value ?? "").trim();
-const normalizeLower = (value) => normalizeText(value).toLowerCase();
+
 const toNonNegativeInteger = (value, label) => {
   const numeric = Number(value ?? 0);
   if (!Number.isFinite(numeric) || numeric < 0 || !Number.isInteger(numeric)) {
@@ -69,7 +69,7 @@ const getRawMaterialReferences = (payload = {}) => {
   ].filter(Array.isArray);
 
   return sourceLists.flatMap((items) => items).map((item = {}) => ({
-    sourceType: normalizeLower(item.itemType || item.sourceType || item.type),
+    sourceType: normalizeLowerText(item.itemType || item.sourceType || item.type),
     sourceId: normalizeText(item.itemId || item.sourceId || item.materialId || item.rawMaterialId || item.id),
   }));
 };
@@ -83,7 +83,7 @@ const assertNoActiveProductionDependency = async (db, materialId) => {
   const bomRows = await db.all("SELECT id, name, status, payload_json FROM production_boms WHERE status != 'deleted'");
   const activeBom = bomRows.find((row) => {
     const payload = safeJsonParse(row.payload_json, {});
-    const isActive = payload.isActive !== false && !["inactive", "archived"].includes(normalizeLower(payload.status || row.status));
+    const isActive = payload.isActive !== false && !["inactive", "archived"].includes(normalizeLowerText(payload.status || row.status));
     return isActive && payloadReferencesRawMaterial(payload, materialId);
   });
   if (activeBom) {
@@ -99,7 +99,7 @@ const assertNoActiveProductionDependency = async (db, materialId) => {
     const rows = await db.all(`SELECT id, name, status, payload_json FROM ${tableName} WHERE status != 'deleted'`);
     const activeRecord = rows.find((row) => {
       const payload = safeJsonParse(row.payload_json, {});
-      const status = normalizeLower(payload.status || row.status);
+      const status = normalizeLowerText(payload.status || row.status);
       const isActive = ACTIVE_PRODUCTION_STATUSES.has(status) || (!status && payload.isActive !== false);
       return isActive && payloadReferencesRawMaterial(payload, materialId);
     });
@@ -115,10 +115,10 @@ const assertNoActiveProductionDependency = async (db, materialId) => {
 };
 
 const assertUniqueName = async (db, name, currentId = "") => {
-  const normalizedName = normalizeLower(name);
+  const normalizedName = normalizeLowerText(name);
   if (!normalizedName) return;
   const rows = await db.all("SELECT id, name FROM raw_materials WHERE status != 'deleted'");
-  const duplicate = rows.find((row) => row.id !== currentId && normalizeLower(row.name) === normalizedName);
+  const duplicate = rows.find((row) => row.id !== currentId && normalizeLowerText(row.name) === normalizedName);
   if (duplicate) {
     throw createRawMaterialError("Nama bahan baku sudah digunakan.", "RAW_MATERIAL_DUPLICATE_NAME", 409);
   }
@@ -136,10 +136,10 @@ const assertCategory = async (db, categoryId) => {
   if (!row) {
     throw createRawMaterialError("Kelompok bahan tidak ditemukan.", "RAW_MATERIAL_CATEGORY_NOT_FOUND", 400);
   }
-  if (normalizeLower(row.type) !== "raw_material_group") {
+  if (normalizeLowerText(row.type) !== "raw_material_group") {
     throw createRawMaterialError("Kategori yang dipilih bukan Kelompok Bahan.", "RAW_MATERIAL_CATEGORY_TYPE_INVALID", 400);
   }
-  if (normalizeLower(row.status) === "inactive") {
+  if (normalizeLowerText(row.status) === "inactive") {
     throw createRawMaterialError("Kelompok bahan sudah nonaktif.", "RAW_MATERIAL_CATEGORY_INACTIVE", 409);
   }
 };
@@ -176,8 +176,8 @@ const validateRawMaterialDomain = async ({ db, payload, current = null, currentP
   await assertUniqueName(db, name, current?.id || "");
   await assertCategory(db, payload.categoryId);
 
-  const unit = normalizeLower(payload.stockUnit || payload.unit);
-  const currentUnit = normalizeLower(currentPayload?.stockUnit || currentPayload?.unit);
+  const unit = normalizeLowerText(payload.stockUnit || payload.unit);
+  const currentUnit = normalizeLowerText(currentPayload?.stockUnit || currentPayload?.unit);
   const isUnchangedLegacyUnit = Boolean(current && unit && currentUnit && unit === currentUnit);
   if (!RAW_MATERIAL_UNITS.has(unit) && !isUnchangedLegacyUnit) {
     throw createRawMaterialError("Satuan stok bahan baku tidak valid.", "RAW_MATERIAL_UNIT_INVALID", 400);
@@ -261,8 +261,8 @@ const getRawMaterialsRouterConfig = () => ({
   validateDirectUpdate: async ({ db, current, currentPayload, mergedPayload }) => {
     await validateRawMaterialDomain({ db, payload: mergedPayload, current, currentPayload });
 
-    const wasActive = currentPayload.isActive !== false && normalizeLower(currentPayload.status || current.status) !== "inactive";
-    const willBeInactive = mergedPayload.isActive === false || normalizeLower(mergedPayload.status) === "inactive";
+    const wasActive = currentPayload.isActive !== false && normalizeLowerText(currentPayload.status || current.status) !== "inactive";
+    const willBeInactive = mergedPayload.isActive === false || normalizeLowerText(mergedPayload.status) === "inactive";
     if (wasActive && willBeInactive) {
       if (hasStockSnapshot(current) || hasAnyVariantStock(currentPayload)) {
         throw createRawMaterialError(

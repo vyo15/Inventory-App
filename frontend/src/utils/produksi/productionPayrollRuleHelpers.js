@@ -1,3 +1,4 @@
+import { normalizeTruthyText as safeString } from "../text/textNormalization";
 import formatNumber from "../formatters/numberId";
 import formatCurrency from "../formatters/currencyId";
 import { calculatePayrollAmounts } from "../../constants/productionPayrollOptions";
@@ -25,7 +26,6 @@ const safeNumber = (value, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-const safeString = (value) => String(value || "").trim();
 
 // Formatter final lintas aplikasi: helper ini dipakai untuk pesan validasi payroll
 // agar tidak ada formatter lokal di area guarded payroll produksi.

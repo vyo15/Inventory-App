@@ -1,3 +1,4 @@
+import { normalizeTruthyText as normalizePayrollStatusValue } from "../utils/text/textNormalization";
 // =====================================================
 // Production Payroll Options
 // =====================================================
@@ -58,7 +59,6 @@ const PAYROLL_PAYMENT_STATUS_TAG_COLORS = {
   paid: "green",
 };
 
-const normalizePayrollStatusValue = (value) => String(value || "").trim();
 
 // =====================================================
 // ACTIVE / UI-ONLY

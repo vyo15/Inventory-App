@@ -1,4 +1,4 @@
-const normalizeRecordId = (value) => String(value ?? '').trim();
+import { normalizeText as normalizeRecordId } from "../text/textNormalization";
 
 const getComparableRecordId = (record = {}) => normalizeRecordId(
   record?.id || record?.code || record?.referenceNumber || '',

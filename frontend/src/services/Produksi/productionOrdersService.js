@@ -1,3 +1,5 @@
+import { normalizeTruthyText as safeTrim } from "../../utils/text/textNormalization";
+import { getCurrentIsoTimestamp, getProductionActorName } from "./helpers/productionAuditMetadata";
 import {
   commitProductionOrder,
   commitProductionOrderRequirementRefresh,
@@ -11,13 +13,6 @@ import { getActiveSemiFinishedMaterials } from "./semiFinishedMaterialsService";
 import { listenProducts } from "../MasterData/productsService";
 import { listenRawMaterials } from "../MasterData/rawMaterialsService";
 
-const safeTrim = (value) => String(value || "").trim();
-const nowIso = () => new Date().toISOString();
-const getActorName = (currentUser = null) => currentUser?.email
-  || currentUser?.displayName
-  || currentUser?.username
-  || currentUser?.uid
-  || "system";
 
 const onceFromListener = (listener) => new Promise((resolve, reject) => {
   let unsubscribe = null;
@@ -164,7 +159,7 @@ export const buildProductionOrderRequirementLines = async ({
 
 const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
   const code = safeTrim(values.code || values.orderCode || values.referenceNumber).toUpperCase();
-  const actorName = getActorName(currentUser);
+  const actorName = getProductionActorName(currentUser);
 
   return {
     ...values,
@@ -173,13 +168,13 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
     referenceNumber: code,
     name: values.name || values.description || code,
     status: values.status || "draft",
-    orderDate: values.orderDate || values.date || nowIso(),
-    transactionDate: values.orderDate || values.date || nowIso(),
+    orderDate: values.orderDate || values.date || getCurrentIsoTimestamp(),
+    transactionDate: values.orderDate || values.date || getCurrentIsoTimestamp(),
     targetQty: Number(values.targetQty || values.quantity || 0),
     requirementLines: Array.isArray(values.requirementLines) ? values.requirementLines : [],
-    updatedAt: nowIso(),
+    updatedAt: getCurrentIsoTimestamp(),
     updatedBy: actorName,
-    ...(!isEdit ? { createdAt: nowIso(), createdBy: actorName } : {}),
+    ...(!isEdit ? { createdAt: getCurrentIsoTimestamp(), createdBy: actorName } : {}),
   };
 };
 
@@ -213,8 +208,8 @@ export const reserveProductionOrder = async (orderId, currentUser = null) => upd
   {
     ...(await getProductionOrderById(orderId)),
     status: "reserved",
-    reservedAt: nowIso(),
-    updatedBy: getActorName(currentUser),
+    reservedAt: getCurrentIsoTimestamp(),
+    updatedBy: getProductionActorName(currentUser),
   }
 );
 
@@ -224,8 +219,8 @@ export const releaseProductionOrderReservation = async (orderId, currentUser = n
   {
     ...(await getProductionOrderById(orderId)),
     status: "draft",
-    reservationReleasedAt: nowIso(),
-    updatedBy: getActorName(currentUser),
+    reservationReleasedAt: getCurrentIsoTimestamp(),
+    updatedBy: getProductionActorName(currentUser),
   }
 );
 
@@ -235,8 +230,8 @@ export const markProductionOrderInProduction = async (orderId, currentUser = nul
   {
     ...(await getProductionOrderById(orderId)),
     status: "in_production",
-    startedAt: nowIso(),
-    updatedBy: getActorName(currentUser),
+    startedAt: getCurrentIsoTimestamp(),
+    updatedBy: getProductionActorName(currentUser),
   }
 );
 

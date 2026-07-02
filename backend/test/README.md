@@ -1,6 +1,6 @@
 # Backend Test Convention — IMS Bunga Flanel
 
-Status: **AKTIF / SOURCE-VERIFIED**  
+Status: **AKTIF / SOURCE-VERIFIED**
 Scope: test backend `node:test` pada database temporary yang dikonfigurasi sebelum source database di-import.
 
 ## Penamaan file

@@ -5,6 +5,7 @@ const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { test } = require("node:test");
 const {
+  findTrackedPatchArtifacts,
   findTrackedRuntimeArtifacts,
   findUnsafeArchiveEntries,
   verifySourceArchive,
@@ -58,6 +59,22 @@ test("source readiness menolak runtime database, backup, dan log yang ter-track"
 });
 
 
+test("source readiness menolak metadata patch yang ter-track", () => {
+  assert.deepEqual(findTrackedPatchArtifacts([
+    "frontend/src/main.jsx",
+    "_PATCH_MANIFEST.md",
+    "_PATCH_DELETE_FILES.txt",
+    "_IMS_PATCH_INFO.txt",
+    "release.changed-files/manifest.json",
+  ]), [
+    "_PATCH_MANIFEST.md",
+    "_PATCH_DELETE_FILES.txt",
+    "_IMS_PATCH_INFO.txt",
+    "release.changed-files/manifest.json",
+  ]);
+});
+
+
 test("backend test runner memakai discovery otomatis dan lockfile registry publik", () => {
   const backendPackage = JSON.parse(readRootFile("backend/package.json"));
   const backendLock = readRootFile("backend/package-lock.json");
@@ -78,17 +95,24 @@ test("git archive mengecualikan seluruh folder runtime data, backups, dan logs",
   assert.match(attributes, /^\/logs export-ignore$/m);
 });
 
-test("JavaScript dan CSS source memakai kebijakan LF yang konsisten", () => {
+test("source JavaScript, CSS, JSON, dan Markdown memakai kebijakan LF yang konsisten", () => {
   const attributes = readRootFile(".gitattributes");
   const editorConfig = readRootFile(".editorconfig");
 
-  for (const extension of ["js", "jsx", "cjs", "mjs", "css"]) {
+  for (const extension of ["js", "jsx", "cjs", "mjs", "css", "json", "md"]) {
     assert.match(attributes, new RegExp(`^\\*\\.${extension} text eol=lf$`, "m"));
+  }
+
+  for (const pattern of [".githooks/*", ".gitignore", ".nvmrc", ".node-version", "*.env.example"]) {
+    const escapedPattern = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    assert.match(attributes, new RegExp(`^${escapedPattern} text eol=lf$`, "m"));
   }
 
   assert.match(editorConfig, /^root = true$/m);
   assert.match(editorConfig, /^\[\*\.\{js,jsx,cjs,mjs\}\]$/m);
   assert.match(editorConfig, /^\[\*\.css\]$/m);
+  assert.match(editorConfig, /^\[\*\.json\]$/m);
+  assert.match(editorConfig, /^\[\*\.md\]$/m);
   assert.match(editorConfig, /^end_of_line = lf$/m);
 
   const ignoredDirectoryNames = new Set([
@@ -100,7 +124,8 @@ test("JavaScript dan CSS source memakai kebijakan LF yang konsisten", () => {
     ".artifacts",
   ]);
   const ignoredRootDirectories = new Set(["data", "backups", "logs"]);
-  const supportedExtensions = new Set([".js", ".jsx", ".cjs", ".mjs", ".css"]);
+  const supportedExtensions = new Set([".js", ".jsx", ".cjs", ".mjs", ".css", ".json", ".md"]);
+  const supportedExtensionlessFiles = new Set([".gitignore", ".nvmrc", ".node-version"]);
   const pendingDirectories = [ROOT_DIR];
   const invalidFiles = [];
 
@@ -125,7 +150,15 @@ test("JavaScript dan CSS source memakai kebijakan LF yang konsisten", () => {
         continue;
       }
 
-      if (!entry.isFile() || !supportedExtensions.has(path.extname(entry.name))) continue;
+      if (!entry.isFile()) continue;
+      const isGitHook = relativeParts[0] === ".githooks";
+      const isEnvExample = entry.name.endsWith(".env.example");
+      if (
+        !supportedExtensions.has(path.extname(entry.name))
+        && !supportedExtensionlessFiles.has(entry.name)
+        && !isGitHook
+        && !isEnvExample
+      ) continue;
       const buffer = fs.readFileSync(fullPath);
       if (buffer.includes(13)) {
         invalidFiles.push(path.relative(ROOT_DIR, fullPath).replaceAll("\\", "/"));
@@ -225,14 +258,20 @@ test("source ZIP verifier menolak runtime, generated output, dan path backslash"
     "Inventory-App/.artifacts/sbom/backend-sbom.cdx.json",
     "Inventory-App/logs/ims-backend.log",
     "Inventory-App\\backend\\package.json",
+    "Inventory-App/_PATCH_MANIFEST.md",
+    "Inventory-App/_PATCH_DELETE_FILES.txt",
+    "Inventory-App/ims-release.changed-files/manifest.json",
   ]);
 
   assert.deepEqual(unsafeEntries, [
     ".artifacts/sbom/backend-sbom.cdx.json",
     "Inventory-App/backend/package.json",
+    "_PATCH_DELETE_FILES.txt",
+    "_PATCH_MANIFEST.md",
     "backups/sqlite/daily/IMS.imsbackup",
     "data/ims.sqlite-wal",
     "frontend/dist/index.js",
+    "ims-release.changed-files/manifest.json",
     "logs/ims-backend.log",
   ]);
 });
@@ -432,6 +471,92 @@ test("canonical security dan pricing wrapper tidak kembali menyalin business rul
   assert.doesNotMatch(supplierEsm, /\.cjs["']/);
   assert.doesNotMatch(supplierEsm, /estimatedShippingCost\s*\+/);
   assert.doesNotMatch(supplierCjs, /estimatedShippingCost\s*\+/);
+});
+
+test("normalizer text dan integer tetap memakai sumber canonical", () => {
+  const frontendRoot = path.join(ROOT_DIR, "frontend", "src");
+  const backendRoot = path.join(ROOT_DIR, "backend", "src");
+  const frontendViolations = [];
+  const backendViolations = [];
+
+  const scan = (rootDir, callback) => {
+    const pending = [rootDir];
+    while (pending.length > 0) {
+      const current = pending.pop();
+      for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+        const fullPath = path.join(current, entry.name);
+        if (entry.isDirectory()) {
+          pending.push(fullPath);
+          continue;
+        }
+        if (entry.isFile() && [".js", ".jsx"].includes(path.extname(entry.name))) {
+          callback(fullPath, fs.readFileSync(fullPath, "utf8"));
+        }
+      }
+    }
+  };
+
+  scan(frontendRoot, (fullPath, source) => {
+    const relativePath = path.relative(ROOT_DIR, fullPath).replaceAll("\\", "/");
+    if (relativePath === "frontend/src/utils/text/textNormalization.js") return;
+    if (/^(?:export\s+)?const\s+safeTrim\s*=/m.test(source)) {
+      frontendViolations.push(relativePath);
+    }
+  });
+
+  scan(backendRoot, (fullPath, source) => {
+    const relativePath = path.relative(ROOT_DIR, fullPath).replaceAll("\\", "/");
+    if (relativePath === "backend/src/utils/textNormalization.js") return;
+    if (/^const\s+(?:normalizeText|toInteger)\s*=/m.test(source)) {
+      backendViolations.push(relativePath);
+    }
+  });
+
+  assert.deepEqual(frontendViolations, []);
+  assert.deepEqual(backendViolations, []);
+
+  const supplierSource = readRootFile("backend/src/modules/suppliers/suppliers.shared.js");
+  assert.match(supplierSource, /toNonNegativeInteger[\s\S]*supplierCatalogPricing\.cjs/);
+  assert.doesNotMatch(supplierSource, /^const\s+toNonNegativeInteger\s*=/m);
+  assert.doesNotMatch(supplierSource, /^const\s+toPositiveInteger\s*=/m);
+});
+
+test("path, actor, normalizer turunan, dan timestamp tetap memakai helper canonical", () => {
+  const backendRoot = path.join(ROOT_DIR, "backend", "src");
+  const violations = [];
+  const allowedFiles = new Set([
+    "backend/src/utils/dateTime.js",
+    "backend/src/utils/pathSafety.js",
+    "backend/src/utils/requestActor.js",
+    "backend/src/utils/textNormalization.js",
+  ]);
+  const pending = [backendRoot];
+
+  while (pending.length > 0) {
+    const current = pending.pop();
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const fullPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        pending.push(fullPath);
+        continue;
+      }
+      if (!entry.isFile() || ![".js", ".cjs", ".mjs"].includes(path.extname(entry.name))) continue;
+      const relativePath = path.relative(ROOT_DIR, fullPath).replaceAll("\\", "/");
+      if (allowedFiles.has(relativePath)) continue;
+      const source = fs.readFileSync(fullPath, "utf8");
+      const forbiddenPatterns = [
+        /const\s+isPathAtOrInside\s*=/,
+        /const\s+resolveThroughExistingAncestor\s*=/,
+        /const\s+getActor\s*=\s*\(req\)/,
+        /const\s+normalize(?:Code|Lower|AuditText)\s*=/,
+        /const\s+nowIso\s*=/,
+        /const\s+toFiniteInteger\s*=/,
+      ];
+      if (forbiddenPatterns.some((pattern) => pattern.test(source))) violations.push(relativePath);
+    }
+  }
+
+  assert.deepEqual(violations.sort(), []);
 });
 
 test("frontend production helper tidak mengambil kembali authority commit HPP", () => {

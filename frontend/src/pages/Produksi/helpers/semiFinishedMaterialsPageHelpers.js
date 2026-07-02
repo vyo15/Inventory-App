@@ -1,3 +1,5 @@
+import { normalizeTruthyText as normalizeSemiFinishedGroupKey } from "../../../utils/text/textNormalization";
+export { normalizeSemiFinishedGroupKey };
 import {
   calculateSemiFinishedTotalsFromVariants,
   DEFAULT_SEMI_FINISHED_FORM,
@@ -109,7 +111,6 @@ export const resolveSemiFinishedActiveHppCost = (record = {}) => {
 export const FALLBACK_SEMI_FINISHED_GROUP_KEY = "__general_reusable";
 export const FALLBACK_SEMI_FINISHED_GROUP_LABEL = "Umum / Reusable";
 
-export const normalizeSemiFinishedGroupKey = (value = "") => String(value || "").trim();
 
 const normalizeSemiFinishedGroupLookupKey = (value = "") =>
   normalizeSemiFinishedGroupKey(value)

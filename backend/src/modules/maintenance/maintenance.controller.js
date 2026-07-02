@@ -1,4 +1,5 @@
 const { success } = require("../../utils/response");
+const { getRequestActor, getRequestActorUser } = require("../../utils/requestActor");
 const {
   buildMasterDataExportPayload,
   createBackup,
@@ -18,8 +19,6 @@ const {
   purgeInactiveRecord,
 } = require("./maintenance.service");
 
-const getActor = (req) => req.localAuth?.user?.username || "system";
-const getActorUser = (req) => req.localAuth?.user || {};
 
 const getMaintenanceStatusController = async (_req, res, next) => {
   try {
@@ -41,7 +40,7 @@ const getInitialSetupReadinessController = async (_req, res, next) => {
 
 const getDataQualityAuditController = async (req, res, next) => {
   try {
-    const result = await getDataQualityAudit({ actor: getActor(req) });
+    const result = await getDataQualityAudit({ actor: getRequestActor(req) });
     return success(res, "Audit kualitas data selesai. Tidak ada data yang diubah.", result);
   } catch (error) {
     return next(error);
@@ -59,7 +58,7 @@ const getStockReadModelAuditController = async (_req, res, next) => {
 
 const rebuildStockReadModelsController = async (req, res, next) => {
   try {
-    const result = await rebuildStockReadModels({ actor: getActor(req) });
+    const result = await rebuildStockReadModels({ actor: getRequestActor(req) });
     return success(res, result.message || "Data turunan stok berhasil diperbaiki.", result);
   } catch (error) {
     return next(error);
@@ -70,7 +69,7 @@ const deleteOrphanStockReadModelsController = async (req, res, next) => {
   try {
     const result = await deleteOrphanStockReadModels({
       confirmKeyword: req.body?.confirmKeyword,
-      actor: getActor(req),
+      actor: getRequestActor(req),
     });
     return success(res, result.message || "Data turunan stok yatim berhasil dibersihkan.", result);
   } catch (error) {
@@ -92,7 +91,7 @@ const createBackupController = async (req, res, next) => {
   try {
     const backup = await createBackup({
       type: req.body?.backupType || req.body?.type || "manual",
-      actor: getActor(req),
+      actor: getRequestActor(req),
       notes: req.body?.notes || "Backup manual resmi dari UI IMS.",
     });
     return success(res, "Backup database berhasil dibuat dan diverifikasi", backup);
@@ -118,7 +117,7 @@ const importBackupController = async (req, res, next) => {
       body: req.body,
       headers: req.headers,
       query: req.query,
-      actor: getActor(req),
+      actor: getRequestActor(req),
     });
     return success(res, "File Backup IMS berhasil diimport dan valid untuk restore.", summary);
   } catch (error) {
@@ -132,7 +131,7 @@ const executeRestoreController = async (req, res, next) => {
       confirmKeyword: req.body?.confirmKeyword,
       filename: req.body?.filename,
       backupFileName: req.body?.backupFileName,
-      actor: getActor(req),
+      actor: getRequestActor(req),
     });
 
     if (!result.restored) {
@@ -161,7 +160,7 @@ const createRestorePlanController = async (req, res, next) => {
     const result = await createRestorePlan({
       filename: req.body?.filename,
       backupFileName: req.body?.backupFileName,
-      actor: getActor(req),
+      actor: getRequestActor(req),
     });
     return success(res, "Restore plan dibuat sebagai preview-only. Tidak ada data yang diubah.", result);
   } catch (error) {
@@ -183,7 +182,7 @@ const listInactivePurgeCandidatesController = async (req, res, next) => {
   try {
     const result = await listInactivePurgeCandidates({
       entityType: req.query?.entityType || "",
-      actorUser: getActorUser(req),
+      actorUser: getRequestActorUser(req),
     });
     return success(res, "Preview data nonaktif berhasil dimuat. Tidak ada data yang diubah.", result);
   } catch (error) {
@@ -198,7 +197,7 @@ const purgeInactiveRecordController = async (req, res, next) => {
       id: req.body?.id,
       confirmKeyword: req.body?.confirmKeyword,
       confirmTarget: req.body?.confirmTarget,
-      actorUser: getActorUser(req),
+      actorUser: getRequestActorUser(req),
     });
     return success(res, "Data nonaktif berhasil dihapus permanen dan snapshot audit dipertahankan.", result);
   } catch (error) {

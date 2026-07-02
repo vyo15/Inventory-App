@@ -11,7 +11,7 @@ const POPUP_STATUSES = new Set(["success", "error", "info"]);
 let isActionResultHostMounted = false;
 let pendingActionResults = [];
 
-const normalizeText = (value, fallback = "") => {
+const normalizeFeedbackText = (value, fallback = "") => {
   if (value === null || value === undefined || value === "") return fallback;
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "boolean") return String(value);
@@ -21,7 +21,7 @@ const normalizeText = (value, fallback = "") => {
 const normalizeDetails = (details = []) => {
   if (!Array.isArray(details)) return [];
   return details
-    .map((item) => normalizeText(item, ""))
+    .map((item) => normalizeFeedbackText(item, ""))
     .filter(Boolean)
     .slice(0, 8);
 };
@@ -61,8 +61,8 @@ const normalizeOptions = (status, options = {}) => {
   const content = normalizedOptions.content || normalizedOptions.message || errorMessage || config.defaultContent;
 
   const contextDetails = [
-    normalizedOptions.module ? `Modul: ${normalizeText(normalizedOptions.module)}` : "",
-    normalizedOptions.action ? `Aksi: ${normalizeText(normalizedOptions.action)}` : "",
+    normalizedOptions.module ? `Modul: ${normalizeFeedbackText(normalizedOptions.module)}` : "",
+    normalizedOptions.action ? `Aksi: ${normalizeFeedbackText(normalizedOptions.action)}` : "",
   ].filter(Boolean);
 
   return {
@@ -71,7 +71,7 @@ const normalizeOptions = (status, options = {}) => {
     title: normalizedOptions.title || config.defaultTitle,
     content,
     details: normalizeDetails([...contextDetails, ...(Array.isArray(normalizedOptions.details) ? normalizedOptions.details : [])]),
-    note: normalizeText(normalizedOptions.note, ""),
+    note: normalizeFeedbackText(normalizedOptions.note, ""),
     okText: normalizedOptions.okText || "Mengerti",
     width: normalizedOptions.width || 520,
   };

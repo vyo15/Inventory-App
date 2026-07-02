@@ -1,4 +1,5 @@
 const { respondIfServiceError } = require("../../utils/httpError");
+const { getRequestActor } = require("../../utils/requestActor");
 const { failure, success } = require("../../utils/response");
 const {
   applyPricingRuleBatch,
@@ -10,7 +11,6 @@ const {
   updatePricingRule,
 } = require("./pricingRules.service");
 
-const getActor = (req) => req.localAuth?.user?.username || "system";
 
 const handlePricingRuleError = (res, error) => respondIfServiceError(res, error, {
   duplicateMessage: "Kode/ID pricing rule sudah ada di database lokal.",
@@ -51,7 +51,7 @@ const getPricingRuleController = async (req, res, next) => {
 
 const createPricingRuleController = async (req, res, next) => {
   try {
-    const pricingRule = await createPricingRule(req.body, getActor(req));
+    const pricingRule = await createPricingRule(req.body, getRequestActor(req));
     return success(res, "Pricing rule berhasil ditambahkan ke database lokal", pricingRule, undefined, 201);
   } catch (error) {
     const handled = handlePricingRuleError(res, error);
@@ -62,7 +62,7 @@ const createPricingRuleController = async (req, res, next) => {
 
 const updatePricingRuleController = async (req, res, next) => {
   try {
-    const pricingRule = await updatePricingRule(req.params.id, req.body, getActor(req));
+    const pricingRule = await updatePricingRule(req.params.id, req.body, getRequestActor(req));
     return success(res, "Pricing rule database lokal berhasil diubah", pricingRule);
   } catch (error) {
     const handled = handlePricingRuleError(res, error);
@@ -73,7 +73,7 @@ const updatePricingRuleController = async (req, res, next) => {
 
 const applyPricingRuleBatchController = async (req, res, next) => {
   try {
-    const result = await applyPricingRuleBatch(req.params.id, req.body, getActor(req));
+    const result = await applyPricingRuleBatch(req.params.id, req.body, getRequestActor(req));
     return success(
       res,
       `Pricing rule berhasil diterapkan secara atomic ke ${result.updatedCount} item`,
@@ -88,7 +88,7 @@ const applyPricingRuleBatchController = async (req, res, next) => {
 
 const deletePricingRuleController = async (req, res, next) => {
   try {
-    const result = await softDeletePricingRule(req.params.id, getActor(req));
+    const result = await softDeletePricingRule(req.params.id, getRequestActor(req));
     return success(res, "Pricing rule database lokal berhasil dinonaktifkan", result);
   } catch (error) {
     const handled = handlePricingRuleError(res, error);

@@ -1,3 +1,4 @@
+import { normalizeTruthyText as safeTrim } from "../../utils/text/textNormalization";
 import {
   commitProductionOrderStart,
   commitProductionWorkLogComplete,
@@ -20,7 +21,6 @@ import {
   validateProductionWorkLogPayload,
 } from "./helpers/productionWorkLogsServiceHelpers";
 
-const safeTrim = (value) => String(value || "").trim();
 
 export const validateProductionWorkLog = validateProductionWorkLogPayload;
 

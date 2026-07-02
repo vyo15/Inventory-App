@@ -1,18 +1,17 @@
+import { normalizeText as toSafeText } from "../../utils/text/textNormalization";
 import {
   useEffect,
   useMemo,
   useState } from "react";
 import { App,
   Button,
-  Col,
-  DatePicker,
 } from "antd";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
-import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageContentCanvas from "../../components/Layout/Page/PageContentCanvas";
 import PageSection from "../../components/Layout/Page/PageSection";
+import ReportPeriodFilterSection from "./components/ReportPeriodFilterSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import { exportJsonToExcel } from "../../utils/export/exportExcel";
 import { fetchSalesReportData } from "../../services/Laporan/reportsService";
@@ -34,9 +33,6 @@ import {
   normalizeReportDateRange,
 } from "../../utils/reports/reportDateRange";
 
-const { RangePicker } = DatePicker;
-
-const toSafeText = (value = "") => String(value ?? "").trim();
 
 const getSalesInternalReference = (sale = {}) =>
   toSafeText(sale.saleNumber || sale.code || sale.sourceRef || sale.referenceNumber) || "-";
@@ -395,22 +391,11 @@ const SalesReport = () => {
 
       <PageContentCanvas>
 
-      <PageSection
-        title="Filter Periode"
+      <ReportPeriodFilterSection
+        value={dateRange}
+        onChange={setDateRange}
         subtitle="Report membaca data sales sesuai tanggal transaksi, bukan seluruh collection."
-      >
-        <FilterBar surface={false}>
-          <Col xs={24} md={10} lg={8}>
-            <RangePicker
-              style={{ width: "100%" }}
-              format="DD/MM/YYYY"
-              value={dateRange}
-              allowClear={false}
-              onChange={(value) => setDateRange(value || getDefaultReportDateRange())}
-            />
-          </Col>
-        </FilterBar>
-      </PageSection>
+      />
 
       <PageSection
         title="Ringkasan Penjualan"

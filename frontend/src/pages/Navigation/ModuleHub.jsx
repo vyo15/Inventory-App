@@ -1,7 +1,5 @@
 import {
   useMemo } from "react";
-import { Empty,
-} from "antd";
 import { FileTextOutlined, RightOutlined } from "@ant-design/icons";
 import { Navigate, useNavigate } from "react-router-dom";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";

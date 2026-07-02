@@ -1,3 +1,4 @@
+import { toFiniteNumber } from "../number/numberNormalization";
 // =========================
 // SECTION: Number Formatter - Indonesia
 // =========================
@@ -5,11 +6,6 @@
 // Helper ini adalah source of truth format angka lintas aplikasi.
 // Gunakan helper ini untuk qty, stok, jumlah baris, persentase, dan angka umum
 // agar tidak ada lagi formatter lokal yang menampilkan .00 secara tidak perlu.
-const toFiniteNumber = (value, fallback = 0) => {
-  const numericValue = Number(value);
-  return Number.isFinite(numericValue) ? numericValue : fallback;
-};
-
 export const formatNumberId = (value, options = {}) => {
   const safeValue = toFiniteNumber(value);
   const {

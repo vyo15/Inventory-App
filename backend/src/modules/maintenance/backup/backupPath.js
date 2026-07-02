@@ -1,6 +1,7 @@
 const { createHttpError } = require("../../../utils/httpError");
 const fs = require("fs");
 const path = require("path");
+const { isPathAtOrInside, resolveThroughExistingAncestor } = require("../../../utils/pathSafety");
 const env = require("../../../config/env");
 const {
   BACKUP_DISK_RESERVE_BYTES,
@@ -13,28 +14,6 @@ const ensureDir = (dirPath) => fs.mkdirSync(dirPath, { recursive: true });
 const MANAGED_BACKUP_STORAGE_CLASSES = new Set(["daily", "monthly", "manual"]);
 const INTERNAL_BACKUP_STORAGE_CLASSES = new Set([...MANAGED_BACKUP_STORAGE_CLASSES, ".tmp"]);
 const SQLITE_FILE_HEADER = Buffer.from("SQLite format 3\0", "utf8");
-
-const isPathAtOrInside = (candidatePath, parentPath) => {
-  const candidate = path.resolve(candidatePath);
-  const parent = path.resolve(parentPath);
-  const relative = path.relative(parent, candidate);
-  return relative === "" || (!relative.startsWith(`..${path.sep}`)
-    && relative !== ".."
-    && !path.isAbsolute(relative));
-};
-
-const resolveThroughExistingAncestor = (candidatePath) => {
-  const resolvedCandidate = path.resolve(candidatePath);
-  let existingAncestor = resolvedCandidate;
-  while (!fs.existsSync(existingAncestor)) {
-    const parent = path.dirname(existingAncestor);
-    if (parent === existingAncestor) break;
-    existingAncestor = parent;
-  }
-
-  const realAncestor = fs.realpathSync(existingAncestor);
-  return path.resolve(realAncestor, path.relative(existingAncestor, resolvedCandidate));
-};
 
 const createBackupPathError = (code, message, details = {}) => {
   const error = createHttpError(message, code, 400, { details, exposeDetails: false });

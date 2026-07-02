@@ -1,3 +1,4 @@
+import { normalizeTruthyText as safeTrim } from "../../utils/text/textNormalization";
 import { listFinanceExpenses, listFinanceIncomes } from "../Finance/financeService";
 import { getInventoryLogs } from "../Inventory/inventoryService";
 import { getStockIssueReadModels, getStockReadModelRows } from "../Inventory/stockReadModelService";
@@ -56,7 +57,6 @@ const toNumber = (value) => {
   const parsed = Number(value || 0);
   return Number.isFinite(parsed) ? parsed : 0;
 };
-const safeTrim = (value) => String(value || "").trim();
 
 const normalizeStatus = (value) => safeTrim(value).toLowerCase();
 

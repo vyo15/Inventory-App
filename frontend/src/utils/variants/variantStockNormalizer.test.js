@@ -77,6 +77,21 @@ describe('adapter compatibility varian legacy', () => {
     }],
   };
 
+
+  it('Stock Read Model menetralkan angka legacy tidak valid tanpa menghasilkan NaN', () => {
+    const result = normalizeStockReadModelRecord({
+      sourceType: 'product',
+      sourceId: 'product-1',
+      currentStock: 'invalid',
+      reservedStock: 'invalid',
+      availableStock: 'invalid',
+    });
+
+    expect(result.currentStock).toBe(0);
+    expect(result.reservedStock).toBe(0);
+    expect(result.availableStock).toBe(0);
+  });
+
   it.each([
     ['Product', normalizeProductRecord],
     ['Raw Material', normalizeRawMaterialRecord],

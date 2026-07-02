@@ -142,4 +142,77 @@ describe("frontend runtime source safety", () => {
 
     expect(violations).toEqual([]);
   });
+
+  it("normalizer angka dan metadata audit produksi tetap memakai helper canonical", () => {
+    const allowedFiles = new Set([
+      "frontend/src/services/Produksi/helpers/productionAuditMetadata.js",
+      "frontend/src/utils/number/numberNormalization.js",
+      "frontend/src/utils/text/textNormalization.js",
+    ]);
+    const violations = [];
+
+    sourceFiles.forEach((filePath) => {
+      const relativePath = toRelative(filePath);
+      if (allowedFiles.has(relativePath)) return;
+      const source = fs.readFileSync(filePath, "utf8");
+      const forbiddenPatterns = [
+        /const\s+getActorName\s*=/,
+        /const\s+nowIso\s*=/,
+        /const\s+toFiniteNumber\s*=/,
+        /const\s+safeTrim\s*=/,
+        /const\s+normalizeText\s*=/,
+        /Number\.isFinite\([^)]*\)\s*\?\s*Math\.round\(/,
+      ];
+      if (forbiddenPatterns.some((pattern) => pattern.test(source))) {
+        violations.push(relativePath);
+      }
+    });
+
+    expect(violations.sort()).toEqual([]);
+  });
+
+  it("tidak membiarkan import PascalCase mati tersembunyi oleh konfigurasi lint", () => {
+    const violations = [];
+    const declarationPattern = /import\s+([\s\S]*?)\s+from\s+["'][^"']+["'];/g;
+
+    sourceFiles.forEach((filePath) => {
+      const source = fs.readFileSync(filePath, "utf8");
+      const sourceWithoutImports = source.replace(declarationPattern, "");
+
+      for (const declaration of source.matchAll(declarationPattern)) {
+        const clause = declaration[1].trim();
+        const localNames = [];
+
+        if (clause.startsWith("* as ")) {
+          localNames.push(clause.slice(5).trim());
+        } else {
+          if (!clause.startsWith("{")) {
+            const defaultImport = clause.split(",", 1)[0].trim();
+            if (defaultImport) localNames.push(defaultImport);
+          }
+
+          const namedBlock = clause.match(/\{([\s\S]*?)\}/);
+          if (namedBlock) {
+            namedBlock[1].split(",").forEach((part) => {
+              const normalized = part.trim();
+              if (!normalized) return;
+              localNames.push(normalized.split(/\s+as\s+/).at(-1).trim());
+            });
+          }
+        }
+
+        localNames
+          .filter((name) => /^[A-Z_]/.test(name))
+          .forEach((name) => {
+            const usagePattern = new RegExp(`\\b${name.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}\\b`);
+            if (!usagePattern.test(sourceWithoutImports)) {
+              violations.push(`${toRelative(filePath)}: ${name}`);
+            }
+          });
+      }
+    });
+
+    expect(violations).toEqual([]);
+  });
+
 });

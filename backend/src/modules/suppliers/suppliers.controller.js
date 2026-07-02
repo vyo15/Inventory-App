@@ -1,4 +1,5 @@
 const { respondIfServiceError } = require("../../utils/httpError");
+const { getRequestActor } = require("../../utils/requestActor");
 const { failure, success } = require("../../utils/response");
 const {
   createSupplier,
@@ -11,7 +12,6 @@ const {
   verifySupplierCatalogOffer,
 } = require("./suppliers.service");
 
-const getActor = (req) => req.localAuth?.user?.username || "system";
 
 const handleSupplierError = (res, error) => respondIfServiceError(res, error, {
   duplicateMessage: "Kode supplier sudah ada di database lokal",
@@ -74,7 +74,7 @@ const verifySupplierCatalogOfferController = async (req, res, next) => {
       actualPrice: req.body?.actualPrice,
       resultStatus: req.body?.resultStatus,
       note: req.body?.note,
-      actor: getActor(req),
+      actor: getRequestActor(req),
     });
     return success(res, "Pengecekan harga katalog Supplier berhasil disimpan", result);
   } catch (error) {
@@ -86,7 +86,7 @@ const verifySupplierCatalogOfferController = async (req, res, next) => {
 
 const createSupplierController = async (req, res, next) => {
   try {
-    const supplier = await createSupplier(req.body, getActor(req));
+    const supplier = await createSupplier(req.body, getRequestActor(req));
     return success(res, "Supplier berhasil ditambahkan ke database lokal", supplier, undefined, 201);
   } catch (error) {
     const handled = handleSupplierError(res, error);
@@ -97,7 +97,7 @@ const createSupplierController = async (req, res, next) => {
 
 const updateSupplierController = async (req, res, next) => {
   try {
-    const supplier = await updateSupplier(req.params.id, req.body, getActor(req));
+    const supplier = await updateSupplier(req.params.id, req.body, getRequestActor(req));
     return success(res, "Supplier database lokal berhasil diubah", supplier);
   } catch (error) {
     const handled = handleSupplierError(res, error);
@@ -108,7 +108,7 @@ const updateSupplierController = async (req, res, next) => {
 
 const deleteSupplierController = async (req, res, next) => {
   try {
-    const result = await softDeleteSupplier(req.params.id, getActor(req));
+    const result = await softDeleteSupplier(req.params.id, getRequestActor(req));
     return success(res, "Supplier database lokal berhasil dinonaktifkan", result);
   } catch (error) {
     const handled = handleSupplierError(res, error);

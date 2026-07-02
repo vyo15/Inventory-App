@@ -1,3 +1,4 @@
+const { normalizeTruthyText: normalizeText } = require("../../utils/textNormalization");
 const { createServiceError } = require("../../utils/httpError");
 const crypto = require("crypto");
 const { getDb, runInTransaction } = require("../../db/connection");
@@ -14,7 +15,7 @@ const {
 
 const createAuthError = createServiceError;
 
-const normalizeText = (value = "") => String(value || "").trim();
+
 const normalizeUsername = (value = "") => normalizeText(value).toLowerCase();
 const toIsoSqlDate = (date = new Date()) => date.toISOString();
 const USER_AVATAR_KEY_PREFIX = "user_avatar:";

@@ -1,6 +1,6 @@
 # 21 Responsive UI/UX Standard — IMS Bunga Flanel
 
-Status: **AKTIF / SOURCE-ALIGNED / GUARDED**  
+Status: **AKTIF / SOURCE-ALIGNED / GUARDED**
 Tanggal lock: **2026-06-29**
 
 Dokumen ini menjadi rundown utama agar tampilan IMS konsisten pada desktop, laptop, tablet, telepon, viewport pendek, dan layar lebar. Standar ini tidak memakai deteksi jenis perangkat atau user-agent. Keputusan layout selalu berdasarkan **lebar dan tinggi viewport aktual**.

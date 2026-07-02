@@ -1,4 +1,5 @@
 const express = require("express");
+const { getRequestActor } = require("../../utils/requestActor");
 const {
   requireLocalAuth,
   requireLocalAdministrator,
@@ -19,7 +20,6 @@ const {
   startProductionOrder,
 } = require("./production.service");
 
-const getActor = (req) => req.localAuth?.user?.username || "system";
 
 const withProductionGuards = ({
   config,
@@ -43,7 +43,7 @@ const createProductionRouter = () => {
   const router = express.Router();
 
   router.post("/orders/commit", requireLocalAuth, requireLocalOperationalUser, asyncHandler(async (req, res) => {
-    const order = await createOrderCommit({ payload: req.body || {}, actor: getActor(req) });
+    const order = await createOrderCommit({ payload: req.body || {}, actor: getRequestActor(req) });
     return success(res, "Production Order berhasil dibuat secara atomic", order, undefined, 201);
   }));
 
@@ -51,18 +51,18 @@ const createProductionRouter = () => {
     const result = await createOrderFromPlan({
       planId: req.params.id,
       payload: req.body || {},
-      actor: getActor(req),
+      actor: getRequestActor(req),
     });
     return success(res, "Planning dan Production Order berhasil diproses secara atomic", result, undefined, 201);
   }));
 
   router.post("/planning/:id/cancel", requireLocalAuth, requireLocalOperationalUser, asyncHandler(async (req, res) => {
-    const plan = await cancelProductionPlan({ planId: req.params.id, actor: getActor(req) });
+    const plan = await cancelProductionPlan({ planId: req.params.id, actor: getRequestActor(req) });
     return success(res, "Planning produksi berhasil dibatalkan", plan);
   }));
 
   router.post("/orders/:id/refresh-requirements", requireLocalAuth, requireLocalOperationalUser, asyncHandler(async (req, res) => {
-    const order = await refreshOrderRequirements({ orderId: req.params.id, actor: getActor(req) });
+    const order = await refreshOrderRequirements({ orderId: req.params.id, actor: getRequestActor(req) });
     return success(res, "Requirement Production Order berhasil dihitung ulang", order);
   }));
 
@@ -70,7 +70,7 @@ const createProductionRouter = () => {
     const result = await startProductionOrder({
       orderId: req.params.id,
       payload: req.body || {},
-      actor: getActor(req),
+      actor: getRequestActor(req),
     });
     return success(res, "Produksi dimulai, material dipotong, dan Work Log dibuat secara atomic", result, undefined, 201);
   }));
@@ -79,13 +79,13 @@ const createProductionRouter = () => {
     const result = await completeProductionWorkLog({
       workLogId: req.params.id,
       payload: req.body || {},
-      actor: getActor(req),
+      actor: getRequestActor(req),
     });
     return success(res, "Work Log, output stok, payroll, HPP, dan status PO berhasil diselesaikan secara atomic", result);
   }));
 
   router.post("/work-logs/:id/generate-payrolls", requireLocalAuth, requireLocalOperationalUser, asyncHandler(async (req, res) => {
-    const result = await generatePayrollLines({ workLogId: req.params.id, actor: getActor(req) });
+    const result = await generatePayrollLines({ workLogId: req.params.id, actor: getRequestActor(req) });
     return success(res, "Payroll Work Log berhasil diproses tanpa duplikasi", result);
   }));
 
@@ -93,7 +93,7 @@ const createProductionRouter = () => {
     const result = await finalizeProductionPayroll({
       payrollId: req.params.id,
       payload: req.body || {},
-      actor: getActor(req),
+      actor: getRequestActor(req),
     });
     return success(res, "Payroll berhasil dikonfirmasi dan HPP direconcile", result);
   }));
@@ -102,7 +102,7 @@ const createProductionRouter = () => {
     const result = await markProductionPayrollPaid({
       payrollId: req.params.id,
       payload: req.body || {},
-      actor: getActor(req),
+      actor: getRequestActor(req),
     });
     return success(res, "Payroll paid, finance, dan HPP berhasil diproses secara atomic", result);
   }));
