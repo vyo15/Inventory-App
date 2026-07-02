@@ -229,5 +229,5 @@ module.exports = {
   upsertFinanceJsonRecord,
   toInteger,
   normalizeDate,
-  nowIso,
+  nowIso: getCurrentIsoTimestamp,
 };

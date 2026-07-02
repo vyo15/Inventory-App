@@ -40,3 +40,15 @@ test("upper/lower text memakai normalisasi nullish yang sama", () => {
   assert.equal(normalizeUpperText(0), "0");
   assert.equal(normalizeLowerText(false), "false");
 });
+
+
+test("compatibility export normalizeLower tetap menunjuk helper canonical", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const source = fs.readFileSync(
+    path.resolve(__dirname, "../src/modules/production/production.shared.js"),
+    "utf8",
+  );
+
+  assert.match(source, /normalizeLower:\s*normalizeLowerText/);
+});

@@ -1,13 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-const mocks = vi.hoisted(() => ({ requestSqliteApi: vi.fn() }));
-
-vi.mock("./sqliteApiClient", () => ({ requestSqliteApi: mocks.requestSqliteApi }));
-vi.mock("./sqliteJsonRecordAdapterFactory", () => ({
-  createSqliteJsonRecordAdapter: () => ({
-    list: vi.fn(), getById: vi.fn(), generateCode: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn(),
-  }),
-}));
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   commitProductionOrderFromPlan,
@@ -16,9 +7,21 @@ import {
   commitProductionWorkLogComplete,
 } from "./sqliteProductionAdapter";
 
+let fetchMock;
+
 beforeEach(() => {
-  vi.clearAllMocks();
-  mocks.requestSqliteApi.mockResolvedValue({ data: { ok: true } });
+  window.localStorage.clear();
+  window.sessionStorage.clear();
+  fetchMock = vi.spyOn(window, "fetch").mockResolvedValue(
+    new Response(JSON.stringify({ ok: true, data: { saved: true } }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }),
+  );
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe("sqliteProductionAdapter atomic endpoints", () => {
@@ -29,9 +32,19 @@ describe("sqliteProductionAdapter atomic endpoints", () => {
     [() => commitProductionPayrollPaid("pay-1", { paidAt: "2026-06-20" }), "/api/production/payrolls/pay-1/mark-paid", { paidAt: "2026-06-20" }],
   ])("mengirim lifecycle ke endpoint commit resmi", async (invoke, path, body) => {
     await invoke();
-    expect(mocks.requestSqliteApi).toHaveBeenCalledWith(path, {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      `http://localhost:3001${path}`,
+      expect.objectContaining({
+        credentials: "include",
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: expect.objectContaining({
+          "Content-Type": "application/json",
+          "X-IMS-Client-ID": expect.any(String),
+        }),
+      }),
+    );
   });
 });

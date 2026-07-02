@@ -1,3 +1,4 @@
+const { getCurrentIsoTimestamp } = require("../../../utils/dateTime");
 const {
   normalizeText,
   toRoundedInteger: toInteger,
@@ -88,7 +89,7 @@ module.exports = {
   getVariantReferenceTokens,
   matchesVariantReference,
   normalizeText,
-  nowIso,
+  nowIso: getCurrentIsoTimestamp,
   resolveInventoryVariantCollection,
   toInteger,
 };

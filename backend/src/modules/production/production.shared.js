@@ -1,3 +1,4 @@
+const { getCurrentIsoTimestamp } = require("../../utils/dateTime");
 const { normalizeLowerText, normalizeText } = require("../../utils/textNormalization");
 const { AppError } = require("../../utils/httpError");
 const { runInTransaction } = require("../../db/connection");
@@ -122,10 +123,10 @@ module.exports = {
   getMaterialUnitCost,
   getRecord,
   listRecords,
-  normalizeLower,
+  normalizeLower: normalizeLowerText,
   normalizeText,
   normalizeUpper,
-  nowIso,
+  nowIso: getCurrentIsoTimestamp,
   resolveProductionCode,
   runProductionTransaction,
   toRecord,
